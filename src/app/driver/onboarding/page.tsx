@@ -206,7 +206,7 @@ export default function DriverOnboardingPage() {
               className="rounded-xl px-4 py-3 text-sm border"
               style={{ background: "var(--primary-soft)", borderColor: "var(--primary)", color: "var(--primary)" }}
             >
-              <strong>Red Plate Only</strong> — RAJLO is exclusively for vehicles carrying official Jamaican red (Public Passenger Vehicle) plates. Private or commercial white-plate vehicles are not eligible.
+              <strong>Red Plate Only</strong> — Rajlo is exclusively for vehicles carrying official Jamaican red (Public Passenger Vehicle) plates. Private or commercial white-plate vehicles are not eligible.
             </div>
             <TextInput label="Red Plate Number" placeholder="e.g. 5812 GK" value={form.plateNumber} onChange={setField("plateNumber")} hint="Must be a registered PPV red plate as shown on your TA docs" required />
             <FileUploadField

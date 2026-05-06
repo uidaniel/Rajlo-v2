@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { Logo } from "./logo";
 
 type NavLink = {
   label: string;
@@ -28,9 +29,7 @@ export function MobileDrawer({
       {/* Mobile Header */}
       <header className="sticky top-0 z-40 flex items-center justify-between gap-4 border-b border-line bg-surface px-4 py-3 md:hidden">
         <div className="flex-1">
-          <Link href="/" className="text-sm font-bold text-primary tracking-wide">
-            RAJLO <span className="text-xs font-normal text-muted">Let&apos;s go!</span>
-          </Link>
+          <Logo size="sm" tagline />
         </div>
         <button
           onClick={() => setIsOpen(!isOpen)}
@@ -72,6 +71,9 @@ export function MobileDrawer({
         }`}
       >
         <div className="p-4 md:sticky md:top-0 md:z-10 md:bg-surface">
+          <div className="hidden md:block mb-4">
+            <Logo size="sm" tagline />
+          </div>
           <h1 className="text-lg font-semibold">{title}</h1>
           <p className="text-xs text-muted mt-1">{subtitle}</p>
         </div>

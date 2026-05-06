@@ -1,14 +1,51 @@
 @import "tailwindcss";
 
+/*
+ * Rajlo brand fonts — per the Sept 2024 Brand Guidelines:
+ *   Primary:   Avenir   (Light, Book, Roman, Medium, Heavy, Black)
+ *   Secondary: Kollectif (Regular, Bold)
+ *
+ * Avenir Heavy is licensed and self-hosted at /public/fonts/avenir-heavy.ttf.
+ * It's declared at weights 700–900 so any "bold/extrabold/black" usage on
+ * headlines picks it up. Body text and lighter weights fall through to Inter
+ * (the closest free Avenir-style match — brand book p.35 authorizes this).
+ *
+ * To add more weights later (Roman 400, Black 900, etc.), drop additional
+ * .ttf/.woff2 files in /public/fonts/ and add an @font-face block here.
+ * .woff2 is preferred for production (~60% smaller); convert via fonttools or
+ * any online ttf→woff2 converter when you have a moment.
+ */
+@font-face {
+  font-family: "Avenir";
+  src: url("/fonts/avenir-heavy.ttf") format("truetype");
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Kollektif";
+  src: url("/fonts/kollektif.ttf") format("truetype");
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
-  --background: #f7f7f5;
-  --foreground: #121315;
+  /* Rajlo brand palette (Sept 2024 guidelines) */
+  --rajlo-red: #f10100;
+  --rajlo-black: #111906;
+  --rajlo-white: #ffffff;
+
+  /* Semantic tokens */
+  --background: #ffffff;
+  --foreground: var(--rajlo-black);
   --muted: #6b7077;
   --surface: #ffffff;
-  --surface-soft: #f1f2ee;
-  --line: #daddd4;
-  --primary: #1e6f5c;
-  --primary-soft: #d8ede7;
+  --surface-soft: #f6f6f4;
+  --line: #e6e6e2;
+  --primary: var(--rajlo-red);
+  --primary-soft: #fde8e7;
+  --primary-hover: #d40100;
 }
 
 @theme inline {
@@ -20,22 +57,54 @@
   --color-line: var(--line);
   --color-primary: var(--primary);
   --color-primary-soft: var(--primary-soft);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-primary-hover: var(--primary-hover);
+  --color-rajlo-red: var(--rajlo-red);
+  --color-rajlo-black: var(--rajlo-black);
+
+  /*
+   * Font tokens. When real Avenir / Kollectif fonts are licensed and
+   * @font-face blocks above are uncommented, the "Avenir" / "Kollectif"
+   * names resolve to them; otherwise the next-font CSS variables (Inter,
+   * DM Sans) are used.
+   */
+  --font-sans: "Avenir", var(--font-primary), system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: "Avenir", var(--font-primary), system-ui, sans-serif;
+  --font-secondary-stack: "Kollektif", var(--font-secondary), var(--font-primary), system-ui, sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: "ss01", "cv11";
 }
 
-a {
-  color: inherit;
-  text-decoration: none;
+.font-secondary {
+  font-family: var(--font-secondary-stack);
+}
+
+@layer base {
+  /*
+   * Must live in @layer base — unlayered rules outrank Tailwind utilities
+   * (`text-white`, `text-rajlo-red`, etc.) because unlayered styles win over
+   * any @layer in CSS cascade order. Keeping this in `base` means utility
+   * classes on individual <a> elements correctly override it.
+   */
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
 }
 
 .glass {
   background: color-mix(in oklab, var(--surface) 78%, transparent);
   backdrop-filter: blur(10px);
+}
+
+/* Brand watermark — used as low-opacity decorative bg in corners */
+.rajlo-watermark {
+  position: absolute;
+  pointer-events: none;
+  user-select: none;
+  opacity: 0.06;
 }
