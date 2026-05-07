@@ -1,8 +1,10 @@
 import { MobileDrawer } from "./mobile-drawer";
+import type { IconName } from "./icons";
 
 type NavLink = {
   label: string;
   href: string;
+  icon: IconName;
 };
 
 type PortalLayoutProps = {

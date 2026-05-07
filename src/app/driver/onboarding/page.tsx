@@ -231,7 +231,6 @@ function DriverOnboardingWizard() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const editMode = searchParams.get("edit") === "1";
-  const [driverId] = useState("DRV-1031");
   const [userId, setUserId] = useState<string | null>(null);
   const [step, setStep] = useState(1);
   const [files, setFiles] = useState<FileState>({});
@@ -566,7 +565,7 @@ function DriverOnboardingWizard() {
       const res = await fetch("/api/driver/onboarding", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ driverId, form, uploadedDocs }),
+        body: JSON.stringify({ form, uploadedDocs }),
       });
       if (!res.ok) throw new Error("Failed");
       clearDraft();

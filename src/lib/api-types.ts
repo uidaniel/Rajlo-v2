@@ -1,5 +1,4 @@
 export type OnboardingSubmitRequest = {
-  driverId: string;
   form: {
     firstName: string;
     lastName: string;

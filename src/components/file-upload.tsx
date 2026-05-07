@@ -139,7 +139,7 @@ export function FileUpload({
             </>
           )}
         </div>
-        {file?.path && !file.uploading && (
+        {file?.path && !file.uploading && !file.approved && (
           <button
             type="button"
             onClick={(e) => {
