@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/icons";
@@ -31,7 +31,31 @@ const STATUS_STYLES: Record<ReviewState, { bg: string; text: string; ring: strin
   pending: { bg: "bg-surface-soft", text: "text-muted", ring: "ring-line", label: "Pending" },
 };
 
+function VerificationDetailLoading() {
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-10 md:px-6 md:py-16">
+      <div className="rounded-3xl border border-line bg-surface p-10 text-center">
+        <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-primary-soft">
+          <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
+        </span>
+        <p className="mt-4 text-sm font-semibold text-muted">Loading verification details…</p>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminVerificationDetailPage() {
+  // Suspense boundary required by Next.js 16 because the inner component uses
+  // useSearchParams — without this, the prerender step fails with the
+  // "Missing Suspense boundary with useSearchParams" error.
+  return (
+    <Suspense fallback={<VerificationDetailLoading />}>
+      <VerificationDetailInner />
+    </Suspense>
+  );
+}
+
+function VerificationDetailInner() {
   const searchParams = useSearchParams();
   const queryDriverId = searchParams.get("driverId");
 

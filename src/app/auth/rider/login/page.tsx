@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import {
   AuthShell,
   AuthField,
@@ -14,6 +14,16 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { friendlyError } from "@/lib/auth-errors";
 
 export default function RiderLoginPage() {
+  // Suspense required by Next.js 16 for useSearchParams — without it, the
+  // production prerender step fails.
+  return (
+    <Suspense>
+      <RiderLoginInner />
+    </Suspense>
+  );
+}
+
+function RiderLoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/rider";

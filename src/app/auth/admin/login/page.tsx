@@ -2,12 +2,22 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { AuthShell, AuthField, AuthSubmit } from "@/components/auth-shell";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { friendlyError } from "@/lib/auth-errors";
 
 export default function AdminLoginPage() {
+  // Wrap in Suspense — Next.js 16 requires it whenever a client component
+  // calls useSearchParams, otherwise prerender fails the build.
+  return (
+    <Suspense>
+      <AdminLoginInner />
+    </Suspense>
+  );
+}
+
+function AdminLoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const next = searchParams.get("next") ?? "/admin";
