@@ -371,7 +371,7 @@ export default function Home() {
       </section>
 
       {/* ============== Driver call-out ============== */}
-      <section className="mx-auto max-w-6xl px-4 py-24">
+      <section className="mx-auto max-w-6xl overflow-hidden px-4 py-24">
         <div className="grid gap-12 md:grid-cols-[1.1fr_0.9fr] md:items-center">
           <FadeUp>
             <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
@@ -420,8 +420,11 @@ export default function Home() {
           </FadeUp>
 
           <FadeUp delay={0.2}>
-            <div className="relative">
-              <div className="absolute inset-0 -m-6 rounded-3xl bg-rajlo-red/10" />
+            <div className="relative mx-auto w-full max-w-[320px]">
+              {/* Soft red glow background — sized to the phone instead of the
+                  parent column so the negative inset can't push past the
+                  viewport edge on mobile (was causing horizontal scroll). */}
+              <div className="absolute inset-x-0 inset-y-0 -mx-3 -my-6 rounded-3xl bg-rajlo-red/10" />
               <div className="relative">
                 <FloatY amplitude={4} duration={5}>
                   <PhoneMockup>

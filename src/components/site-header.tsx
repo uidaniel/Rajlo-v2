@@ -20,8 +20,8 @@ export function SiteHeader() {
   const pathname = usePathname();
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line/60 bg-surface/80 backdrop-blur">
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+    <header className="sticky top-0 z-40 border-b border-line bg-surface/95 backdrop-blur-md supports-backdrop-filter:bg-surface/80">
+      <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3.5 md:gap-4">
         <Logo size="sm" tagline />
 
         <nav className="hidden items-center gap-6 md:flex" aria-label="Primary">
