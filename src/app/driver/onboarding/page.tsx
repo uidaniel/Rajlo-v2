@@ -73,6 +73,144 @@ function TextInput({
   );
 }
 
+/**
+ * Type-friendly date input. Driver types the digits straight from their
+ * licence (e.g. `15082030`) and we auto-format as `15/08/2030`. The form
+ * state stays in ISO `YYYY-MM-DD` so the API/DB don't have to change.
+ *
+ * Why not <input type="date">? On mobile, picking a year 5+ years out
+ * means tapping through page after page of the calendar — annoying for
+ * licence/franchise expiry dates which are always in the future.
+ */
+function DateInput({
+  label,
+  value,
+  onChange,
+  hint,
+  required,
+}: {
+  label: string;
+  /** ISO date `YYYY-MM-DD` (or empty string when unset). */
+  value: string;
+  /** Called with an ISO date when the input is a valid full date,
+   *  or the empty string when the user hasn't finished typing. */
+  onChange: (iso: string) => void;
+  hint?: string;
+  required?: boolean;
+}) {
+  // Local state holds the visible "DD/MM/YYYY" string. We seed it from the
+  // ISO `value` prop so pre-filled forms show the expected format.
+  const isoToDisplay = (iso: string): string => {
+    if (!iso) return "";
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return "";
+    return `${m[3]}/${m[2]}/${m[1]}`;
+  };
+
+  const [display, setDisplay] = useState<string>(() => isoToDisplay(value));
+
+  // Re-sync when the form-level value flips (e.g. resubmission pre-fill or
+  // localStorage draft restore). Skipping the sync while the user is mid-type
+  // would erase their input on every render.
+  useEffect(() => {
+    const next = isoToDisplay(value);
+    setDisplay((prev) => {
+      const prevDigits = prev.replace(/\D/g, "");
+      const nextDigits = next.replace(/\D/g, "");
+      // If the parent's ISO matches what we already show, leave alone.
+      if (prevDigits === nextDigits) return prev;
+      return next;
+    });
+  }, [value]);
+
+  const formatDigits = (digits: string): string => {
+    const d = digits.slice(0, 8);
+    if (d.length <= 2) return d;
+    if (d.length <= 4) return `${d.slice(0, 2)}/${d.slice(2)}`;
+    return `${d.slice(0, 2)}/${d.slice(2, 4)}/${d.slice(4)}`;
+  };
+
+  // Treat the visible string as valid when it parses to a real Gregorian
+  // date. Anything else stays as raw text and reports "" upward so the
+  // continue-button stays disabled until the date is complete.
+  const validateAndEmit = (next: string) => {
+    const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(next);
+    if (!m) {
+      onChange("");
+      return;
+    }
+    const day = Number(m[1]);
+    const month = Number(m[2]);
+    const year = Number(m[3]);
+    if (
+      year < 1900 ||
+      year > 2100 ||
+      month < 1 ||
+      month > 12 ||
+      day < 1 ||
+      day > 31
+    ) {
+      onChange("");
+      return;
+    }
+    // Detect impossible days (Feb 30, Apr 31 etc.) by round-tripping.
+    const dt = new Date(Date.UTC(year, month - 1, day));
+    if (
+      dt.getUTCFullYear() !== year ||
+      dt.getUTCMonth() !== month - 1 ||
+      dt.getUTCDate() !== day
+    ) {
+      onChange("");
+      return;
+    }
+    const iso = `${year.toString().padStart(4, "0")}-${month
+      .toString()
+      .padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+    onChange(iso);
+  };
+
+  const handleChange = (raw: string) => {
+    const digits = raw.replace(/\D/g, "");
+    const formatted = formatDigits(digits);
+    setDisplay(formatted);
+    validateAndEmit(formatted);
+  };
+
+  // Show a subtle inline warning when the user has entered enough digits
+  // to form a complete date but it failed validation — e.g. 31/02/2030.
+  const looksComplete = display.replace(/\D/g, "").length === 8;
+  const isInvalid = looksComplete && !value;
+
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-semibold">
+        {label}
+        {required && <span className="ml-0.5 text-rajlo-red">*</span>}
+      </span>
+      {hint && <p className="mb-2 text-xs text-muted">{hint}</p>}
+      <input
+        type="text"
+        inputMode="numeric"
+        autoComplete="off"
+        value={display}
+        onChange={(e) => handleChange(e.target.value)}
+        placeholder="DD/MM/YYYY"
+        maxLength={10}
+        className={`w-full rounded-xl border bg-surface px-4 py-3 text-sm tracking-wide outline-none transition-all placeholder:text-muted/70 focus:ring-2 focus:ring-rajlo-red/15 ${
+          isInvalid
+            ? "border-rajlo-red focus:border-rajlo-red"
+            : "border-line focus:border-rajlo-red"
+        }`}
+      />
+      {isInvalid && (
+        <p className="mt-1.5 text-xs font-medium text-rajlo-red">
+          That doesn&apos;t look like a real date. Use DD/MM/YYYY.
+        </p>
+      )}
+    </label>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════════════
    Main page
    ═══════════════════════════════════════════════════════════════ */
@@ -848,7 +986,7 @@ function DriverOnboardingWizard() {
             {step === 2 && (
               <div className="space-y-5">
                 <TextInput label="Driver's licence number" placeholder="DL-123456" value={form.licenceNumber} onChange={setField("licenceNumber")} hint="Class that permits PPV / taxi operation" required />
-                <TextInput label="Licence expiry date" type="date" value={form.licenceExpiry} onChange={setField("licenceExpiry")} required />
+                <DateInput label="Licence expiry date" value={form.licenceExpiry} onChange={setField("licenceExpiry")} hint="As shown on your driver's licence" required />
                 <div className="grid gap-5 md:grid-cols-2">
                   <FileUpload field={{ id: "drivers_licence_front", label: "Driver's licence — front", hint: "Clear photo of the front of the licence", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
                   <FileUpload field={{ id: "drivers_licence_back", label: "Driver's licence — back", hint: "Clear photo of the back of the licence", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
@@ -883,7 +1021,7 @@ function DriverOnboardingWizard() {
                   The TA Franchise Certificate grants the right to operate on a specific route or zone. It&apos;s renewed annually and is the primary authorization for PPV operation in Jamaica.
                 </p>
                 <TextInput label="Franchise certificate number" placeholder="FC-2025-XXXXXX" value={form.franchiseNumber} onChange={setField("franchiseNumber")} required />
-                <TextInput label="Franchise expiry date" type="date" value={form.franchiseExpiry} onChange={setField("franchiseExpiry")} hint="Annual renewal — we'll remind you 60 days before expiry" required />
+                <DateInput label="Franchise expiry date" value={form.franchiseExpiry} onChange={setField("franchiseExpiry")} hint="Annual renewal — we'll remind you 60 days before expiry" required />
                 <FileUpload field={{ id: "franchise_cert", label: "TA Franchise Certificate", hint: "Upload the certificate as issued by the Jamaica Transport Authority", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
               </div>
             )}
