@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import { tryMatchCarpool } from "@/lib/carpool-matcher";
 
 /**
  * POST /api/rider/rides
@@ -44,6 +45,10 @@ type CreateRideRequest = {
     etaMinutes: number;
     fareJMD: number;
   };
+  /** Phase 2A.3: rider opted into carpool/ride-share. When true, the
+   *  server tries to match this ride with another opt-in ride going
+   *  the same way and reduces the fare on both. */
+  allowCarpool?: boolean;
 };
 
 function isPlace(p: unknown): p is PlacePayload {
@@ -116,6 +121,8 @@ export async function POST(request: Request) {
     );
   }
 
+  const allowCarpool = body.allowCarpool === true;
+
   // Insert the ride row.
   const { data: ride, error: rideError } = await supabase
     .from("rides")
@@ -143,8 +150,11 @@ export async function POST(request: Request) {
       estimated_eta_minutes: Number.isFinite(body.fare.etaMinutes)
         ? Math.round(body.fare.etaMinutes)
         : null,
+      allow_carpool: allowCarpool,
     })
-    .select("id")
+    .select(
+      "id, rider_id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, seats, estimated_fare_jmd",
+    )
     .single();
 
   if (rideError || !ride) {
@@ -193,8 +203,53 @@ export async function POST(request: Request) {
       stops: stops.length,
       seats,
       estimatedFareJMD: Math.round(body.fare.fareJMD),
+      allowCarpool,
     },
   });
 
-  return NextResponse.json({ ok: true, rideId: ride.id });
+  // Phase 2A.3 — try to pair this ride with another carpool opt-in
+  // going the same way. If matched, both rides get linked + their
+  // fares drop. If not matched, the ride stays as a normal solo
+  // request and may still be matched later when another opt-in comes
+  // in (the matcher runs again on every new ride).
+  let matchedFareJMD: number | null = null;
+  let matchedWithRiderId: string | null = null;
+  if (allowCarpool) {
+    const result = await tryMatchCarpool(supabase, ride);
+    if (result) {
+      matchedFareJMD = result.newFareJMD;
+      matchedWithRiderId = result.partnerRiderId;
+      // Audit on both sides so the events table tells the full story.
+      await supabase.from("ride_events").insert([
+        {
+          ride_id: ride.id,
+          event: "carpool_matched",
+          actor_role: "system",
+          metadata: {
+            groupId: result.groupId,
+            partnerRideId: result.partnerRideId,
+            newFareJMD: result.newFareJMD,
+          },
+        },
+        {
+          ride_id: result.partnerRideId,
+          event: "carpool_matched",
+          actor_role: "system",
+          metadata: {
+            groupId: result.groupId,
+            partnerRideId: ride.id,
+            newFareJMD: result.partnerFareJMD,
+          },
+        },
+      ]);
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    rideId: ride.id,
+    carpool: matchedFareJMD
+      ? { matched: true, fareJMD: matchedFareJMD, partnerRiderId: matchedWithRiderId }
+      : { matched: false },
+  });
 }

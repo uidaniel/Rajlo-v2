@@ -13,10 +13,13 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { formatJMD } from "@/lib/jamaica";
 import { useFleetBroadcaster } from "@/lib/use-fleet";
 
-type InboxRide = {
+type RidePlace = { name: string; address: string; parish: string | null };
+
+type InboxSolo = {
+  kind: "solo";
   id: string;
-  pickup: { name: string; address: string; parish: string | null };
-  dropoff: { name: string; address: string; parish: string | null };
+  pickup: RidePlace;
+  dropoff: RidePlace;
   stopsCount: number;
   seats: number;
   notes: string | null;
@@ -26,13 +29,27 @@ type InboxRide = {
   requestedAt: string;
 };
 
+type InboxCarpool = {
+  kind: "carpool";
+  id: string; // primary's id — used for the accept call
+  groupId: string;
+  rideIds: string[];
+  primary: { rideId: string; pickup: RidePlace; dropoff: RidePlace; seats: number; fareJMD: number };
+  secondary: { rideId: string; pickup: RidePlace; dropoff: RidePlace; seats: number; fareJMD: number };
+  totalSeats: number;
+  combinedFareJMD: number;
+  requestedAt: string;
+};
+
+type InboxEntry = InboxSolo | InboxCarpool;
+
 export default function DriverHomePage() {
   const router = useRouter();
   const [complianceSummary, setComplianceSummary] = React.useState(
     () => buildMockCompliancePayload("DRV-1031").summary,
   );
   const [online, setOnline] = React.useState(true);
-  const [inboxRides, setInboxRides] = React.useState<InboxRide[]>([]);
+  const [inboxRides, setInboxRides] = React.useState<InboxEntry[]>([]);
   const [acceptError, setAcceptError] = React.useState<string | null>(null);
   const [accepting, setAccepting] = React.useState<string | null>(null);
   // Auth user id — needed so our fleet broadcasts include a stable driver
@@ -153,7 +170,7 @@ export default function DriverHomePage() {
       try {
         const res = await fetch("/api/driver/inbox");
         if (res.ok && !cancelled) {
-          const json = (await res.json()) as { rides: InboxRide[] };
+          const json = (await res.json()) as { rides: InboxEntry[] };
           setInboxRides(json.rides ?? []);
         }
       } catch {
@@ -213,16 +230,7 @@ export default function DriverHomePage() {
     setInboxRides((prev) => prev.filter((r) => r.id !== rideId));
   };
 
-  // Adapter from API shape → RideRequestCard shape.
-  const incomingRequests = inboxRides.map((r) => ({
-    id: r.id,
-    from: r.pickup.name,
-    to: r.dropoff.name,
-    eta: r.estimatedEtaMinutes ? `${r.estimatedEtaMinutes} min` : "—",
-    price: formatJMD(r.estimatedFareJMD),
-    seats: r.seats,
-    status: "searching" as const,
-  }));
+  const incomingCount = inboxRides.length;
 
   /* While the active-trip check is in flight, hold off rendering — we
      don't want to flash the empty inbox/dashboard if the driver is
@@ -412,7 +420,7 @@ export default function DriverHomePage() {
 
       {/* ─────── Stats ─────── */}
       <Stagger className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label="Requests" value={incomingRequests.length.toString()} icon="inbox" />
+        <Stat label="Requests" value={incomingCount.toString()} icon="inbox" />
         <Stat label="Today" value="JMD 5.2k" icon="trending-up" />
         <Stat label="Rating" value="4.8" icon="star" />
         <Stat label="Trips" value="142" icon="navigation" />
@@ -426,9 +434,9 @@ export default function DriverHomePage() {
               <h2 className="text-lg font-extrabold tracking-tight md:text-xl">
                 Incoming requests
               </h2>
-              {incomingRequests.length > 0 && (
+              {incomingCount > 0 && (
                 <span className="rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-bold text-rajlo-red">
-                  {incomingRequests.length} new
+                  {incomingCount} new
                 </span>
               )}
             </div>
@@ -439,7 +447,7 @@ export default function DriverHomePage() {
               </div>
             )}
 
-            {incomingRequests.length === 0 ? (
+            {incomingCount === 0 ? (
               <div className="rounded-2xl border border-line bg-surface p-8 text-center">
                 <span className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-surface-soft text-muted">
                   <Icon name="inbox" className="h-5 w-5" />
@@ -451,18 +459,36 @@ export default function DriverHomePage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {incomingRequests.map((request) => (
-                  <div key={request.id} className="relative">
-                    {accepting === request.id && (
+                {inboxRides.map((entry) => (
+                  <div key={entry.id} className="relative">
+                    {accepting === entry.id && (
                       <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-2xl bg-white/70 backdrop-blur-sm">
                         <span className="h-6 w-6 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
                       </div>
                     )}
-                    <RideRequestCard
-                      ride={request}
-                      onAccept={() => handleAccept(request.id)}
-                      onDecline={() => handleDecline(request.id)}
-                    />
+                    {entry.kind === "solo" ? (
+                      <RideRequestCard
+                        ride={{
+                          id: entry.id,
+                          from: entry.pickup.name,
+                          to: entry.dropoff.name,
+                          eta: entry.estimatedEtaMinutes
+                            ? `${entry.estimatedEtaMinutes} min`
+                            : "—",
+                          price: formatJMD(entry.estimatedFareJMD),
+                          seats: entry.seats,
+                          status: "searching" as const,
+                        }}
+                        onAccept={() => handleAccept(entry.id)}
+                        onDecline={() => handleDecline(entry.id)}
+                      />
+                    ) : (
+                      <CarpoolRequestCard
+                        entry={entry}
+                        onAccept={() => handleAccept(entry.id)}
+                        onDecline={() => handleDecline(entry.id)}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -524,5 +550,90 @@ function ActionCard({
       </span>
       <p className="text-sm font-bold">{label}</p>
     </Link>
+  );
+}
+
+/**
+ * Inbox card for a carpool group — two riders going the same way that
+ * the matcher paired together. Visually distinct from solo cards (a
+ * "Carpool" badge + a 2-passenger pickup ladder) so the driver knows
+ * up-front they're committing to two pickups + two dropoffs in one go.
+ * Accepting this card claims BOTH rides atomically server-side.
+ */
+function CarpoolRequestCard({
+  entry,
+  onAccept,
+  onDecline,
+}: {
+  entry: InboxCarpool;
+  onAccept: () => void;
+  onDecline: () => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-2xl border-2 border-rajlo-red/30 bg-surface shadow-sm">
+      <div className="flex items-center justify-between gap-3 bg-primary-soft px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-full bg-rajlo-red text-white">
+            <Icon name="users" className="h-3.5 w-3.5" />
+          </span>
+          <span className="text-xs font-extrabold uppercase tracking-wider text-rajlo-red">
+            Carpool · 2 riders
+          </span>
+        </div>
+        <span className="text-xs font-bold text-rajlo-red">
+          {formatJMD(entry.combinedFareJMD)}
+        </span>
+      </div>
+
+      <div className="space-y-4 p-4 md:p-6">
+        <div>
+          <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+            Rider 1 · Pickup first
+          </p>
+          <p className="mt-0.5 truncate text-sm font-bold">
+            {entry.primary.pickup.name}
+          </p>
+          <p className="mt-0.5 truncate text-xs text-muted">
+            → {entry.primary.dropoff.name}
+          </p>
+          <p className="mt-1 text-[11px] text-muted">
+            {entry.primary.seats} seat{entry.primary.seats === 1 ? "" : "s"} ·{" "}
+            {formatJMD(entry.primary.fareJMD)}
+          </p>
+        </div>
+        <div className="border-t border-line pt-4">
+          <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+            Rider 2 · Pickup second
+          </p>
+          <p className="mt-0.5 truncate text-sm font-bold">
+            {entry.secondary.pickup.name}
+          </p>
+          <p className="mt-0.5 truncate text-xs text-muted">
+            → {entry.secondary.dropoff.name}
+          </p>
+          <p className="mt-1 text-[11px] text-muted">
+            {entry.secondary.seats} seat{entry.secondary.seats === 1 ? "" : "s"} ·{" "}
+            {formatJMD(entry.secondary.fareJMD)}
+          </p>
+        </div>
+
+        <div className="flex gap-2 border-t border-line pt-4">
+          <button
+            type="button"
+            onClick={onDecline}
+            className="flex-1 rounded-lg border border-line py-2.5 text-sm font-bold transition-colors hover:bg-surface-soft"
+          >
+            Decline
+          </button>
+          <button
+            type="button"
+            onClick={onAccept}
+            className="flex-1 rounded-lg bg-rajlo-red py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90"
+          >
+            Accept carpool
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

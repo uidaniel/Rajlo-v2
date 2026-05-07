@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
@@ -46,6 +47,11 @@ type ActiveRide = {
     arrivedAt: string | null;
     startedAt: string | null;
   };
+  /** Phase 2A.3 — non-null when this trip was matched as a carpool.
+   *  Partner's first name is included so the rider knows who they're
+   *  sharing with; we deliberately don't expose the partner's
+   *  pickup/dropoff. */
+  carpool: { groupId: string; partnerFirstName: string | null } | null;
 };
 
 type DriverInfo = {
@@ -104,12 +110,37 @@ const STATUS_HERO: Record<
   },
 };
 
+/**
+ * Snapshot of a ride that just completed. Held in state so the
+ * completion popup can keep showing after `/api/rider/rides/active`
+ * starts returning null (the API filters out terminal-state rides).
+ * Populated when refresh() observes the active→null transition.
+ */
+type CompletedSnapshot = {
+  id: string;
+  driverName: string | null;
+  fareJMD: number;
+};
+
 export default function RiderLiveTripPage() {
+  const router = useRouter();
   const [data, setData] = useState<ActiveResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [safetyOpen, setSafetyOpen] = useState(false);
+  const [completed, setCompleted] = useState<CompletedSnapshot | null>(null);
+  // Tracks the most recent active-ride snapshot we saw, so when
+  // refresh() returns `{ ride: null }` we can detect the active → done
+  // transition and pop the rating overlay using the previous ride's
+  // info. Without this, the rider would just see "No active trip" the
+  // moment the driver taps Complete, with no acknowledgement.
+  const prevActiveRef = useRef<{
+    id: string;
+    status: ActiveRide["status"];
+    driverName: string | null;
+    fareJMD: number;
+  } | null>(null);
 
   // Live tracking: rider streams their own GPS so the driver can find them,
   // and the hook surfaces the driver's incoming pings as `driverPosition`.
@@ -131,12 +162,44 @@ export default function RiderLiveTripPage() {
   // server — used both for the initial fetch and for every postgres_changes
   // push, so we always render the latest joined data, not just whatever
   // came through the row payload.
+  //
+  // Side-effect: detects the active→null transition (driver tapped
+  // Complete) and pops the completion overlay so the rider gets a
+  // proper "trip is over" moment rather than instantly seeing the
+  // "No active trip" empty state.
   const refresh = async (signal?: AbortSignal) => {
     try {
       const res = await fetch("/api/rider/rides/active", { signal });
       if (!res.ok) return;
       const json = (await res.json()) as ActiveResponse;
       setData(json);
+
+      const prev = prevActiveRef.current;
+      if (json.ride) {
+        // Keep the snapshot fresh while the ride is in flight — we'll
+        // need it to render the popup if/when the driver completes.
+        prevActiveRef.current = {
+          id: json.ride.id,
+          status: json.ride.status,
+          driverName: json.driver?.name ?? null,
+          fareJMD: json.ride.estimatedFareJMD,
+        };
+      } else if (prev && prev.status === "in_progress") {
+        // Active → null after an in_progress ride means the driver hit
+        // Complete. Show the rating overlay with the previous ride's
+        // data. We don't trigger this for "requested → null" (rider
+        // cancelled while waiting) or "accepted/arrived → null"
+        // (cancelled before the trip really started) — those don't
+        // warrant a celebration screen.
+        setCompleted({
+          id: prev.id,
+          driverName: prev.driverName,
+          fareJMD: prev.fareJMD,
+        });
+        prevActiveRef.current = null;
+      } else {
+        prevActiveRef.current = null;
+      }
     } catch (err) {
       // AbortError is expected when the effect unmounts — swallow it.
       if ((err as { name?: string })?.name === "AbortError") return;
@@ -218,24 +281,37 @@ export default function RiderLiveTripPage() {
   /* ── No active trip ── */
   if (!data?.ride) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-surface-soft text-muted">
-          <Icon name="navigation" className="h-6 w-6" />
-        </span>
-        <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
-          No active trip
-        </h1>
-        <p className="mx-auto mt-2 max-w-md text-sm text-muted">
-          Book a ride to get started.
-        </p>
-        <Link
-          href="/rider/request"
-          className="mt-6 inline-flex items-center gap-2 rounded-full bg-rajlo-red px-6 py-3 text-sm font-bold text-white hover:bg-primary-hover"
-        >
-          Book a ride
-          <Icon name="arrow-right" className="h-4 w-4" />
-        </Link>
-      </div>
+      <>
+        <div className="mx-auto max-w-2xl px-4 py-16 text-center">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-surface-soft text-muted">
+            <Icon name="navigation" className="h-6 w-6" />
+          </span>
+          <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
+            No active trip
+          </h1>
+          <p className="mx-auto mt-2 max-w-md text-sm text-muted">
+            Book a ride to get started.
+          </p>
+          <Link
+            href="/rider/request"
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-rajlo-red px-6 py-3 text-sm font-bold text-white hover:bg-primary-hover"
+          >
+            Book a ride
+            <Icon name="arrow-right" className="h-4 w-4" />
+          </Link>
+        </div>
+        {/* Completion overlay — pops over the empty state when the
+           driver just tapped Complete on a trip we were tracking.
+           Submitting a rating or dismissing the dialog clears it,
+           dropping the rider back onto the empty state. */}
+        {completed && (
+          <CompletionDialog
+            snapshot={completed}
+            onDismiss={() => setCompleted(null)}
+            onBookAgain={() => router.push("/rider/request")}
+          />
+        )}
+      </>
     );
   }
 
@@ -321,6 +397,29 @@ export default function RiderLiveTripPage() {
         </div>
       </FadeUp>
 
+      {/* Carpool badge — shown when this trip was matched with another
+         rider via the share-and-save toggle. We don't expose the
+         partner's pickup/dropoff (privacy), just their first name. */}
+      {ride.carpool && (
+        <FadeUp delay={0.04}>
+          <div className="flex items-center gap-3 rounded-2xl border border-rajlo-red/30 bg-primary-soft px-4 py-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rajlo-red text-white">
+              <Icon name="users" className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                Carpool
+              </p>
+              <p className="mt-0.5 text-sm font-bold leading-snug">
+                {ride.carpool.partnerFirstName
+                  ? `Sharing this trip with ${ride.carpool.partnerFirstName}`
+                  : "Sharing this trip with another rider"}
+              </p>
+            </div>
+          </div>
+        </FadeUp>
+      )}
+
       {error && (
         <div className="rounded-xl border border-rajlo-red/30 bg-primary-soft px-4 py-3 text-sm font-semibold text-rajlo-red">
           {error}
@@ -336,13 +435,27 @@ export default function RiderLiveTripPage() {
         <div className="overflow-hidden rounded-3xl border border-line bg-surface shadow-lg shadow-rajlo-red/[0.04]">
           {/* Live-tracking is the primary task on this page, so let the
              map dominate. `h-[55vh]` scales with the device — about half
-             the viewport on phones, comfortable on desktop. */}
+             the viewport on phones, comfortable on desktop.
+
+             Live-route mode flips the polyline from "preview the whole
+             trip" to "where the driver is going right now":
+              - accepted/arrived → driver→pickup line
+              - in_progress      → driver→dropoff line
+             Anything else (requested while waiting for a match,
+             completed, cancelled) falls back to the static preview. */}
           <MapView
             pickup={mapPickup}
             stops={mapStops}
             dropoff={mapDropoff}
             driverPosition={driverPosition}
             riderPosition={riderPosition}
+            liveRoute={
+              ride.status === "accepted" || ride.status === "arrived"
+                ? { target: "pickup" }
+                : ride.status === "in_progress"
+                  ? { target: "dropoff" }
+                  : null
+            }
             className="h-[55vh] min-h-[20rem] w-full md:h-[60vh] md:max-h-[640px]"
           />
         </div>
@@ -497,6 +610,138 @@ export default function RiderLiveTripPage() {
           onClose={() => setSafetyOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Trip-completion dialog. Lets the rider:
+ *   - rate the driver 1–5 stars (purely cosmetic for now — no backend
+ *     persistence yet; we'll wire `/api/rider/rides/[id]/rate` later)
+ *   - book another ride (routes to /rider/request)
+ *   - dismiss with a close button
+ *
+ * Lives at module scope (rather than nested) so the parent's render
+ * tree stays tidy and the dialog has its own local "selected stars"
+ * state that resets each time it's opened.
+ */
+function CompletionDialog({
+  snapshot,
+  onDismiss,
+  onBookAgain,
+}: {
+  snapshot: CompletedSnapshot;
+  onDismiss: () => void;
+  onBookAgain: () => void;
+}) {
+  const [stars, setStars] = useState(0);
+  const [hoverStars, setHoverStars] = useState(0);
+  // Once the rider taps a star we lock the input + flip the CTA copy
+  // — gives them feedback that their rating registered without us
+  // needing to do an actual round-trip yet.
+  const [submitted, setSubmitted] = useState(false);
+
+  const submitRating = (n: number) => {
+    setStars(n);
+    setSubmitted(true);
+    // Future: POST /api/rider/rides/{snapshot.id}/rate { stars: n }
+  };
+
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="completion-title"
+      className="fixed inset-0 z-50 grid place-items-center bg-rajlo-black/60 px-4 py-6 backdrop-blur-sm"
+    >
+      <div className="relative w-full max-w-md overflow-hidden rounded-3xl bg-surface shadow-2xl">
+        {/* Close button — top-right of the dialog. */}
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Dismiss"
+          className="absolute right-4 top-4 grid h-9 w-9 place-items-center rounded-full bg-surface-soft text-muted transition-colors hover:bg-line hover:text-foreground"
+        >
+          <Icon name="x" className="h-4 w-4" />
+        </button>
+
+        <div className="relative bg-emerald-600 px-6 py-7 text-white md:px-8">
+          <div className="grid h-14 w-14 place-items-center rounded-full bg-white text-emerald-600 shadow-lg">
+            <Icon name="check-circle" className="h-7 w-7" />
+          </div>
+          <h2
+            id="completion-title"
+            className="mt-4 text-2xl font-extrabold tracking-tight md:text-3xl"
+          >
+            Trip complete!
+          </h2>
+          <p className="mt-1 text-sm text-white/85">
+            {snapshot.driverName
+              ? `Hope ${snapshot.driverName} got you there safely.`
+              : "Hope you got where you were going safely."}
+          </p>
+          <p className="mt-3 text-xs font-bold uppercase tracking-wider text-white/85">
+            Trip total
+          </p>
+          <p className="mt-0.5 text-2xl font-extrabold tracking-tight">
+            {formatJMD(snapshot.fareJMD)}
+          </p>
+        </div>
+
+        <div className="px-6 py-6 md:px-8">
+          <p className="text-center text-sm font-bold">
+            {submitted
+              ? "Thanks for rating!"
+              : "How was your ride?"}
+          </p>
+          <div
+            className="mt-3 flex items-center justify-center gap-2"
+            onMouseLeave={() => setHoverStars(0)}
+          >
+            {[1, 2, 3, 4, 5].map((n) => {
+              const filled = n <= (hoverStars || stars);
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  disabled={submitted}
+                  onMouseEnter={() => !submitted && setHoverStars(n)}
+                  onClick={() => submitRating(n)}
+                  aria-label={`Rate ${n} star${n === 1 ? "" : "s"}`}
+                  className={`grid h-11 w-11 place-items-center rounded-full transition-all ${
+                    filled
+                      ? "bg-rajlo-red text-white shadow-md shadow-rajlo-red/30"
+                      : "bg-surface-soft text-muted hover:bg-primary-soft hover:text-rajlo-red"
+                  } ${submitted ? "cursor-default" : "hover:-translate-y-0.5"}`}
+                >
+                  <Icon name="star" className="h-5 w-5" />
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-6 flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={onBookAgain}
+              className="group inline-flex items-center justify-center gap-2 rounded-full bg-rajlo-red px-6 py-3 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 transition-all hover:-translate-y-0.5 hover:bg-primary-hover"
+            >
+              Book another ride
+              <Icon
+                name="arrow-right"
+                className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+              />
+            </button>
+            <button
+              type="button"
+              onClick={onDismiss}
+              className="rounded-full border border-line bg-surface px-5 py-2.5 text-xs font-bold text-muted transition-colors hover:bg-surface-soft hover:text-foreground"
+            >
+              {submitted ? "Done" : "Skip rating"}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

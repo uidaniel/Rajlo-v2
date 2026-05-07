@@ -39,6 +39,55 @@ export type FleetDot = {
   heading?: number | null;
 };
 
+/**
+ * "Live route" mode — when set, the polyline goes from the driver's
+ * current GPS position to the named target instead of the static
+ * pickup → stops → dropoff path. Used during an active ride: while
+ * heading to the rider, target is "pickup"; once the ride starts,
+ * target flips to "dropoff".
+ */
+export type LiveRoute = { target: "pickup" | "dropoff" };
+
+/** Re-route only when the driver has moved this many metres from the
+ *  last route's origin. Without this, every 5s GPS heartbeat would fire
+ *  a Directions API call — expensive and visually noisy (the polyline
+ *  would flicker as it redraws). */
+const LIVE_ROUTE_REFRESH_THRESHOLD_M = 120;
+
+/** Initial compass bearing from p1 to p2 (0–360°, 0=north, clockwise). */
+function computeBearing(
+  p1: { lat: number; lng: number },
+  p2: { lat: number; lng: number },
+): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const toDeg = (r: number) => (r * 180) / Math.PI;
+  const φ1 = toRad(p1.lat);
+  const φ2 = toRad(p2.lat);
+  const Δλ = toRad(p2.lng - p1.lng);
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) -
+    Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+/** Great-circle distance between two lat/lng pairs (haversine, metres). */
+function approxDistanceMeters(
+  p1: { lat: number; lng: number },
+  p2: { lat: number; lng: number },
+): number {
+  const R = 6_371_000;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const φ1 = toRad(p1.lat);
+  const φ2 = toRad(p2.lat);
+  const Δφ = toRad(p2.lat - p1.lat);
+  const Δλ = toRad(p2.lng - p1.lng);
+  const a =
+    Math.sin(Δφ / 2) ** 2 +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // Top-down (elevation) view car icon. Rendered as an inline SVG embedded
 // as a data URL — multi-element so we get a proper car look: red body,
 // dark windshield + rear window, wing mirror nubs.
@@ -60,6 +109,7 @@ export function MapView({
   driverPosition,
   riderPosition,
   nearbyDrivers,
+  liveRoute,
   className = "h-72 w-full",
 }: {
   pickup: Place | null;
@@ -71,17 +121,37 @@ export function MapView({
   riderPosition?: LiveDot | null;
   /** Online drivers on the booking-screen map (Phase 2A.4). */
   nearbyDrivers?: FleetDot[];
+  /** When set, the polyline goes driver→pickup or driver→dropoff
+   *  depending on `target`, and the driver marker is the car icon. */
+  liveRoute?: LiveRoute | null;
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
+  // Static polyline (pickup → stops → dropoff). Hidden when `liveRoute`
+  // is engaged — the live route has its own polyline.
   const polylineRef = useRef<google.maps.Polyline | null>(null);
+  // Live route polyline (driver → target). Tracked separately so the
+  // static-route effect doesn't accidentally clear it on every status flip.
+  const livePolylineRef = useRef<google.maps.Polyline | null>(null);
   const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
   // Live-position markers are tracked separately so they don't get wiped
   // when the route refreshes.
   const driverDotRef = useRef<google.maps.Marker | null>(null);
   const riderDotRef = useRef<google.maps.Marker | null>(null);
+  // Driver heading state — derived from successive driverPosition values.
+  // Held in refs so the marker effect can update icon rotation without
+  // re-running the whole effect just because the heading number changed.
+  const prevDriverPosRef = useRef<{ lat: number; lng: number } | null>(null);
+  const driverHeadingRef = useRef<number>(0);
+  const driverIconBucketRef = useRef<number>(-1);
+  // Live-route bookkeeping — we only refetch the Directions polyline
+  // when the driver has drifted significantly OR the target has flipped.
+  // Without this, the 5s GPS heartbeat would fire a Directions call
+  // every tick, which is wasteful and makes the polyline flicker.
+  const liveRouteOriginRef = useRef<{ lat: number; lng: number } | null>(null);
+  const liveRouteTargetRef = useRef<"pickup" | "dropoff" | null>(null);
   // Fleet markers — keyed by driverId so we move/dispose them in place
   // instead of recreating every render. Smoother and avoids the
   // marker-creation flash when positions update. We also remember each
@@ -143,7 +213,10 @@ export function MapView({
     };
   }, []);
 
-  // Re-render markers + route + bounds whenever the waypoints change.
+  // Re-render markers + (optionally) static route + bounds whenever the
+  // waypoints change. When `liveRoute` is engaged, we still draw the
+  // pickup/stops/dropoff markers, but skip the static polyline + bounds
+  // — the live-route effect below owns those.
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -173,9 +246,14 @@ export function MapView({
     }
 
     // Drop the markers immediately — they don't depend on the route call.
+    // While `liveRoute` is active we drop the pickup pin too while
+    // in_progress (the rider has already been picked up; that pin would
+    // be stale clutter). The dropoff stays visible as the destination.
     points.forEach(({ place, label }, i) => {
       const isPickup = i === 0;
       const isDropoff = i === points.length - 1 && points.length > 1;
+      // Hide the pickup pin once the trip is in progress.
+      if (liveRoute?.target === "dropoff" && isPickup) return;
       const marker = new google.maps.Marker({
         map,
         position: { lat: place.lat, lng: place.lng },
@@ -203,6 +281,10 @@ export function MapView({
       map.setZoom(14);
       return;
     }
+
+    // When liveRoute is engaged, the live-route effect draws + fits its
+    // own polyline. We're done after dropping the markers.
+    if (liveRoute) return;
 
     // Two or more points → ask Google for a road-following route.
     // Token marker we use to ignore stale responses if the points change
@@ -288,37 +370,147 @@ export function MapView({
     return () => {
       cancelled = true;
     };
-  }, [pickup, stops, dropoff]);
+  }, [pickup, stops, dropoff, liveRoute]);
 
-  // Live driver position — separate effect so route changes don't wipe it.
-  // Marker is reused across updates so the move feels smooth.
+  // Live-route polyline: driver → pickup (or driver → dropoff). Refetches
+  // the Directions polyline only when the driver has moved significantly
+  // OR the target has flipped — moving the marker every 5s is fine, but
+  // refetching the route every 5s would burn API budget and look jittery.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || typeof window === "undefined" || !window.google) return;
+
+    // Tear down when liveRoute is disengaged or there's no driver pos.
+    if (!liveRoute || !driverPosition) {
+      livePolylineRef.current?.setMap(null);
+      livePolylineRef.current = null;
+      liveRouteOriginRef.current = null;
+      liveRouteTargetRef.current = null;
+      return;
+    }
+
+    const target = liveRoute.target === "pickup" ? pickup : dropoff;
+    if (!target) return;
+
+    const driverLatLng = {
+      lat: driverPosition.lat,
+      lng: driverPosition.lng,
+    };
+    const targetChanged = liveRouteTargetRef.current !== liveRoute.target;
+    const movedFar =
+      !liveRouteOriginRef.current ||
+      approxDistanceMeters(liveRouteOriginRef.current, driverLatLng) >
+        LIVE_ROUTE_REFRESH_THRESHOLD_M;
+
+    if (!targetChanged && !movedFar && livePolylineRef.current) {
+      // Driver moved but only slightly — leave the existing polyline in
+      // place. The car marker still updates via the driverPosition effect.
+      return;
+    }
+
+    liveRouteOriginRef.current = driverLatLng;
+    liveRouteTargetRef.current = liveRoute.target;
+
+    const service = directionsServiceRef.current;
+    if (!service) return;
+    let cancelled = false;
+
+    service
+      .route({
+        origin: driverLatLng,
+        destination: { lat: target.lat, lng: target.lng },
+        travelMode: google.maps.TravelMode.DRIVING,
+      })
+      .then((response) => {
+        if (cancelled) return;
+        const route = response.routes[0];
+        if (!route) return;
+        // Replace previous live polyline (if any) with the new one.
+        livePolylineRef.current?.setMap(null);
+        livePolylineRef.current = new google.maps.Polyline({
+          map,
+          path: route.overview_path,
+          strokeColor: "#f10100",
+          strokeWeight: 5,
+          strokeOpacity: 0.9,
+        });
+        // Fit the camera to driver+target the first time we draw the
+        // route OR when the target changes. Subsequent refetches keep
+        // the user's existing pan/zoom — they may have zoomed in
+        // intentionally.
+        if (targetChanged) {
+          const bounds = new google.maps.LatLngBounds();
+          bounds.extend(driverLatLng);
+          bounds.extend({ lat: target.lat, lng: target.lng });
+          map.fitBounds(bounds, { top: 80, right: 60, bottom: 80, left: 60 });
+        }
+      })
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.warn("[MapView] Live Directions request failed:", err);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [liveRoute, driverPosition, pickup, dropoff]);
+
+  // Live driver position — rendered as the same car icon used for the
+  // fleet view. Marker is reused across updates so the move feels smooth.
+  // Heading is computed from successive positions (the browser's
+  // `coords.heading` is null on most desktops and unreliable on
+  // stationary mobile, so we derive it ourselves). When the driver
+  // hasn't really moved (under 10m of jitter) we hold the previous
+  // heading so a parked car keeps facing the way it last drove.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || typeof window === "undefined" || !window.google) return;
     if (!driverPosition) {
       driverDotRef.current?.setMap(null);
       driverDotRef.current = null;
+      prevDriverPosRef.current = null;
+      driverIconBucketRef.current = -1;
       return;
     }
     const pos = { lat: driverPosition.lat, lng: driverPosition.lng };
+
+    // Compute / refresh the heading.
+    const prev = prevDriverPosRef.current;
+    if (prev) {
+      const moved = approxDistanceMeters(prev, pos);
+      if (moved >= 10) {
+        driverHeadingRef.current = computeBearing(prev, pos);
+        prevDriverPosRef.current = pos;
+      }
+      // If we moved less than 10m, leave both prev pos and heading alone
+      // — small GPS drift shouldn't repoint the car.
+    } else {
+      prevDriverPosRef.current = pos;
+    }
+
+    const heading = driverHeadingRef.current;
+    const bucket =
+      typeof heading === "number"
+        ? (((Math.round(heading / 10) * 10) % 360) + 360) % 360
+        : 0;
+
     if (!driverDotRef.current) {
       driverDotRef.current = new google.maps.Marker({
         map,
         position: pos,
         zIndex: 999,
-        // Red car-coloured halo — a filled red dot with a black outline ring.
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 10,
-          fillColor: "#f10100",
-          fillOpacity: 1,
-          strokeColor: "#111906",
-          strokeWeight: 3,
-        },
+        icon: buildCarIcon(heading),
         title: "Driver",
       });
+      driverIconBucketRef.current = bucket;
     } else {
       driverDotRef.current.setPosition(pos);
+      // Only re-set the icon when the rotation bucket actually changed —
+      // setIcon swaps the data URL and forces an image re-decode.
+      if (driverIconBucketRef.current !== bucket) {
+        driverDotRef.current.setIcon(buildCarIcon(heading));
+        driverIconBucketRef.current = bucket;
+      }
     }
   }, [driverPosition]);
 
@@ -453,7 +645,9 @@ export function MapView({
         <div className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-1.5 rounded-xl bg-white/95 px-3 py-2 text-[11px] font-bold shadow-md backdrop-blur">
           {driverPosition && (
             <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full border-2 border-rajlo-black bg-rajlo-red" />
+              <span className="grid h-3.5 w-3.5 place-items-center">
+                <span className="h-3 w-2 rounded-sm bg-rajlo-red" />
+              </span>
               Driver
             </div>
           )}

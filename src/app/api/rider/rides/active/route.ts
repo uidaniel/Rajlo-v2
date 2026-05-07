@@ -33,7 +33,7 @@ export async function GET() {
   const { data: ride } = await supabase
     .from("rides")
     .select(
-      "id, status, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, accepted_at, arrived_at, started_at",
+      "id, status, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, accepted_at, arrived_at, started_at, carpool_group_id",
     )
     .eq("rider_id", user.id)
     .in("status", ["requested", "accepted", "arrived", "in_progress"])
@@ -43,6 +43,31 @@ export async function GET() {
 
   if (!ride) {
     return NextResponse.json({ ride: null });
+  }
+
+  // If this rider's trip is part of a carpool, surface the partner's
+  // first name so the live-trip UI can render a "sharing with X"
+  // badge. We deliberately DON'T expose the partner's pickup/dropoff —
+  // that's privileged info the driver needs but other riders don't.
+  let carpoolPartnerFirstName: string | null = null;
+  if (ride.carpool_group_id) {
+    const { data: partner } = await supabase
+      .from("rides")
+      .select("rider_id")
+      .eq("carpool_group_id", ride.carpool_group_id)
+      .neq("id", ride.id)
+      .maybeSingle();
+    if (partner?.rider_id) {
+      const { data: partnerProfile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", partner.rider_id)
+        .maybeSingle();
+      // First name only — last names aren't useful for the rider and
+      // err on the side of less PII exposure.
+      carpoolPartnerFirstName =
+        partnerProfile?.full_name?.split(" ")[0] ?? null;
+    }
   }
 
   const { data: stops } = await supabase
@@ -115,6 +140,12 @@ export async function GET() {
         arrivedAt: ride.arrived_at,
         startedAt: ride.started_at,
       },
+      carpool: ride.carpool_group_id
+        ? {
+            groupId: ride.carpool_group_id,
+            partnerFirstName: carpoolPartnerFirstName,
+          }
+        : null,
     },
     driver,
   });

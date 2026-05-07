@@ -35,9 +35,20 @@ type ActiveRide = {
   estimatedEtaMinutes: number | null;
 };
 
+type CarpoolPartner = {
+  rideId: string;
+  riderName: string;
+  pickup: { name: string; address: string; lat: number; lng: number };
+  dropoff: { name: string; address: string; lat: number; lng: number };
+  seats: number;
+  fareJMD: number;
+  status: string;
+};
+
 type ActiveResponse = {
   ride: ActiveRide | null;
   rider: { name: string; avatarUrl: string | null } | null;
+  carpool: { groupId: string; partner: CarpoolPartner } | null;
 };
 
 const STAGE_COPY = {
@@ -143,7 +154,7 @@ export default function DriverActiveTripPage() {
       }
       if (action === "complete") {
         setCompletedFare(fareForCompletion);
-        setData({ ride: null, rider: null });
+        setData({ ride: null, rider: null, carpool: null });
       } else {
         await refresh();
       }
@@ -168,7 +179,7 @@ export default function DriverActiveTripPage() {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(err.error ?? `Server returned ${res.status}`);
       }
-      setData({ ride: null, rider: null });
+      setData({ ride: null, rider: null, carpool: null });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't cancel ride");
     } finally {
@@ -259,9 +270,19 @@ export default function DriverActiveTripPage() {
         .join("")
     : "?";
 
-  // For the map: the relevant route changes by stage.
-  // - accepted/arrived: driver → pickup (just show pickup pin centred for now)
-  // - in_progress: pickup → stops → dropoff (full route)
+  // Always pass all the pins to MapView — the component itself hides
+  // the pickup pin during in_progress (no longer relevant once the
+  // rider is on board) and uses `liveRoute` to draw the polyline from
+  // the driver's live position to the right target.
+  //
+  // For a carpool trip, we synthesise a multi-stop route through both
+  // riders' points: primary pickup → partner pickup → primary dropoff
+  // → partner dropoff. This gives the driver a clear visual of the
+  // whole tour they've signed up for. (Live-route mode is disabled
+  // for carpool — a single driver→target line doesn't capture the
+  // multi-stage flow; the driver uses Google Maps for actual nav.)
+  const carpool = data?.carpool ?? null;
+
   const mapPickup: Place = {
     placeId: "",
     name: ride.pickup.name,
@@ -270,28 +291,53 @@ export default function DriverActiveTripPage() {
     lng: ride.pickup.lng,
     parish: null,
   };
-  const mapDropoff: Place | null =
-    ride.status === "in_progress"
-      ? {
+  const mapDropoff: Place = carpool
+    ? {
+        placeId: "",
+        name: carpool.partner.dropoff.name,
+        address: carpool.partner.dropoff.address,
+        lat: carpool.partner.dropoff.lat,
+        lng: carpool.partner.dropoff.lng,
+        parish: null,
+      }
+    : {
+        placeId: "",
+        name: ride.dropoff.name,
+        address: ride.dropoff.address,
+        lat: ride.dropoff.lat,
+        lng: ride.dropoff.lng,
+        parish: null,
+      };
+  const mapStops: Place[] = carpool
+    ? [
+        // Partner's pickup goes between the two pickups.
+        {
+          placeId: "",
+          name: carpool.partner.pickup.name,
+          address: carpool.partner.pickup.address,
+          lat: carpool.partner.pickup.lat,
+          lng: carpool.partner.pickup.lng,
+          parish: null,
+        },
+        // Then primary's dropoff. Partner's dropoff is the final dropoff
+        // (set as `mapDropoff` above).
+        {
           placeId: "",
           name: ride.dropoff.name,
           address: ride.dropoff.address,
           lat: ride.dropoff.lat,
           lng: ride.dropoff.lng,
           parish: null,
-        }
-      : null;
-  const mapStops: Place[] =
-    ride.status === "in_progress"
-      ? ride.stops.map((s) => ({
-          placeId: "",
-          name: s.name,
-          address: s.address,
-          lat: s.lat,
-          lng: s.lng,
-          parish: null,
-        }))
-      : [];
+        },
+      ]
+    : ride.stops.map((s) => ({
+        placeId: "",
+        name: s.name,
+        address: s.address,
+        lat: s.lat,
+        lng: s.lng,
+        parish: null,
+      }));
 
   return (
     <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6 md:py-8">
@@ -331,19 +377,57 @@ export default function DriverActiveTripPage() {
       <FadeUp delay={0.05}>
         <div className="overflow-hidden rounded-3xl border border-line bg-surface shadow-lg shadow-rajlo-red/[0.04]">
           {/* The map is the driver's primary navigation surface — give
-             it real viewport real-estate. `h-[55vh]` ≈ half the phone
-             screen, capped at 640px on desktop so the action bar
-             below stays visible without scrolling. */}
+             it real viewport real-estate. Live-route mode draws the
+             on-the-road line from the driver's current position to
+             pickup (accepted/arrived) or dropoff (in_progress).
+             Disabled for carpool: the route is a 4-point tour (two
+             pickups + two dropoffs) rather than a single driver→target
+             line, so we fall back to the static-route polyline. */}
           <MapView
             pickup={mapPickup}
             stops={mapStops}
             dropoff={mapDropoff}
             driverPosition={driverPosition}
             riderPosition={riderPosition}
+            liveRoute={
+              carpool
+                ? null
+                : ride.status === "in_progress"
+                  ? { target: "dropoff" }
+                  : { target: "pickup" }
+            }
             className="h-[55vh] min-h-[20rem] w-full md:h-[60vh] md:max-h-[640px]"
           />
         </div>
       </FadeUp>
+
+      {/* Carpool banner — distinct red ribbon making it crystal-clear
+         the driver has two riders. Only shown when partner data is
+         present in the response. */}
+      {carpool && (
+        <FadeUp delay={0.08}>
+          <div className="flex items-center gap-3 rounded-2xl border-2 border-rajlo-red/40 bg-primary-soft p-4">
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-rajlo-red text-white">
+              <Icon name="users" className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                Carpool · 2 riders
+              </p>
+              <p className="mt-0.5 text-sm font-bold leading-snug">
+                Pick up {rider?.name ?? "Rider 1"} first, then{" "}
+                {carpool.partner.riderName}.
+              </p>
+              <p className="mt-0.5 text-xs text-muted">
+                Combined fare ·{" "}
+                {formatJMD(
+                  ride.estimatedFareJMD + carpool.partner.fareJMD,
+                )}
+              </p>
+            </div>
+          </div>
+        </FadeUp>
+      )}
 
       {rider && (
         <FadeUp delay={0.1}>
@@ -363,7 +447,7 @@ export default function DriverActiveTripPage() {
             </div>
             <div className="min-w-0 flex-1">
               <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
-                Rider
+                {carpool ? "Rider 1 (pickup first)" : "Rider"}
               </p>
               <p className="mt-0.5 truncate text-base font-extrabold tracking-tight">
                 {rider.name}
@@ -373,6 +457,37 @@ export default function DriverActiveTripPage() {
                 {ride.estimatedFareJMD
                   ? ` · ${formatJMD(ride.estimatedFareJMD)} estimated`
                   : ""}
+              </p>
+            </div>
+          </div>
+        </FadeUp>
+      )}
+
+      {/* Carpool partner card — same shape as the primary rider card
+         but visually demoted with "Rider 2 (pickup second)" so the
+         driver knows the order. */}
+      {carpool && (
+        <FadeUp delay={0.12}>
+          <div className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-5">
+            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-full bg-rajlo-red/10 text-base font-extrabold text-rajlo-red ring-1 ring-rajlo-red/20">
+              {carpool.partner.riderName
+                .split(" ")
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((s) => s[0]?.toUpperCase())
+                .join("") || "?"}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+                Rider 2 (pickup second)
+              </p>
+              <p className="mt-0.5 truncate text-base font-extrabold tracking-tight">
+                {carpool.partner.riderName}
+              </p>
+              <p className="mt-0.5 text-xs text-muted">
+                {carpool.partner.seats} seat
+                {carpool.partner.seats === 1 ? "" : "s"} ·{" "}
+                {formatJMD(carpool.partner.fareJMD)} estimated
               </p>
             </div>
           </div>
