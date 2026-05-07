@@ -6,6 +6,20 @@ import { loadGoogleMaps } from "@/lib/google-maps";
 import { JAMAICA_BOUNDS, detectParish, type Place } from "@/lib/jamaica";
 
 /**
+ * `structuredFormat` is part of the Places API (New) PlacePrediction
+ * payload at runtime, but `@types/google.maps` doesn't declare it as of
+ * the version pinned here. We augment locally so the call sites can stay
+ * tidy and typed.
+ */
+type StructuredFormatLike = {
+  mainText?: { toString(): string };
+  secondaryText?: { toString(): string };
+};
+type PredictionWithStructured = google.maps.places.PlacePrediction & {
+  structuredFormat?: StructuredFormatLike;
+};
+
+/**
  * Google Places autocomplete input, biased to Jamaica.
  *
  * Uses the **new Places API** (`AutocompleteSuggestion` + `Place.fetchFields`)
@@ -284,7 +298,7 @@ export function PlacesAutocomplete({
           className="absolute left-0 right-0 top-full z-30 mt-2 max-h-80 overflow-y-auto rounded-2xl border border-line bg-surface shadow-2xl"
         >
           {suggestions.map((s, i) => {
-            const pp = s.placePrediction;
+            const pp = s.placePrediction as PredictionWithStructured | null;
             if (!pp) return null;
             const sf = pp.structuredFormat;
             const main = sf?.mainText?.toString() ?? pp.text?.toString() ?? "";
