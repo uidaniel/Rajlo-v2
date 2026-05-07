@@ -1,226 +1,674 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
-import { LocationInput, SeatSelector } from "@/components/location-inputs";
-import { RideRequestCard } from "@/components/ride-request-card";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { Icon } from "@/components/icons";
+import { FadeUp } from "@/components/anim";
+import { PlacesAutocomplete } from "@/components/places-autocomplete";
+import { MapView } from "@/components/map-view";
+import { loadGoogleMaps } from "@/lib/google-maps";
+import { useFleet } from "@/lib/use-fleet";
+import {
+  detectParish,
+  estimateFare,
+  formatJMD,
+  type Place,
+} from "@/lib/jamaica";
 
+/**
+ * Rider booking screen. Multi-stop aware: pickup + 0–4 intermediate stops +
+ * dropoff. Live map preview, live fare preview.
+ *
+ * Two completely separate layouts (mobile / desktop) rendered side by side
+ * with `md:hidden` / `hidden md:flex`. The breakpoint just swaps which tree
+ * is mounted — no layout-property overrides between mobile and desktop.
+ *
+ * - Mobile: map on top (h-64), sliding-sheet form below, action bar fixed
+ *   at the viewport bottom.
+ * - Desktop: map card on the left (flex-1 with rounded corners), form card
+ *   on the right (w-[420px] with rounded corners). The action bar lives
+ *   INSIDE the form card at the bottom — width = column width = 420px,
+ *   never covers map content, never spans the full viewport.
+ */
 export default function RiderRequestPage() {
-  const [step, setStep] = useState<"location" | "destination" | "confirm">("location");
-  const [currentLocation, setCurrentLocation] = useState("Cross Roads, Kingston");
-  const [destination, setDestination] = useState("");
+  const router = useRouter();
+  const [pickup, setPickup] = useState<Place | null>(null);
+  // Stops is `(Place | null)[]` so an "Add stop" tap can spawn an empty row
+  // the user fills via autocomplete. Filtered to non-null when computing
+  // the route + fare.
+  const [stops, setStops] = useState<(Place | null)[]>([]);
+  const [dropoff, setDropoff] = useState<Place | null>(null);
   const [seats, setSeats] = useState(1);
-  const [rideRequested, setRideRequested] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  // While we're checking on mount whether the user already has an active
+  // ride (and should be sent to the live-trip view instead of the booking
+  // form), hide the form to avoid a flash of "book a ride" UI.
+  const [bootstrapping, setBootstrapping] = useState(true);
 
-  const handleUseGeo = () => {
-    setCurrentLocation("📍 Your Location (Auto-detected)");
+  // On mount: if the rider already has an in-flight ride (e.g. they
+  // refreshed mid-flow, or came back from another tab), skip the booking
+  // form and send them straight to the live-trip view. This is what
+  // makes the whole booking flow refresh-survivable — no state lives in
+  // component memory, the URL determines what you see.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/rider/rides/active");
+        if (!res.ok) return;
+        const json = (await res.json()) as { ride: { id: string } | null };
+        if (!cancelled && json.ride) {
+          router.replace("/rider/live-trip");
+          return;
+        }
+      } catch {
+        /* offline → just show the booking form */
+      } finally {
+        if (!cancelled) setBootstrapping(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
+
+  const filledStops = useMemo(
+    () => stops.filter((s): s is Place => s !== null),
+    [stops],
+  );
+
+  const allPoints = useMemo(() => {
+    const list: Place[] = [];
+    if (pickup) list.push(pickup);
+    filledStops.forEach((s) => list.push(s));
+    if (dropoff) list.push(dropoff);
+    return list;
+  }, [pickup, filledStops, dropoff]);
+
+  const fare = useMemo(
+    () => estimateFare(allPoints, seats),
+    [allPoints, seats],
+  );
+
+  // Subscribe to the global fleet channel so we can show car icons on the
+  // booking-screen map. Disabled while we're bootstrapping (no point
+  // opening a websocket if we're about to redirect away).
+  const fleetDrivers = useFleet(/* active */ !bootstrapping);
+
+  const canSubmit = Boolean(pickup) && Boolean(dropoff) && !submitting;
+
+  const addStop = () => {
+    if (stops.length >= 4) return;
+    setStops((s) => [...s, null]);
   };
 
-  const handleRequestRide = () => {
-    if (destination && seats > 0) {
-      setRideRequested(true);
+  const updateStop = (index: number, place: Place) => {
+    setStops((prev) => {
+      const next = [...prev];
+      next[index] = place;
+      return next;
+    });
+  };
+
+  const removeStop = (index: number) => {
+    setStops((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async () => {
+    if (!canSubmit || !pickup || !dropoff) return;
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch("/api/rider/rides", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pickup: {
+            name: pickup.name,
+            address: pickup.address,
+            lat: pickup.lat,
+            lng: pickup.lng,
+            parish: pickup.parish,
+            placeId: pickup.placeId,
+          },
+          dropoff: {
+            name: dropoff.name,
+            address: dropoff.address,
+            lat: dropoff.lat,
+            lng: dropoff.lng,
+            parish: dropoff.parish,
+            placeId: dropoff.placeId,
+          },
+          stops: filledStops.map((s) => ({
+            name: s.name,
+            address: s.address,
+            lat: s.lat,
+            lng: s.lng,
+            parish: s.parish,
+            placeId: s.placeId,
+          })),
+          seats,
+          notes,
+          fare: {
+            totalKm: fare.totalKm,
+            etaMinutes: fare.etaMinutes,
+            fareJMD: fare.fareJMD,
+          },
+        }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? `Server returned ${res.status}`);
+      }
+      // Ride is created — hand off to the live-trip view, which is the
+      // single source of truth for any ride state. We don't keep the
+      // ride id in component state because that doesn't survive a
+      // refresh; the live-trip page reads the active ride from the API.
+      router.push("/rider/live-trip");
+    } catch (err) {
+      setSubmitError(
+        err instanceof Error ? err.message : "Couldn't create ride.",
+      );
+      setSubmitting(false);
     }
   };
 
-  if (rideRequested) {
+  if (bootstrapping) {
+    // Hide the form while the active-ride check is in flight. Without
+    // this the form briefly flashes before the redirect kicks in.
     return (
-      <div className="space-y-6">
-        <div className="rounded-2xl border border-line bg-primary/5 p-6 text-center">
-          <svg className="h-12 w-12 text-primary mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <h2 className="text-lg font-semibold mt-2">Finding Closest Driver</h2>
-          <p className="text-sm text-muted mt-1">
-            Notifications sent. We're matching you with the best available driver.
-          </p>
-        </div>
-
-        <RideRequestCard
-          ride={{
-            id: "ride-001",
-            from: currentLocation.replace("📍 Your Location (Auto-detected)", "Your Location"),
-            to: destination,
-            eta: "3-5 mins",
-            price: "JMD 520",
-            seats: seats,
-            status: "searching",
-          }}
-        />
-
-        <div className="grid gap-2 md:grid-cols-2">
-          <button
-            onClick={() => {
-              setRideRequested(false);
-              setDestination("");
-              setCurrentLocation("Cross Roads, Kingston");
-              setSeats(1);
-              setStep("location");
-            }}
-            className="rounded-lg border border-line py-3 font-medium text-sm hover:bg-surface-soft transition-colors"
-          >
-            Cancel Request
-          </button>
-          <Link
-            href="/rider/live-trip"
-            className="rounded-lg bg-primary py-3 font-medium text-sm text-white hover:opacity-90 transition-opacity text-center"
-          >
-            Driver Accepted - View Trip
-          </Link>
+      <div className="grid place-items-center px-4 py-16">
+        <div className="flex items-center gap-3 text-sm font-semibold text-muted">
+          <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
+          Loading…
         </div>
       </div>
     );
   }
 
-  return (
-    <div className="space-y-6 md:max-w-2xl">
-      {/* Progress Indicator */}
-      <div className="flex gap-3">
-        {(["location", "destination", "confirm"] as const).map((s, i) => (
-          <div
-            key={s}
-            className={`h-1 flex-1 rounded-full transition-colors ${
-              step === s || (step === "destination" && (s === "location" || s === "destination")) || (step === "confirm" && s !== "confirm")
-                ? "bg-primary"
-                : "bg-line"
-            }`}
-          />
-        ))}
+  /* ───── shared JSX consts read state from this closure, so no prop
+     drilling between the two layouts ───── */
+
+  const breadcrumb = (
+    <FadeUp delay={0.05}>
+      <div className="pointer-events-none absolute left-4 top-4 right-4 flex items-center gap-2">
+        <span className="rounded-full bg-rajlo-red px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg shadow-rajlo-red/30">
+          Booking
+        </span>
+        <span className="rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-bold text-rajlo-black shadow-md backdrop-blur">
+          {allPoints.length === 0
+            ? "Where are we going?"
+            : allPoints.length < 2
+              ? "Add a destination"
+              : `${stops.length + 2} stops planned`}
+        </span>
       </div>
+    </FadeUp>
+  );
 
-      {/* Step: Pick Location */}
-      {step === "location" && (
-        <div className="space-y-6 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6">
-          <div>
-            <h1 className="text-2xl font-semibold md:text-3xl">Where are you?</h1>
-            <p className="text-sm text-muted mt-2">We'll use this as your pickup location.</p>
-          </div>
-
-          <LocationInput
-            label="Current Location"
-            placeholder="Enter pickup location"
-            value={currentLocation}
-            onChange={setCurrentLocation}
-            onUseGeo={handleUseGeo}
-          />
-
-          <button
-            onClick={() => setStep("destination")}
-            className="w-full rounded-lg bg-primary py-3 font-semibold text-white hover:opacity-90 transition-opacity"
-          >
-            Confirm Location
-          </button>
+  const formSections = (
+    <>
+      {submitError && (
+        <div className="mb-4 rounded-xl border border-rajlo-red/30 bg-primary-soft px-4 py-3 text-sm font-semibold text-rajlo-red">
+          {submitError}
         </div>
       )}
+      <FadeUp>
+        <div className="mb-2 flex items-center gap-2">
+          <span className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+            Where to?
+          </span>
+          <span className="h-px flex-1 bg-line" />
+        </div>
+        <h1 className="text-3xl font-extrabold tracking-tight md:text-4xl">
+          Plan your trip
+        </h1>
+        <p className="mt-2 max-w-md text-sm text-muted">
+          Add up to 4 stops along the way — pick up groceries, grab a BBQ, swing
+          by a friend. We&apos;ll route through every one.
+        </p>
+      </FadeUp>
 
-      {/* Step: Enter Destination */}
-      {step === "destination" && (
-        <div className="space-y-6 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6">
-          <div>
-            <h1 className="text-2xl font-semibold md:text-3xl">Where to?</h1>
-            <p className="text-sm text-muted mt-2">
-              From: <span className="font-medium">{currentLocation.replace("📍 Your Location (Auto-detected)", "Your Location")}</span>
+      <FadeUp delay={0.1}>
+        <div className="mt-6 space-y-3">
+          <WaypointSlot
+            kind="pickup"
+            label="A"
+            place={pickup}
+            onSelect={setPickup}
+            onClear={() => setPickup(null)}
+          />
+
+          {stops.map((stop, i) => (
+            <WaypointSlot
+              key={`stop-${i}`}
+              kind="stop"
+              label={String.fromCharCode(66 + i)}
+              place={stop}
+              onSelect={(p) => updateStop(i, p)}
+              onRemove={() => removeStop(i)}
+            />
+          ))}
+
+          {stops.length < 4 && (
+            <button
+              type="button"
+              onClick={addStop}
+              className="group flex w-full items-center gap-3 rounded-xl border border-dashed border-line bg-surface-soft px-4 py-3 text-sm font-semibold text-muted transition-all hover:border-rajlo-red hover:bg-primary-soft/50 hover:text-rajlo-red"
+            >
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-white text-muted group-hover:bg-rajlo-red group-hover:text-white">
+                <Icon name="plus-circle" className="h-4 w-4" />
+              </span>
+              Add a stop along the way
+            </button>
+          )}
+
+          <WaypointSlot
+            kind="dropoff"
+            label={String.fromCharCode(66 + stops.length)}
+            place={dropoff}
+            onSelect={setDropoff}
+            onClear={() => setDropoff(null)}
+          />
+        </div>
+      </FadeUp>
+
+      <FadeUp delay={0.15}>
+        <div className="mt-6">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-sm font-semibold">Seats needed</p>
+            <p className="text-xs text-muted">
+              {seats} passenger{seats === 1 ? "" : "s"}
             </p>
           </div>
-
-          <LocationInput
-            label="Destination"
-            placeholder="Enter destination"
-            value={destination}
-            onChange={setDestination}
-          />
-
-          <SeatSelector value={seats} onChange={setSeats} />
-
-          <div className="rounded-lg bg-surface-soft p-4 border border-line">
-            <p className="text-xs text-muted mb-3 font-medium">ESTIMATED FARE</p>
-            <div className="flex items-baseline justify-between">
-              <span className="text-3xl font-bold text-primary">JMD 520</span>
-              <span className="text-sm text-muted">Approx. 8-12 mins</span>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => setStep("location")}
-              className="flex-1 rounded-lg border border-line py-3 font-medium text-sm hover:bg-surface-soft transition-colors"
-            >
-              Back
-            </button>
-            <button
-              onClick={() => setStep("confirm")}
-              disabled={!destination}
-              className="flex-1 rounded-lg bg-primary py-3 font-semibold text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
-            >
-              Continue
-            </button>
+          <div className="grid grid-cols-4 gap-2">
+            {[1, 2, 3, 4].map((n) => {
+              const active = seats === n;
+              return (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setSeats(n)}
+                  className={`group relative overflow-hidden rounded-xl border py-3 text-sm font-bold transition-all ${
+                    active
+                      ? "border-rajlo-red bg-rajlo-red text-white shadow-md shadow-rajlo-red/30"
+                      : "border-line bg-surface text-foreground hover:border-rajlo-red/30 hover:bg-primary-soft/30"
+                  }`}
+                >
+                  <Icon
+                    name={n === 1 ? "user" : "users"}
+                    className={`mx-auto mb-0.5 h-4 w-4 ${active ? "text-white" : "text-muted group-hover:text-rajlo-red"}`}
+                  />
+                  <span>{n}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
+      </FadeUp>
+
+      <FadeUp delay={0.2}>
+        <div className="mt-6">
+          <label className="block">
+            <span className="text-sm font-semibold">
+              Notes for the driver{" "}
+              <span className="ml-1 text-xs font-medium text-muted">
+                optional
+              </span>
+            </span>
+            <textarea
+              rows={2}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Wait 5 mins at the BBQ stop · I'll have luggage · etc."
+              className="mt-2 w-full rounded-xl border border-line bg-surface-soft px-4 py-3 text-sm outline-none transition-all placeholder:text-muted/70 focus:border-rajlo-red focus:ring-2 focus:ring-rajlo-red/15"
+            />
+          </label>
+        </div>
+      </FadeUp>
+
+      {fare.fareJMD > 0 && (
+        <FadeUp delay={0.25}>
+          <div className="mt-6 overflow-hidden rounded-2xl border border-line bg-surface-soft">
+            <div className="flex items-center justify-between border-b border-line bg-white px-5 py-4">
+              <div>
+                <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+                  Estimated fare
+                </p>
+                <p className="mt-0.5 text-3xl font-extrabold tracking-tight text-rajlo-red">
+                  {formatJMD(fare.fareJMD)}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted">
+                  ETA
+                </p>
+                <p className="mt-0.5 text-base font-extrabold">
+                  ~{fare.etaMinutes} min
+                </p>
+              </div>
+            </div>
+            <ul className="space-y-1.5 px-5 py-4">
+              {fare.breakdown.map((row) => (
+                <li
+                  key={row.label}
+                  className="flex items-center justify-between text-xs"
+                >
+                  <span className="text-muted">{row.label}</span>
+                  <span className="font-semibold text-foreground">
+                    {formatJMD(row.amountJMD)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <p className="border-t border-line/60 bg-white px-5 py-2.5 text-[11px] leading-relaxed text-muted">
+              Final fare confirmed when your driver accepts. Pay in cash or via
+              the app — your choice on arrival.
+            </p>
+          </div>
+        </FadeUp>
       )}
+    </>
+  );
 
-      {/* Step: Confirm & Request */}
-      {step === "confirm" && (
-        <div className="space-y-6 md:rounded-2xl md:border md:border-line md:bg-surface md:p-6">
-          <div>
-            <h1 className="text-2xl font-semibold md:text-3xl">Review Your Ride</h1>
-            <p className="text-sm text-muted mt-2">Everything look good?</p>
-          </div>
+  const barContent = (
+    <>
+      <div className="min-w-0">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted">
+          {fare.fareJMD > 0 ? "Trip total" : "Estimate appears here"}
+        </p>
+        <p className="text-lg font-extrabold tracking-tight">
+          {fare.fareJMD > 0 ? formatJMD(fare.fareJMD) : "—"}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={handleSubmit}
+        disabled={!canSubmit}
+        className="group inline-flex shrink-0 items-center gap-2 rounded-full bg-rajlo-red px-6 py-3 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 transition-all hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-xl hover:shadow-rajlo-red/40 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:-translate-y-0 disabled:hover:bg-rajlo-red"
+      >
+        {submitting ? (
+          <>
+            <span className="h-4 w-4 animate-spin rounded-full border-[2px] border-white border-t-transparent" />
+            Requesting…
+          </>
+        ) : (
+          <>
+            Request ride
+            <Icon
+              name="arrow-right"
+              className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
+            />
+          </>
+        )}
+      </button>
+    </>
+  );
 
-          <div className="space-y-4 rounded-xl border border-line p-4 bg-surface-soft">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-white text-sm font-semibold">
-                A
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted">Pickup</p>
-                <p className="font-medium truncate">{currentLocation.replace("📍 Your Location (Auto-detected)", "Your Location")}</p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-surface text-primary text-sm font-semibold border border-primary">
-                B
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted">Dropoff</p>
-                <p className="font-medium truncate">{destination}</p>
-              </div>
-            </div>
-
-            <div className="border-t border-line pt-3 mt-3">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted">Seats:</span>
-                <span className="font-medium">{seats} passenger{seats !== 1 ? "s" : ""}</span>
-              </div>
-              <div className="flex justify-between text-sm mt-2">
-                <span className="text-muted">Est. Fare:</span>
-                <span className="font-semibold text-primary text-lg">JMD 520</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-3">
-            <button
-              onClick={() => setStep("destination")}
-              className="flex-1 rounded-lg border border-line py-3 font-medium text-sm hover:bg-surface-soft transition-colors"
-            >
-              Back
-            </button>
-            <button
-              onClick={handleRequestRide}
-              className="flex-1 rounded-lg bg-primary py-3 font-semibold text-white hover:opacity-90 transition-opacity"
-            >
-              Request Ride
-            </button>
-          </div>
-
-          <p className="text-xs text-muted text-center">
-            By requesting, you agree to our{" "}
-            <Link href="/legal/terms" className="font-medium text-primary hover:underline">
-              Terms of Service
-            </Link>
-          </p>
+  return (
+    <>
+      {/* ═════════════ MOBILE LAYOUT ═════════════ */}
+      <div className="-mx-4 -my-4 flex min-h-[calc(100vh-3.5rem)] flex-col md:hidden">
+        {/* Map on top */}
+        <div className="relative">
+          <MapView
+            pickup={pickup}
+            stops={filledStops}
+            dropoff={dropoff}
+            nearbyDrivers={fleetDrivers}
+            className="h-64 w-full"
+          />
+          {breadcrumb}
         </div>
+
+        {/* Form sheet sliding up under the map */}
+        <div className="relative -mt-6 flex-1 rounded-t-3xl border-t border-line bg-surface">
+          <div className="mx-auto max-w-2xl px-4 pb-32 pt-6">
+            {formSections}
+          </div>
+        </div>
+
+        {/* Fixed bottom action bar — full width of viewport on mobile only */}
+        <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur">
+          {barContent}
+        </div>
+      </div>
+
+      {/* ═════════════ DESKTOP LAYOUT ═════════════ */}
+      {/* Negative margins cancel PortalLayout's px-4 + md:py-6 wrapper padding
+          so the page occupies the full main column (100vh) edge-to-edge.
+          Combined with md:h-screen, the page fits exactly inside main → no
+          chance of overflow → main never shows a scrollbar on this page. */}
+      <div className="hidden md:-mx-4 md:-my-6 md:flex md:h-screen md:gap-5">
+        {/* Map card on the left — 50% of the row */}
+        <div className="relative min-w-0 flex-1 basis-0 overflow-hidden rounded-3xl shadow-xl shadow-rajlo-black/10">
+          <MapView
+            pickup={pickup}
+            stops={filledStops}
+            dropoff={dropoff}
+            nearbyDrivers={fleetDrivers}
+            className="h-full w-full"
+          />
+          {breadcrumb}
+        </div>
+
+        {/* Form card on the right — 50% of the row */}
+        <div className="flex min-w-0 flex-1 basis-0 flex-col overflow-hidden rounded-3xl border border-line bg-surface shadow-xl shadow-rajlo-red/[0.04]">
+          {/* Scrollable form area.
+              `min-h-0` is the canonical fix for a flex child that should
+              scroll: without it, flex children default to min-height: auto
+              and refuse to shrink below their content's intrinsic height,
+              which prevents `overflow-y-auto` from doing anything.
+              `overflow-x-hidden` guards against any rogue child trying to
+              push the column wider than 50%. */}
+          <div
+            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden [&::-webkit-scrollbar]:hidden"
+            style={{ scrollbarWidth: "none" }}
+          >
+            <div className="px-6 pb-6 pt-7">{formSections}</div>
+          </div>
+
+          {/* Inline action bar at bottom of form card.
+              Width = form card width = 420px, never spans the viewport,
+              never covers map content. */}
+          <div className="flex items-center justify-between gap-3 border-t border-line bg-surface px-6 py-4">
+            {barContent}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+/* ─────────── Waypoint slot ─────────── */
+
+function WaypointSlot({
+  kind,
+  label,
+  place,
+  onSelect,
+  onClear,
+  onRemove,
+}: {
+  kind: "pickup" | "stop" | "dropoff";
+  label: string;
+  place: Place | null;
+  onSelect: (p: Place) => void;
+  onClear?: () => void;
+  onRemove?: () => void;
+}) {
+  const tone =
+    kind === "pickup"
+      ? "bg-emerald-500"
+      : kind === "dropoff"
+        ? "bg-rajlo-red"
+        : "bg-rajlo-black";
+
+  const [locating, setLocating] = useState(false);
+  const [locateError, setLocateError] = useState<string | null>(null);
+
+  const useCurrentLocation = async () => {
+    setLocating(true);
+    setLocateError(null);
+    try {
+      if (!("geolocation" in navigator)) {
+        throw new Error("Your browser doesn't support location.");
+      }
+      // 1. Ask the browser for the user's coordinates.
+      const position = await new Promise<GeolocationPosition>(
+        (resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, {
+            enableHighAccuracy: true,
+            timeout: 10_000,
+            maximumAge: 60_000,
+          });
+        },
+      );
+      const { latitude, longitude } = position.coords;
+
+      // 2. Reverse-geocode via Google to get a real address + place_id.
+      // Use the awaited return value of loadGoogleMaps rather than
+      // `window.google` directly — the loader's return type is fully
+      // typed (`typeof google`), whereas `window.google` depends on
+      // ambient @types/google.maps being globally augmented, which
+      // some editor/TS-server configs don't pick up.
+      const g = await loadGoogleMaps();
+      const geocoder = new g.maps.Geocoder();
+      const { results } = await geocoder.geocode({
+        location: { lat: latitude, lng: longitude },
+      });
+      if (!results.length) throw new Error("Couldn't find your address.");
+      const top = results[0];
+
+      onSelect({
+        placeId: top.place_id ?? "",
+        // Pull the first comma-segment as a friendly short name
+        // ("12 Hope Road" rather than the full multi-line address).
+        name: top.formatted_address.split(",")[0] || "Current location",
+        address: top.formatted_address,
+        lat: latitude,
+        lng: longitude,
+        parish: detectParish(top.address_components),
+      });
+    } catch (err) {
+      // Two possible error shapes here:
+      //   1. GeolocationPositionError — `.code` is a *number* (1=denied,
+      //      2=unavailable, 3=timeout). `instanceof` is unreliable across
+      //      browsers, so we sniff by the numeric code instead.
+      //   2. Google Geocoder error — `.code` is a *string* like
+      //      "REQUEST_DENIED", "ZERO_RESULTS", "OVER_QUERY_LIMIT".
+      let msg: string;
+      const codeAndMessage =
+        err && typeof err === "object"
+          ? (err as { code?: unknown; message?: unknown })
+          : {};
+      const numericCode =
+        typeof codeAndMessage.code === "number" ? codeAndMessage.code : null;
+      const stringCode =
+        typeof codeAndMessage.code === "string" ? codeAndMessage.code : null;
+
+      if (numericCode === 1) {
+        msg =
+          "Location access is blocked. Click the lock icon next to the URL → Site settings → Location → Allow, then try again.";
+      } else if (numericCode === 2) {
+        msg = "Couldn't determine your location. Try again.";
+      } else if (numericCode === 3) {
+        msg = "Location request timed out. Try again.";
+      } else if (stringCode === "ZERO_RESULTS") {
+        msg = "No address found for your location.";
+      } else if (stringCode === "REQUEST_DENIED") {
+        msg = "Geocoding API isn't enabled or is misconfigured.";
+      } else if (stringCode === "OVER_QUERY_LIMIT") {
+        msg = "Hit Google's request limit — try again in a moment.";
+      } else if (err instanceof Error) {
+        msg = err.message;
+      } else if (typeof codeAndMessage.message === "string") {
+        msg = codeAndMessage.message;
+      } else {
+        msg = "Couldn't fetch your location.";
+      }
+      setLocateError(msg);
+    } finally {
+      setLocating(false);
+    }
+  };
+
+  return (
+    <div className="flex items-stretch gap-2.5">
+      <div className="flex flex-col items-center pt-2">
+        <span
+          className={`grid h-7 w-7 place-items-center rounded-full text-[11px] font-extrabold text-white shadow-md ${tone}`}
+        >
+          {label}
+        </span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <PlacesAutocomplete
+          placeholder={
+            kind === "pickup"
+              ? "Pickup location"
+              : kind === "stop"
+                ? "Stop along the way"
+                : "Where to?"
+          }
+          value={place}
+          onSelect={onSelect}
+          onClear={onClear}
+          icon={
+            kind === "pickup"
+              ? "navigation"
+              : kind === "stop"
+                ? "map-pin"
+                : "flag"
+          }
+        />
+
+        {/* Use my current location — pickup field only, hidden once a
+            place has been picked. */}
+        {kind === "pickup" && !place && (
+          <button
+            type="button"
+            onClick={useCurrentLocation}
+            disabled={locating}
+            className="group mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1.5 text-[11px] font-bold text-rajlo-red transition-colors hover:bg-rajlo-red hover:text-white disabled:cursor-wait disabled:opacity-70"
+          >
+            {locating ? (
+              <span className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-current border-t-transparent" />
+            ) : (
+              <Icon name="navigation" className="h-3 w-3" />
+            )}
+            {locating ? "Finding you…" : "Use my current location"}
+          </button>
+        )}
+        {locateError && (
+          <p className="mt-1 ml-1 text-[11px] font-medium text-rajlo-red">
+            {locateError}
+          </p>
+        )}
+
+        {place?.parish && (
+          <p className="mt-1 ml-1 truncate text-[11px] text-muted">
+            <Icon
+              name="map-pin"
+              className="mr-1 inline-block h-3 w-3 align-text-bottom text-muted"
+            />
+            {place.address || place.parish}
+          </p>
+        )}
+      </div>
+      {kind === "stop" && onRemove && (
+        <button
+          type="button"
+          onClick={onRemove}
+          aria-label="Remove stop"
+          className="mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-primary-soft hover:text-rajlo-red"
+        >
+          <Icon name="x" className="h-4 w-4" />
+        </button>
       )}
     </div>
   );
 }
+

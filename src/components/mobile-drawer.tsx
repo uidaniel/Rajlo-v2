@@ -33,8 +33,10 @@ type MobileDrawerProps = {
  * Layout: fixed-width sidebar on the left (md+), drawer overlay on mobile.
  */
 export function MobileDrawer({
-  title,
-  subtitle,
+  // title + subtitle accepted for backward compat with PortalLayout's props,
+  // but no longer rendered — Logo at top is enough chrome.
+  title: _title,
+  subtitle: _subtitle,
   nav,
   children,
 }: MobileDrawerProps) {
@@ -106,8 +108,22 @@ export function MobileDrawer({
         .join("")
     : (profile?.email?.[0]?.toUpperCase() ?? "·");
 
+  // Pick the active nav item by longest matching href. Stops the root
+  // "/rider" Dashboard link from showing as active on every nested page —
+  // on /rider/request only "Request a ride" lights up, etc.
+  const activeHref = nav.reduce<string | null>((longest, item) => {
+    const matches =
+      pathname === item.href || pathname?.startsWith(`${item.href}/`);
+    if (!matches) return longest;
+    if (!longest || item.href.length > longest.length) return item.href;
+    return longest;
+  }, null);
+
   return (
-    <div className="min-h-screen bg-background md:grid md:grid-cols-[280px_1fr]">
+    // Lock the desktop layout to viewport height + clip overflow so only the
+    // <main> below can scroll. Sidebar stays put in its grid cell, page
+    // doesn't scroll at the body level.
+    <div className="min-h-screen bg-background md:grid md:h-screen md:grid-cols-[280px_1fr] md:overflow-hidden">
       {/* ============== Mobile top bar ============== */}
       <header className="sticky top-0 z-40 flex items-center justify-between gap-4 border-b border-line bg-surface px-4 py-3 md:hidden">
         <Logo size="sm" tagline />
@@ -144,31 +160,21 @@ export function MobileDrawer({
             "radial-gradient(circle at 100% 100%, rgba(241,1,0,0.18) 0%, rgba(241,1,0,0) 38%), linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 24%), linear-gradient(165deg, #1a1d10 0%, #111906 55%, #07090a 100%)",
         }}
       >
-        {/* Decorative arc — kept very faint so it sits behind the nav text */}
-
-        {/* Top: Logo + portal label */}
+        {/* Top: Logo only — portal title/subtitle removed for cleaner chrome. */}
         <div className="relative hidden border-b border-white/10 px-6 pb-5 pt-7 md:block">
           <Logo size="sm" variant="white" tagline />
         </div>
 
-        <div className="relative px-6 pb-3 pt-5 md:pt-6">
-          <p className="font-secondary text-[10px] font-bold uppercase tracking-[0.18em] text-white/70">
-            {subtitle}
-          </p>
-          <h1 className="mt-1 text-xl font-extrabold tracking-tight">
-            {title}
-          </h1>
-        </div>
-
-        {/* Nav with icons + active state */}
+        {/* Nav with icons + active state. Hidden scrollbar — still scrollable
+            for very long nav lists, just no visible scrollbar. */}
         <nav
-          className="relative flex-1 overflow-y-auto px-3 pb-3"
+          className="relative flex-1 overflow-y-auto px-3 pb-3 pt-4 [&::-webkit-scrollbar]:hidden md:pt-5"
+          style={{ scrollbarWidth: "none" }}
           aria-label="Portal navigation"
         >
           <ul className="grid gap-1">
             {nav.map((item) => {
-              const active =
-                pathname === item.href || pathname?.startsWith(`${item.href}/`);
+              const active = item.href === activeHref;
               return (
                 <li key={item.href}>
                   <Link

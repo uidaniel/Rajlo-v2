@@ -34,7 +34,13 @@ type FadeUpProps = {
   as?: "div" | "section" | "header" | "p" | "h1" | "h2" | "h3" | "li" | "span";
 };
 
-/** Fades and slides up when scrolled into view. */
+/** Fades and slides up on mount.
+ *
+ * Switched from `whileInView` → `animate` so animations fire regardless of
+ * scroll context. `whileInView` uses IntersectionObserver, which only fires
+ * predictably when the scroll container is the document; inside a portal
+ * layout where main has its own `overflow-y-auto`, the observer can fail to
+ * trigger and leave everything stuck at opacity 0. */
 export function FadeUp({
   children,
   delay = 0,
@@ -48,8 +54,7 @@ export function FadeUp({
     <Tag
       className={className}
       initial={{ opacity: 0, y: reduced ? 0 : y }}
-      whileInView={{ opacity: 1, y: 0 }}
-      viewport={{ once: true, margin: "0px 0px -80px 0px" }}
+      animate={{ opacity: 1, y: 0 }}
       transition={{ duration: reduced ? 0.01 : 0.6, delay, ease: easing }}
     >
       {children}
@@ -69,11 +74,15 @@ const staggerItem: Variants = {
   show: { opacity: 1, y: 0, transition: { duration: 0.55, ease: easing } },
 };
 
-/** Parent that triggers staggered children when scrolled into view. */
+/** Parent that triggers staggered children on mount.
+ *
+ * Same migration as FadeUp — switched from `whileInView` to `animate` so
+ * the stagger always plays, even when the parent scroll container isn't
+ * the document. `amount` is ignored under the new model (kept in the
+ * signature so callers don't need to change). */
 export function Stagger({
   children,
   className,
-  amount = 0.2,
 }: {
   children: ReactNode;
   className?: string;
@@ -84,8 +93,7 @@ export function Stagger({
       className={className}
       variants={staggerContainer}
       initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, amount }}
+      animate="show"
     >
       {children}
     </m.div>

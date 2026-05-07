@@ -2,19 +2,117 @@
 
 import React from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { RideRequestCard } from "@/components/ride-request-card";
 import { complianceThresholds } from "@/lib/mock-data";
 import { buildMockCompliancePayload } from "@/lib/compliance-utils";
 import { Icon, type IconName } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp, Stagger, StaggerItem } from "@/components/anim";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { formatJMD } from "@/lib/jamaica";
+import { useFleetBroadcaster } from "@/lib/use-fleet";
+
+type InboxRide = {
+  id: string;
+  pickup: { name: string; address: string; parish: string | null };
+  dropoff: { name: string; address: string; parish: string | null };
+  stopsCount: number;
+  seats: number;
+  notes: string | null;
+  estimatedFareJMD: number;
+  estimatedDistanceKm: number | null;
+  estimatedEtaMinutes: number | null;
+  requestedAt: string;
+};
 
 export default function DriverHomePage() {
-  const [acceptedRequest, setAcceptedRequest] = React.useState<string | null>(null);
+  const router = useRouter();
   const [complianceSummary, setComplianceSummary] = React.useState(
     () => buildMockCompliancePayload("DRV-1031").summary,
   );
   const [online, setOnline] = React.useState(true);
+  const [inboxRides, setInboxRides] = React.useState<InboxRide[]>([]);
+  const [acceptError, setAcceptError] = React.useState<string | null>(null);
+  const [accepting, setAccepting] = React.useState<string | null>(null);
+  // Auth user id — needed so our fleet broadcasts include a stable driver
+  // identifier, which lets the rider booking screen dedupe the multiple
+  // pings from one driver into a single moving car marker.
+  const [driverUserId, setDriverUserId] = React.useState<string | null>(null);
+  // Whether the driver has an in-flight trip (status accepted/arrived/
+  // in_progress). When true, we hide the inbox and show a CTA back to
+  // the active-trip console — the driver can't accept new rides while
+  // already on one, so a "you have an active trip" banner is far more
+  // useful than an empty inbox.
+  const [hasActiveTrip, setHasActiveTrip] = React.useState(false);
+  const [bootstrapping, setBootstrapping] = React.useState(true);
+
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const supabase = createSupabaseBrowserClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (mounted) setDriverUserId(user?.id ?? null);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // On mount and on every Realtime ride change, check if the driver
+  // already has a trip in flight. If yes, surface the banner instead of
+  // the inbox so the driver always knows where to find their trip.
+  // Realtime alone isn't enough here: the driver might have refreshed
+  // mid-trip with no inbox change pending, so we need the initial fetch.
+  React.useEffect(() => {
+    let cancelled = false;
+
+    const checkActive = async () => {
+      try {
+        const res = await fetch("/api/driver/rides/active");
+        if (!res.ok) return;
+        const json = (await res.json()) as { ride: { id: string } | null };
+        if (!cancelled) setHasActiveTrip(!!json.ride);
+      } catch {
+        /* network blip — Realtime will re-trigger this shortly */
+      } finally {
+        if (!cancelled) setBootstrapping(false);
+      }
+    };
+    checkActive();
+
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel("driver-active-presence")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rides" },
+        () => {
+          if (!cancelled) checkActive();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // Fleet broadcaster: while online, push our GPS to the global
+  // `fleet:online` channel every ~5s. Riders on the booking screen
+  // subscribe and render a car icon for each unique driverId. The
+  // hook itself is a no-op when either argument is falsy, so there's
+  // no GPS access until the driver explicitly toggles online.
+  // Also gated off while on an active trip — at that point GPS is
+  // already flowing through the per-ride position channel, no need to
+  // double-broadcast.
+  const { error: fleetError } = useFleetBroadcaster(
+    driverUserId,
+    online && !hasActiveTrip,
+  );
 
   React.useEffect(() => {
     let mounted = true;
@@ -35,63 +133,151 @@ export default function DriverHomePage() {
     };
   }, []);
 
-  const incomingRequests = [
-    {
-      id: "req-001",
-      from: "Cross Roads",
-      to: "Half-Way Tree",
-      eta: "3 mins away",
-      price: "JMD 580",
-      seats: 2,
-      status: "searching" as const,
-    },
-    {
-      id: "req-002",
-      from: "New Kingston",
-      to: "Papine",
-      eta: "5 mins away",
-      price: "JMD 420",
-      seats: 1,
-      status: "searching" as const,
-    },
-  ];
+  // Inbox: initial fetch + Supabase Realtime subscription on `rides`. RLS
+  // restricts what the driver receives to (a) rides assigned to them and
+  // (b) the open `requested` pool — so any INSERT into the open pool, or
+  // any UPDATE that flips a ride's status (someone else accepts → it
+  // leaves the pool), pushes us a refresh. No polling.
+  //
+  // Skipped while the driver has an active trip — they can't take a new
+  // ride from the inbox until they finish the current one, so there's
+  // no point keeping the websocket open or fetching the list.
+  React.useEffect(() => {
+    if (!online || hasActiveTrip) {
+      setInboxRides([]);
+      return;
+    }
+    let cancelled = false;
 
-  /* ───────────── Accepted view ───────────── */
-  if (acceptedRequest) {
-    const request = incomingRequests.find((r) => r.id === acceptedRequest);
+    const refresh = async () => {
+      try {
+        const res = await fetch("/api/driver/inbox");
+        if (res.ok && !cancelled) {
+          const json = (await res.json()) as { rides: InboxRide[] };
+          setInboxRides(json.rides ?? []);
+        }
+      } catch {
+        /* network blip — Realtime will trigger another refresh later */
+      }
+    };
+    refresh();
+
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel("driver-inbox")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rides" },
+        () => {
+          if (!cancelled) refresh();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [online, hasActiveTrip]);
+
+  const handleAccept = async (rideId: string) => {
+    setAccepting(rideId);
+    setAcceptError(null);
+    try {
+      const res = await fetch(`/api/driver/rides/${rideId}/accept`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(err.error ?? `Server returned ${res.status}`);
+      }
+      // Send the driver straight to the active-trip console — that's
+      // the only view they can usefully act on while the trip is in
+      // flight, and going there directly is snappier than rendering an
+      // intermediate "ride accepted!" card. The active-trip page
+      // hydrates from /api/driver/rides/active, so it's also
+      // refresh-survivable.
+      router.push("/driver/active-trip");
+    } catch (err) {
+      setAcceptError(
+        err instanceof Error ? err.message : "Couldn't accept ride.",
+      );
+      setAccepting(null);
+    }
+  };
+
+  const handleDecline = (rideId: string) => {
+    // Phase 2A.1 doesn't persist declines — just hide locally so the
+    // driver can keep scanning the inbox. A "declined" event log + per-driver
+    // decline filtering will land in 2A.2.
+    setInboxRides((prev) => prev.filter((r) => r.id !== rideId));
+  };
+
+  // Adapter from API shape → RideRequestCard shape.
+  const incomingRequests = inboxRides.map((r) => ({
+    id: r.id,
+    from: r.pickup.name,
+    to: r.dropoff.name,
+    eta: r.estimatedEtaMinutes ? `${r.estimatedEtaMinutes} min` : "—",
+    price: formatJMD(r.estimatedFareJMD),
+    seats: r.seats,
+    status: "searching" as const,
+  }));
+
+  /* While the active-trip check is in flight, hold off rendering — we
+     don't want to flash the empty inbox/dashboard if the driver is
+     about to be sent to the active-trip CTA. */
+  if (bootstrapping) {
     return (
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 md:px-6 md:py-8">
+      <div className="grid place-items-center px-4 py-16">
+        <div className="flex items-center gap-3 text-sm font-semibold text-muted">
+          <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
+          Loading dashboard…
+        </div>
+      </div>
+    );
+  }
+
+  /* ───────────── Active-trip CTA ─────────────
+     If the driver landed back on the dashboard while a trip is in
+     flight (refresh, deep-link, swipe-back, etc.), they can't usefully
+     act on this page — the inbox is hidden, status changes happen on
+     /driver/active-trip. Render a single big CTA pointing them there.
+     This is the refresh-survivable replacement for the old "Ride
+     accepted!" inline view. */
+  if (hasActiveTrip) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-6 px-4 py-10 md:px-6 md:py-12">
         <FadeUp>
-          <div className="relative overflow-hidden rounded-3xl bg-rajlo-red p-6 text-white shadow-xl shadow-rajlo-red/25 md:p-8">
-            <ArcWatermark size={300} variant="white" className="absolute -right-12 -bottom-12 opacity-[0.10]" />
-            <div className="relative flex items-center gap-4">
-              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white text-rajlo-red shadow-lg">
-                <Icon name="check-circle" className="h-6 w-6" />
-              </div>
-              <div>
-                <h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">Ride accepted!</h2>
-                <p className="mt-1 text-sm text-white/85 md:text-base">
-                  Head to the pickup location.
-                </p>
-              </div>
+          <div className="relative overflow-hidden rounded-3xl bg-rajlo-red p-7 text-white shadow-xl shadow-rajlo-red/25 md:p-10">
+            <ArcWatermark
+              size={320}
+              variant="white"
+              className="absolute -right-14 -bottom-14 opacity-[0.12]"
+            />
+            <div className="relative">
+              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-white/85">
+                You&apos;re on a trip
+              </p>
+              <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
+                Active ride in progress
+              </h1>
+              <p className="mt-2 max-w-md text-sm text-white/85 md:text-base">
+                Open the active-trip console to see the live route, the
+                rider&apos;s details, and the next-action button.
+              </p>
+              <Link
+                href="/driver/active-trip"
+                className="group mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-rajlo-red shadow-lg transition-all hover:-translate-y-0.5"
+              >
+                Open active trip
+                <Icon
+                  name="arrow-right"
+                  className="h-4 w-4 transition-transform group-hover:translate-x-1"
+                />
+              </Link>
             </div>
           </div>
-        </FadeUp>
-
-        {request && (
-          <FadeUp delay={0.1}>
-            <RideRequestCard ride={{ ...request, status: "accepted" }} />
-          </FadeUp>
-        )}
-
-        <FadeUp delay={0.2}>
-          <Link
-            href="/driver/active-trip"
-            className="group flex items-center justify-center gap-2 rounded-full bg-rajlo-black px-6 py-3.5 text-center text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-black"
-          >
-            View active trip
-            <Icon name="arrow-right" className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-          </Link>
         </FadeUp>
       </div>
     );
@@ -152,6 +338,28 @@ export default function DriverHomePage() {
         </div>
       </FadeUp>
 
+      {/* ─────── Fleet broadcast error ───────
+         If the driver toggled online but the browser denied location
+         access (or some other GPS error), surface it here so they
+         know why riders aren't seeing their car. The error comes from
+         the fleet broadcaster hook — it captures geolocation failures
+         silently otherwise, which is bad UX. */}
+      {online && fleetError && (
+        <FadeUp delay={0.03}>
+          <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-500 text-white">
+              <Icon name="alert-triangle" className="h-4 w-4" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-sm font-bold leading-snug text-amber-900">
+                Riders can&apos;t see your car on the map yet
+              </p>
+              <p className="mt-0.5 text-xs text-amber-800">{fleetError}</p>
+            </div>
+          </div>
+        </FadeUp>
+      )}
+
       {/* ─────── Compliance banner ─────── */}
       {complianceTone && (
         <FadeUp delay={0.05}>
@@ -211,29 +419,54 @@ export default function DriverHomePage() {
       </Stagger>
 
       {/* ─────── Incoming requests ─────── */}
-      {online && incomingRequests.length > 0 && (
+      {online && (
         <FadeUp delay={0.1}>
           <div>
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-lg font-extrabold tracking-tight md:text-xl">
                 Incoming requests
               </h2>
-              <span className="rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-bold text-rajlo-red">
-                {incomingRequests.length} new
-              </span>
+              {incomingRequests.length > 0 && (
+                <span className="rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-bold text-rajlo-red">
+                  {incomingRequests.length} new
+                </span>
+              )}
             </div>
-            <div className="space-y-3">
-              {incomingRequests.map((request) => (
-                <RideRequestCard
-                  key={request.id}
-                  ride={request}
-                  onAccept={() => setAcceptedRequest(request.id)}
-                  onDecline={() => {
-                    /* mock */
-                  }}
-                />
-              ))}
-            </div>
+
+            {acceptError && (
+              <div className="mb-3 rounded-xl border border-rajlo-red/30 bg-primary-soft px-4 py-3 text-sm font-semibold text-rajlo-red">
+                {acceptError}
+              </div>
+            )}
+
+            {incomingRequests.length === 0 ? (
+              <div className="rounded-2xl border border-line bg-surface p-8 text-center">
+                <span className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-surface-soft text-muted">
+                  <Icon name="inbox" className="h-5 w-5" />
+                </span>
+                <p className="mt-3 text-sm font-bold">No new requests yet</p>
+                <p className="mt-1 text-xs text-muted">
+                  Stay online — incoming rides will pop up here automatically.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {incomingRequests.map((request) => (
+                  <div key={request.id} className="relative">
+                    {accepting === request.id && (
+                      <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-2xl bg-white/70 backdrop-blur-sm">
+                        <span className="h-6 w-6 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
+                      </div>
+                    )}
+                    <RideRequestCard
+                      ride={request}
+                      onAccept={() => handleAccept(request.id)}
+                      onDecline={() => handleDecline(request.id)}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </FadeUp>
       )}
