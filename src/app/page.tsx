@@ -304,16 +304,16 @@ export default function Home() {
               ["Montego Bay", "Falmouth", "St. James → Trelawny", 2100],
             ].map(([from, to, parish, fare]) => (
               <StaggerItem key={`${from}-${to}`}>
-                <HoverLift className="group flex h-full items-center justify-between rounded-2xl border border-line bg-white p-5 transition-all hover:border-rajlo-red hover:shadow-md">
-                  <div className="min-w-0">
+                <HoverLift className="group flex h-full flex-col gap-3 rounded-2xl border border-line bg-white p-5 transition-all hover:border-rajlo-red hover:shadow-md sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+                  <div className="min-w-0 flex-1">
                     <p className="font-secondary text-[11px] font-bold uppercase tracking-wider text-muted">
                       {parish}
                     </p>
-                    <p className="mt-1 truncate text-base font-extrabold">
+                    <p className="mt-1 break-words text-base font-extrabold leading-snug sm:truncate">
                       {from} <span className="text-rajlo-red">→</span> {to}
                     </p>
                   </div>
-                  <p className="ml-4 shrink-0 text-right">
+                  <p className="shrink-0 sm:text-right">
                     <span className="font-secondary text-[10px] font-bold uppercase text-muted">from</span>
                     <span className="block text-xl font-extrabold">JMD {(fare as number).toLocaleString()}</span>
                   </p>
