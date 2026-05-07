@@ -3,20 +3,14 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import {
-  AuthShell,
-  AuthField,
-  AuthSubmit,
-  GoogleAuthButton,
-  AuthDivider,
-} from "@/components/auth-shell";
+import { AuthShell, AuthField, AuthSubmit } from "@/components/auth-shell";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { friendlyError } from "@/lib/auth-errors";
 
-export default function RiderLoginPage() {
+export default function AdminLoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/rider";
+  const next = searchParams.get("next") ?? "/admin";
   const urlError = searchParams.get("error");
 
   const [email, setEmail] = useState("");
@@ -40,23 +34,16 @@ export default function RiderLoginPage() {
       return;
     }
 
-    // Verify the account is actually a rider account. If a driver/admin tries
-    // to sign in here, sign them back out and tell them where to go.
+    // Verify the user actually has the admin role; otherwise sign back out.
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", data.user.id)
       .single();
 
-    if (profile?.role !== "rider") {
+    if (profile?.role !== "admin") {
       await supabase.auth.signOut();
-      const wrongRole =
-        profile?.role === "driver"
-          ? "This is a driver account. Please use the driver sign-in instead."
-          : profile?.role === "admin"
-            ? "This is an admin account. Please use the admin sign-in instead."
-            : "This account isn't authorized for the rider portal.";
-      setError(wrongRole);
+      setError("This account doesn't have admin access.");
       setIsLoading(false);
       return;
     }
@@ -67,9 +54,9 @@ export default function RiderLoginPage() {
 
   return (
     <AuthShell
-      title="Welcome back"
-      subtitle="Sign in to your rider account"
-      audience="rider"
+      title="Admin sign in"
+      subtitle="Operations console — Rajlo staff only."
+      audience="admin"
     >
       <div className="space-y-5">
         {error && (
@@ -78,13 +65,10 @@ export default function RiderLoginPage() {
           </div>
         )}
 
-        <GoogleAuthButton intent="rider" next={next} />
-        <AuthDivider label="or sign in with email" />
-
         <AuthField
           label="Email"
           type="email"
-          placeholder="you@example.com"
+          placeholder="ops@rajlo.com"
           value={email}
           onChange={setEmail}
           autoComplete="email"
@@ -109,19 +93,11 @@ export default function RiderLoginPage() {
             Forgot password?
           </Link>
         </div>
-        <AuthSubmit
-          onClick={handleLogin}
-          loading={isLoading}
-          disabled={!email || !password}
-        >
+        <AuthSubmit onClick={handleLogin} loading={isLoading} disabled={!email || !password}>
           Sign in
         </AuthSubmit>
-
-        <p className="text-center text-sm text-muted">
-          Don&apos;t have an account?{" "}
-          <Link href="/auth/rider/signup" className="font-semibold text-rajlo-red hover:underline">
-            Sign up
-          </Link>
+        <p className="text-center text-xs text-muted">
+          Admin accounts are created manually by Rajlo. If you need access, contact the operations team.
         </p>
       </div>
     </AuthShell>

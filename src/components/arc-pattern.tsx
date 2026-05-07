@@ -69,7 +69,7 @@ export function ArcPatternTile({
       stroke="currentColor"
       strokeWidth="6"
       aria-hidden="true"
-      className={`opacity-[0.08] ${colorClass} ${className}`}
+      className={`${colorClass} ${className}`}
     >
       <path d="M 14 38 A 36 36 0 0 1 86 38" />
       <circle cx="50" cy="62" r="22" />

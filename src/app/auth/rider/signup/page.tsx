@@ -2,86 +2,122 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { AuthShell, AuthField, AuthSubmit } from "@/components/auth-shell";
+import {
+  AuthShell,
+  AuthField,
+  AuthSubmit,
+  AgreementCheckbox,
+  AuthPhoneField,
+  GoogleAuthButton,
+  AuthDivider,
+} from "@/components/auth-shell";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 export default function RiderSignupPage() {
-  const [step, setStep] = useState<"info" | "verify" | "complete">("info");
+  const [step, setStep] = useState<"info" | "check-email">("info");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [agreed, setAgreed] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSignup = async () => {
     setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setStep("verify");
+    setError(null);
+
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
+      setIsLoading(false);
+      return;
+    }
+
+    // Pre-check: reject if this email is already registered (any role).
+    // Supabase silently re-sends a confirmation for existing-but-unconfirmed
+    // accounts, which would mislead the user — so we check explicitly first.
+    try {
+      const res = await fetch("/api/auth/check-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const json = (await res.json()) as {
+        exists?: boolean;
+        role?: "rider" | "driver" | "admin";
+      };
+      if (json.exists) {
+        const roleLabel =
+          json.role === "driver"
+            ? "as a Rajlo driver"
+            : json.role === "admin"
+              ? "as a Rajlo admin"
+              : "as a Rajlo rider";
+        setError(
+          `This email is already registered ${roleLabel}. Please sign in instead, or use a different email to create a rider account.`,
+        );
+        setIsLoading(false);
+        return;
+      }
+    } catch {
+      // If the check itself fails, fall through to signUp — Supabase will
+      // still reject duplicate confirmed accounts on its own.
+    }
+
+    const supabase = createSupabaseBrowserClient();
+    const { error: authError } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback?next=/rider`,
+        data: {
+          full_name: name,
+          phone,
+          role: "rider",
+        },
+      },
+    });
+
+    if (authError) {
+      setError(authError.message);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(false);
+    setStep("check-email");
   };
 
-  const handleVerify = async () => {
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 600));
-    setStep("complete");
-    setIsLoading(false);
-  };
-
-  if (step === "complete") {
-    return (
-      <AuthShell title="You're all set!" subtitle={`Welcome to Rajlo, ${name}.`} audience="rider">
-        <div className="space-y-6 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-soft">
-            <svg className="h-8 w-8 text-rajlo-red" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-              <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z" />
-            </svg>
-          </div>
-          <Link
-            href="/rider/request"
-            className="block rounded-full bg-rajlo-red px-6 py-3.5 text-sm font-semibold text-white hover:bg-primary-hover"
-          >
-            Request your first ride
-          </Link>
-          <p className="text-xs text-muted">
-            By signing up, you agree to our{" "}
-            <Link href="/legal/terms" className="font-semibold text-rajlo-red hover:underline">
-              Terms of Service
-            </Link>{" "}
-            and{" "}
-            <Link href="/legal/privacy" className="font-semibold text-rajlo-red hover:underline">
-              Privacy Policy
-            </Link>
-            .
-          </p>
-        </div>
-      </AuthShell>
-    );
-  }
-
-  if (step === "verify") {
+  if (step === "check-email") {
     return (
       <AuthShell
-        title="Verify your number"
-        subtitle={`We sent a 6-digit code to ${phone}.`}
+        title="Check your inbox"
+        subtitle={`We sent a confirmation link to ${email}. Click it to activate your Rajlo account.`}
         audience="rider"
-        footer={
-          <button className="font-semibold text-rajlo-red hover:underline">Resend code</button>
-        }
       >
-        <div className="space-y-5">
-          <div className="grid grid-cols-6 gap-2">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <input
-                key={i}
-                type="text"
-                inputMode="numeric"
-                maxLength={1}
-                className="rounded-xl border border-line bg-surface py-3 text-center text-xl font-bold outline-none focus:border-rajlo-red focus:ring-2 focus:ring-rajlo-red/15"
-                placeholder="0"
-              />
-            ))}
+        <div className="space-y-5 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-primary-soft">
+            <svg className="h-8 w-8 text-rajlo-red" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24" aria-hidden>
+              <rect width="20" height="16" x="2" y="4" rx="2" />
+              <path d="m22 7-10 5L2 7" />
+            </svg>
           </div>
-          <AuthSubmit onClick={handleVerify} loading={isLoading}>
-            Verify
-          </AuthSubmit>
+          <p className="text-sm text-muted">
+            Didn&apos;t get it? Check your spam folder, or{" "}
+            <button
+              onClick={() => setStep("info")}
+              className="font-semibold text-rajlo-red hover:underline"
+            >
+              try a different email
+            </button>
+            .
+          </p>
+          <Link
+            href="/auth/rider/login"
+            className="block rounded-full border border-line bg-surface px-6 py-3 text-sm font-semibold text-foreground hover:bg-surface-soft"
+          >
+            Back to sign in
+          </Link>
         </div>
       </AuthShell>
     );
@@ -92,32 +128,30 @@ export default function RiderSignupPage() {
       title="Create your account"
       subtitle="Join Rajlo and book a ride anywhere, anytime."
       audience="rider"
-      footer={
-        <>
+    >
+      <div className="space-y-5">
+        {error && (
+          <div className="rounded-xl border border-rajlo-red/20 bg-primary-soft px-4 py-3 text-sm text-rajlo-red">
+            {error}
+          </div>
+        )}
+
+        <GoogleAuthButton intent="rider" label="Sign up with Google" />
+        <AuthDivider label="or sign up with email" />
+
+        <AuthField label="Full name" placeholder="Your name" value={name} onChange={setName} autoComplete="name" icon="user" required />
+        <AuthField label="Email" type="email" placeholder="you@example.com" value={email} onChange={setEmail} autoComplete="email" icon="email" required />
+        <AuthPhoneField label="Phone number" placeholder="876 555 0123" value={phone} onChange={setPhone} required />
+        <AuthField label="Password" type="password" placeholder="At least 8 characters" value={password} onChange={setPassword} autoComplete="new-password" icon="password" required />
+        <AgreementCheckbox checked={agreed} onChange={setAgreed} />
+        <AuthSubmit onClick={handleSignup} loading={isLoading} disabled={!name || !email || !phone || !password || !agreed}>
+          Create account
+        </AuthSubmit>
+        <p className="text-center text-sm text-muted">
           Already have an account?{" "}
           <Link href="/auth/rider/login" className="font-semibold text-rajlo-red hover:underline">
             Sign in
           </Link>
-        </>
-      }
-    >
-      <div className="space-y-5">
-        <AuthField label="Full name" placeholder="Your name" value={name} onChange={setName} autoComplete="name" required />
-        <AuthField label="Email" type="email" placeholder="you@example.com" value={email} onChange={setEmail} autoComplete="email" required />
-        <AuthField label="Phone number" type="tel" placeholder="+1 876 ..." value={phone} onChange={setPhone} autoComplete="tel" required />
-        <AuthSubmit onClick={handleSignup} loading={isLoading} disabled={!name || !email || !phone}>
-          Continue
-        </AuthSubmit>
-        <p className="text-center text-xs text-muted">
-          By continuing you agree to our{" "}
-          <Link href="/legal/terms" className="font-semibold text-rajlo-red hover:underline">
-            Terms
-          </Link>{" "}
-          and{" "}
-          <Link href="/legal/privacy" className="font-semibold text-rajlo-red hover:underline">
-            Privacy Policy
-          </Link>
-          .
         </p>
       </div>
     </AuthShell>

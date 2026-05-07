@@ -1,0 +1,406 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { Icon } from "@/components/icons";
+import { ArcWatermark } from "@/components/arc-pattern";
+import { FadeUp, Stagger, StaggerItem } from "@/components/anim";
+
+type Driver = {
+  id: string;
+  externalId: string;
+  name: string;
+  plateNumber: string | null;
+  status: "pending_review" | "rejected" | "active" | string;
+  activated?: boolean;
+  submittedAt: string;
+  adminNote: string | null;
+  docsUploaded: number;
+  docsPending: number;
+  docsRejected: number;
+};
+
+type Filter = "all" | "pending" | "rejected" | "active";
+
+// Source of truth for the doc count display; matches mock-data.requiredTADocuments
+const TOTAL_REQUIRED_DOCS = 9;
+
+export default function VerificationQueuePage() {
+  const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        // Fetch both cohorts in parallel: in-pipeline (pending/rejected) and
+        // activated drivers. Combined into a single list and filtered
+        // client-side via the chip row.
+        const [pipelineRes, activeRes] = await Promise.all([
+          fetch("/api/admin/verification-queue"),
+          fetch("/api/admin/verification-queue?scope=active"),
+        ]);
+        if (!pipelineRes.ok) throw new Error(`HTTP ${pipelineRes.status}`);
+        const pipelineJson = (await pipelineRes.json()) as {
+          drivers: Driver[];
+        };
+        const activeJson = activeRes.ok
+          ? ((await activeRes.json()) as { drivers: Driver[] })
+          : { drivers: [] };
+        if (mounted) {
+          setDrivers([
+            ...(pipelineJson.drivers ?? []),
+            ...(activeJson.drivers ?? []),
+          ]);
+        }
+      } catch (e) {
+        if (mounted)
+          setError(e instanceof Error ? e.message : "Failed to load queue");
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    let list = drivers;
+    if (filter === "all") {
+      // "All" = everything in the verification pipeline (excludes active).
+      list = list.filter((d) => d.status !== "active");
+    } else if (filter === "pending") {
+      list = list.filter((d) => d.status === "pending_review");
+    } else if (filter === "rejected") {
+      list = list.filter((d) => d.status === "rejected");
+    } else if (filter === "active") {
+      list = list.filter((d) => d.status === "active");
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      list = list.filter(
+        (d) =>
+          d.name.toLowerCase().includes(q) ||
+          d.externalId.toLowerCase().includes(q) ||
+          (d.plateNumber ?? "").toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [drivers, filter, search]);
+
+  const counts = useMemo(() => {
+    const inPipeline = drivers.filter((d) => d.status !== "active").length;
+    const pending = drivers.filter((d) => d.status === "pending_review").length;
+    const rejected = drivers.filter((d) => d.status === "rejected").length;
+    const active = drivers.filter((d) => d.status === "active").length;
+    return { all: inPipeline, pending, rejected, active };
+  }, [drivers]);
+
+  return (
+    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+      {/* ─── Hero ─── */}
+      <FadeUp>
+        <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-7 text-white shadow-xl md:p-10">
+          <ArcWatermark size={420} variant="red" className="absolute -right-20 -bottom-20 opacity-[0.10]" />
+          <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                Operations
+              </p>
+              <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
+                Verification queue
+              </h1>
+              <p className="mt-1 text-sm text-white/70 md:text-base">
+                Drivers awaiting TA document review, sorted by submission time.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-white/10 px-4 py-3 backdrop-blur">
+                <p className="text-xs font-semibold uppercase tracking-wider text-white/70">
+                  Total
+                </p>
+                <p className="mt-0.5 text-3xl font-extrabold tracking-tight">{counts.all}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </FadeUp>
+
+      {/* ─── Filter chips + search ─── */}
+      <FadeUp delay={0.05}>
+        <div className="flex flex-col gap-3 rounded-2xl border border-line bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap gap-2">
+            <FilterChip
+              label="All"
+              count={counts.all}
+              active={filter === "all"}
+              onClick={() => setFilter("all")}
+            />
+            <FilterChip
+              label="Pending review"
+              count={counts.pending}
+              active={filter === "pending"}
+              onClick={() => setFilter("pending")}
+              tone="amber"
+            />
+            <FilterChip
+              label="Resubmit"
+              count={counts.rejected}
+              active={filter === "rejected"}
+              onClick={() => setFilter("rejected")}
+              tone="red"
+            />
+            <FilterChip
+              label="Active drivers"
+              count={counts.active}
+              active={filter === "active"}
+              onClick={() => setFilter("active")}
+              tone="emerald"
+            />
+          </div>
+
+          <div className="relative">
+            <span
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted [&>svg]:h-4 [&>svg]:w-4"
+            >
+              <Icon name="search" />
+            </span>
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search by name, plate, or ID…"
+              className="w-full min-w-0 rounded-xl border border-line bg-surface-soft py-2 pl-9 pr-3 text-sm outline-none focus:border-rajlo-red focus:ring-2 focus:ring-rajlo-red/15 sm:w-72"
+            />
+          </div>
+        </div>
+      </FadeUp>
+
+      {/* ─── List / states ─── */}
+      {loading ? (
+        <div className="grid place-items-center rounded-3xl border border-line bg-surface p-16 text-center">
+          <span className="grid h-12 w-12 place-items-center rounded-full bg-primary-soft">
+            <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
+          </span>
+          <p className="mt-4 text-sm font-semibold text-muted">Loading queue…</p>
+        </div>
+      ) : error ? (
+        <div className="rounded-2xl border border-rajlo-red/30 bg-primary-soft p-6 text-center">
+          <Icon name="alert-triangle" className="mx-auto h-8 w-8 text-rajlo-red" />
+          <p className="mt-3 text-sm font-bold text-rajlo-red">{error}</p>
+          <p className="mt-1 text-xs text-muted">
+            Refresh the page or check your sign-in.
+          </p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="grid place-items-center rounded-3xl border border-line bg-surface p-16 text-center">
+          <span className="grid h-14 w-14 place-items-center rounded-full bg-emerald-50 text-emerald-600">
+            <Icon name="check-circle" className="h-7 w-7" />
+          </span>
+          <p className="mt-5 text-xl font-extrabold tracking-tight">All caught up</p>
+          <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
+            {drivers.length === 0
+              ? "No drivers awaiting verification right now. New submissions will appear here automatically."
+              : "No drivers match your filter. Adjust the filter or search to see more."}
+          </p>
+        </div>
+      ) : (
+        <Stagger className="space-y-3" amount={0.05}>
+          {filtered.map((d) => (
+            <StaggerItem key={d.id}>
+              <DriverCard driver={d} />
+            </StaggerItem>
+          ))}
+        </Stagger>
+      )}
+    </div>
+  );
+}
+
+function FilterChip({
+  label,
+  count,
+  active,
+  onClick,
+  tone = "default",
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  onClick: () => void;
+  tone?: "default" | "amber" | "red" | "emerald";
+}) {
+  const toneActive =
+    tone === "red"
+      ? "bg-rajlo-red text-white shadow-sm"
+      : tone === "amber"
+        ? "bg-amber-500 text-white shadow-sm"
+        : tone === "emerald"
+          ? "bg-emerald-600 text-white shadow-sm"
+          : "bg-rajlo-black text-white shadow-sm";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-full px-3.5 py-1.5 text-xs font-bold transition-colors ${
+        active
+          ? toneActive
+          : "border border-line bg-surface text-muted hover:bg-surface-soft hover:text-foreground"
+      }`}
+    >
+      {label}
+      <span
+        className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
+          active ? "bg-white/20" : "bg-line/60"
+        }`}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+function DriverCard({ driver }: { driver: Driver }) {
+  const isRejected = driver.status === "rejected";
+  const isActive = driver.status === "active";
+  const submitted = new Date(driver.submittedAt);
+  const ago = relativeTime(submitted);
+  const docPct = Math.round((driver.docsUploaded / TOTAL_REQUIRED_DOCS) * 100);
+
+  const avatarBg = isActive
+    ? "bg-emerald-600"
+    : isRejected
+      ? "bg-rajlo-red"
+      : "bg-rajlo-black";
+  const avatarIcon = isActive
+    ? "check-circle"
+    : isRejected
+      ? "alert-triangle"
+      : "clipboard-check";
+
+  return (
+    <Link
+      href={`/admin/verification-detail?driverId=${encodeURIComponent(driver.externalId)}`}
+      className="group flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-md md:flex-row md:items-center"
+    >
+      {/* Avatar + name */}
+      <div className="flex items-start gap-3 md:min-w-[220px] md:flex-1">
+        <span
+          className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white shadow-sm ${avatarBg}`}
+        >
+          <Icon name={avatarIcon} className="h-5 w-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="truncate text-base font-extrabold tracking-tight">
+            {driver.name}
+          </p>
+          <p className="truncate text-xs text-muted">
+            {driver.externalId} · {driver.plateNumber ?? "no plate"}
+          </p>
+        </div>
+      </div>
+
+      {/* Status + stats grid */}
+      <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-3 md:gap-5">
+        <Stat
+          label={isActive ? "Activated" : "Submitted"}
+          value={ago}
+          tone={!isActive && hoursSince(submitted) > 48 ? "warn" : "default"}
+        />
+        <Stat
+          label="Documents"
+          value={`${driver.docsUploaded}/${TOTAL_REQUIRED_DOCS}`}
+          progress={docPct}
+        />
+        <div className="hidden md:block">
+          <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+            Status
+          </p>
+          <span
+            className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ${
+              isActive
+                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                : isRejected
+                  ? "bg-primary-soft text-rajlo-red ring-rajlo-red/30"
+                  : "bg-amber-50 text-amber-800 ring-amber-200"
+            }`}
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                isActive
+                  ? "bg-emerald-500"
+                  : isRejected
+                    ? "bg-rajlo-red"
+                    : "bg-amber-500"
+              }`}
+            />
+            {isActive ? "Active" : isRejected ? "Resubmit" : "Pending"}
+          </span>
+        </div>
+      </div>
+
+      {/* Chevron */}
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface-soft text-muted transition-all group-hover:bg-rajlo-red group-hover:text-white">
+        <Icon name="chevron-right" className="h-4 w-4" />
+      </span>
+    </Link>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  tone = "default",
+  progress,
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "warn";
+  progress?: number;
+}) {
+  return (
+    <div>
+      <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+        {label}
+      </p>
+      <p
+        className={`mt-1 text-sm font-bold ${
+          tone === "warn" ? "text-amber-700" : "text-foreground"
+        }`}
+      >
+        {value}
+      </p>
+      {typeof progress === "number" && (
+        <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-line">
+          <div
+            className="h-full rounded-full bg-rajlo-red transition-all"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function relativeTime(date: Date): string {
+  const ms = Date.now() - date.getTime();
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min${minutes === 1 ? "" : "s"} ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours} hour${hours === 1 ? "" : "s"} ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days} day${days === 1 ? "" : "s"} ago`;
+  const months = Math.floor(days / 30);
+  return `${months} month${months === 1 ? "" : "s"} ago`;
+}
+
+function hoursSince(date: Date): number {
+  return (Date.now() - date.getTime()) / (1000 * 60 * 60);
+}

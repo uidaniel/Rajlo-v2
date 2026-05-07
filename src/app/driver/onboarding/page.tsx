@@ -1,66 +1,36 @@
 "use client";
-import { useState } from "react";
-import { useRouter } from "next/navigation";
 
-const STEPS = [
-  { id: 1, title: "Personal Info", subtitle: "TRN, NIS, and contact details" },
-  { id: 2, title: "Licence & Badge", subtitle: "Driver's licence and TA Driver Badge" },
-  { id: 3, title: "Vehicle Details", subtitle: "Red plate registration and COF" },
-  { id: 4, title: "TA Franchise", subtitle: "TA Franchise Certificate" },
-  { id: 5, title: "Insurance", subtitle: "PPV comprehensive insurance" },
-  { id: 6, title: "Police Record & Selfie", subtitle: "Good conduct certificate and identity photo" },
-  { id: 7, title: "Review & Submit", subtitle: "Confirm and send for TA verification" },
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { Logo } from "@/components/logo";
+import { ArcWatermark } from "@/components/arc-pattern";
+import { Icon, type IconName } from "@/components/icons";
+import { FadeUp } from "@/components/anim";
+import { FileUpload, type FileState } from "@/components/file-upload";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { uploadDriverDocument, removeDriverDocument } from "@/lib/storage";
+
+const DRAFT_KEY = "rajlo-driver-onboarding-draft";
+
+const STEPS: {
+  id: number;
+  title: string;
+  subtitle: string;
+  icon: IconName;
+}[] = [
+  { id: 1, title: "Personal info", subtitle: "TRN, NIS, contact", icon: "user" },
+  { id: 2, title: "Licence & Badge", subtitle: "Driver's licence + TA badge", icon: "shield-check" },
+  { id: 3, title: "Vehicle details", subtitle: "Red plate + COF", icon: "car" },
+  { id: 4, title: "TA Franchise", subtitle: "Franchise certificate", icon: "file-text" },
+  { id: 5, title: "Insurance", subtitle: "PPV insurance", icon: "shield" },
+  { id: 6, title: "Police record", subtitle: "Good conduct + selfie", icon: "clipboard-check" },
+  { id: 7, title: "Review", subtitle: "Confirm & submit", icon: "check-circle" },
 ];
 
-type UploadField = {
-  id: string;
-  label: string;
-  hint: string;
-  required: boolean;
-};
-
-type FileState = Record<string, File | null>;
-
-function FileUploadField({
-  field,
-  files,
-  onChange,
-}: {
-  field: UploadField;
-  files: FileState;
-  onChange: (id: string, file: File | null) => void;
-}) {
-  const file = files[field.id];
-  return (
-    <div className="space-y-1">
-      <label className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
-        {field.label}
-        {field.required && <span style={{ color: "#e74c3c" }}> *</span>}
-      </label>
-      <p className="text-xs" style={{ color: "var(--muted)" }}>{field.hint}</p>
-      <label
-        className="flex items-center gap-3 rounded-xl border-2 border-dashed cursor-pointer px-4 py-3 transition-colors"
-        style={{
-          borderColor: file ? "var(--primary)" : "var(--line)",
-          background: file ? "var(--primary-soft)" : "var(--surface-soft)",
-        }}
-      >
-        <span style={{ color: file ? "var(--primary)" : "var(--muted)", fontSize: 20 }}>
-          {file ? "✅" : "📎"}
-        </span>
-        <span className="text-sm truncate" style={{ color: file ? "var(--primary)" : "var(--muted)" }}>
-          {file ? file.name : "Click to upload file (PDF, JPG, PNG)"}
-        </span>
-        <input
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png"
-          className="hidden"
-          onChange={(e) => onChange(field.id, e.target.files?.[0] ?? null)}
-        />
-      </label>
-    </div>
-  );
-}
+/* ═══════════════════════════════════════════════════════════════
+   Form primitives
+   ═══════════════════════════════════════════════════════════════ */
 
 function TextInput({
   label,
@@ -69,63 +39,497 @@ function TextInput({
   onChange,
   hint,
   required,
+  type = "text",
+  min,
+  max,
 }: {
   label: string;
-  placeholder: string;
+  placeholder?: string;
   value: string;
   onChange: (v: string) => void;
   hint?: string;
   required?: boolean;
+  type?: "text" | "email" | "tel" | "date" | "number";
+  min?: string;
+  max?: string;
 }) {
   return (
-    <div className="space-y-1">
-      <label className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
+    <label className="block">
+      <span className="mb-1.5 block text-sm font-semibold">
         {label}
-        {required && <span style={{ color: "#e74c3c" }}> *</span>}
-      </label>
-      {hint && <p className="text-xs" style={{ color: "var(--muted)" }}>{hint}</p>}
+        {required && <span className="ml-0.5 text-rajlo-red">*</span>}
+      </span>
+      {hint && <p className="mb-2 text-xs text-muted">{hint}</p>}
       <input
-        className="w-full rounded-xl border px-4 py-2.5 text-sm outline-none focus:ring-2"
-        style={{
-          borderColor: "var(--line)",
-          background: "var(--surface-soft)",
-          color: "var(--foreground)",
-        }}
-        placeholder={placeholder}
+        type={type}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        min={min}
+        max={max}
+        className="w-full rounded-xl border border-line bg-surface px-4 py-3 text-sm outline-none transition-all placeholder:text-muted/70 focus:border-rajlo-red focus:ring-2 focus:ring-rajlo-red/15"
       />
+    </label>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   Main page
+   ═══════════════════════════════════════════════════════════════ */
+
+const EMPTY_FORM = {
+  firstName: "",
+  lastName: "",
+  phone: "",
+  email: "",
+  trn: "",
+  nis: "",
+  licenceNumber: "",
+  licenceExpiry: "",
+  badgeNumber: "",
+  plateNumber: "",
+  vehicleMake: "",
+  vehicleModel: "",
+  vehicleYear: "",
+  franchiseNumber: "",
+  franchiseExpiry: "",
+};
+
+/** Maps a document key (e.g. "drivers_licence_back") to a human label. */
+function humanizeDocKey(key: string): string {
+  const map: Record<string, string> = {
+    drivers_licence_front: "Driver's licence (front)",
+    drivers_licence_back: "Driver's licence (back)",
+    driver_badge: "TA Driver Badge",
+    franchise_cert: "TA Franchise Certificate",
+    cof: "Certificate of Fitness",
+    insurance: "PPV Insurance",
+    police_record: "Police Record",
+    selfie: "Identity selfie",
+    red_plate_reg: "Red plate registration",
+    trn: "TRN",
+    nis: "NIS",
+  };
+  return map[key] ?? key.replace(/_/g, " ");
+}
+
+/**
+ * Which step in the wizard owns each document key. Used to deep-link the
+ * resubmission pills so a tap takes the driver straight to the relevant step.
+ */
+const DOC_TO_STEP: Record<string, number> = {
+  drivers_licence_front: 2,
+  drivers_licence_back: 2,
+  driver_badge: 2,
+  red_plate_reg: 3,
+  cof: 3,
+  franchise_cert: 4,
+  insurance: 5,
+  police_record: 6,
+  selfie: 6,
+};
+
+/**
+ * Returns true if every required field/upload for the given step is filled.
+ * Step 7 (review) requires steps 1–6 to all be complete.
+ */
+function isStepComplete(
+  step: number,
+  form: typeof EMPTY_FORM,
+  files: FileState,
+): boolean {
+  const hasFile = (id: string) => Boolean(files[id]?.path);
+  const hasText = (...keys: (keyof typeof form)[]) =>
+    keys.every((k) => form[k].trim() !== "");
+
+  switch (step) {
+    case 1:
+      return hasText("firstName", "lastName", "phone", "email", "trn", "nis");
+    case 2:
+      return (
+        hasText("licenceNumber", "licenceExpiry", "badgeNumber") &&
+        hasFile("drivers_licence_front") &&
+        hasFile("drivers_licence_back") &&
+        hasFile("driver_badge")
+      );
+    case 3:
+      return (
+        hasText("plateNumber", "vehicleMake", "vehicleModel", "vehicleYear") &&
+        hasFile("red_plate_reg") &&
+        hasFile("cof")
+      );
+    case 4:
+      return (
+        hasText("franchiseNumber", "franchiseExpiry") &&
+        hasFile("franchise_cert")
+      );
+    case 5:
+      return hasFile("insurance");
+    case 6:
+      return hasFile("police_record") && hasFile("selfie");
+    case 7:
+      return [1, 2, 3, 4, 5, 6].every((s) => isStepComplete(s, form, files));
+    default:
+      return false;
+  }
+}
+
+/** Server-fetched driver state for resubmissions. */
+type ServerDocument = {
+  doc_key: string;
+  status: string;
+  file_name: string | null;
+  file_path: string | null;
+  note: string | null;
+};
+type ServerDriver = {
+  external_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  trn: string | null;
+  nis: string | null;
+  licence_number: string | null;
+  licence_expiry: string | null;
+  badge_number: string | null;
+  plate_number: string | null;
+  vehicle_make: string | null;
+  vehicle_model: string | null;
+  vehicle_year: number | null;
+  franchise_number: string | null;
+  franchise_expiry: string | null;
+  admin_note: string | null;
+  onboarding_status: string;
+};
+
+function LoadingScreen() {
+  return (
+    <div className="grid min-h-screen place-items-center bg-surface-soft">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <span className="grid h-14 w-14 place-items-center rounded-full bg-rajlo-red/10">
+          <span className="h-6 w-6 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
+        </span>
+        <p className="text-sm font-semibold text-muted">Loading your application…</p>
+      </div>
     </div>
   );
 }
 
 export default function DriverOnboardingPage() {
+  // Suspense boundary required by Next.js 16 because the inner component uses
+  // useSearchParams — without this, production builds fail with the
+  // "Missing Suspense boundary with useSearchParams" error.
+  return (
+    <Suspense fallback={<LoadingScreen />}>
+      <DriverOnboardingWizard />
+    </Suspense>
+  );
+}
+
+function DriverOnboardingWizard() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editMode = searchParams.get("edit") === "1";
   const [driverId] = useState("DRV-1031");
+  const [userId, setUserId] = useState<string | null>(null);
   const [step, setStep] = useState(1);
   const [files, setFiles] = useState<FileState>({});
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [form, setForm] = useState({
-    firstName: "",
-    lastName: "",
-    phone: "",
-    email: "",
-    trn: "",
-    nis: "",
-    licenceNumber: "",
-    licenceExpiry: "",
-    badgeNumber: "",
-    plateNumber: "",
-    vehicleMake: "",
-    vehicleModel: "",
-    vehicleYear: "",
-    franchiseNumber: "",
-    franchiseExpiry: "",
-  });
+  const [done, setDone] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [hasDraft, setHasDraft] = useState(false);
+  const [restored, setRestored] = useState(false);
+  const [isResubmission, setIsResubmission] = useState(false);
+  const [adminNote, setAdminNote] = useState<string | null>(null);
+  const [rejectedDocKeys, setRejectedDocKeys] = useState<Set<string>>(new Set());
 
-  const handleFile = (id: string, file: File | null) => {
-    setFiles((prev) => ({ ...prev, [id]: file }));
+  // Loads the signed-in user's id (needed to scope storage paths) AND checks
+  // whether they've already submitted onboarding. Routing logic:
+  //  - active           → /driver
+  //  - pending_review   → /driver/pending (locked: can't edit a pending app)
+  //  - rejected (default) → /driver/resubmit (focused upload-only flow)
+  //  - rejected + ?edit=1 → STAY on this wizard so the driver can fix form data
+  //  - needs_onboarding → STAY on onboarding (first-time)
+  const [checkingAccess, setCheckingAccess] = useState(true);
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        router.push("/auth/driver/login");
+        return;
+      }
+      setUserId(user.id);
+
+      try {
+        const res = await fetch("/api/driver/status");
+        if (res.ok) {
+          const json = (await res.json()) as { state: string };
+          if (json.state === "active") {
+            router.push("/driver");
+            return;
+          }
+          if (
+            json.state === "pending_verification" ||
+            json.state === "deactivated"
+          ) {
+            router.push("/driver/pending");
+            return;
+          }
+          if (json.state === "rejected") {
+            if (!editMode) {
+              router.push("/driver/resubmit");
+              return;
+            }
+            // ?edit=1 — let the driver edit form data via the full wizard.
+            await loadResubmissionData();
+            setIsResubmission(true);
+          }
+        }
+      } catch {
+        /* on error, fall through and let the user see the wizard */
+      }
+
+      setCheckingAccess(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [router, editMode]);
+
+  /**
+   * Pulls existing driver + documents and pre-fills the form for a rejected
+   * driver who's resubmitting.
+   */
+  const loadResubmissionData = async () => {
+    try {
+      const res = await fetch("/api/driver/me");
+      if (!res.ok) return;
+      const json = (await res.json()) as {
+        driver: ServerDriver | null;
+        documents: ServerDocument[];
+      };
+      if (!json.driver) return;
+      const d = json.driver;
+
+      // Merge instead of overwrite: prefer the DB value, but keep whatever
+      // the user already had in the form (from a localStorage draft) when the
+      // DB returns null/empty. Without this, a field the DB never managed to
+      // store (e.g. submitted before the columns existed) would wipe the
+      // user's saved draft on every load.
+      setForm((prev) => {
+        const pick = (
+          db: string | null | undefined,
+          local: string,
+        ): string => {
+          if (db !== null && db !== undefined && db !== "") return db;
+          return local;
+        };
+        return {
+          firstName: pick(d.first_name, prev.firstName),
+          lastName: pick(d.last_name, prev.lastName),
+          phone: pick(d.phone, prev.phone),
+          email: pick(d.email, prev.email),
+          trn: pick(d.trn, prev.trn),
+          nis: pick(d.nis, prev.nis),
+          licenceNumber: pick(d.licence_number, prev.licenceNumber),
+          licenceExpiry: pick(d.licence_expiry, prev.licenceExpiry),
+          badgeNumber: pick(d.badge_number, prev.badgeNumber),
+          plateNumber: pick(d.plate_number, prev.plateNumber),
+          vehicleMake: pick(d.vehicle_make, prev.vehicleMake),
+          vehicleModel: pick(d.vehicle_model, prev.vehicleModel),
+          vehicleYear: d.vehicle_year ? String(d.vehicle_year) : prev.vehicleYear,
+          franchiseNumber: pick(d.franchise_number, prev.franchiseNumber),
+          franchiseExpiry: pick(d.franchise_expiry, prev.franchiseExpiry),
+        };
+      });
+
+      setAdminNote(d.admin_note);
+
+      // Merge the DB-known docs with whatever's already in the local files
+      // state (which would have been hydrated from localStorage by the
+      // earlier useEffect — this is the bridge from /driver/resubmit, where
+      // the driver may have already uploaded a replacement before clicking
+      // "Edit my details").
+      //
+      // Rules per doc:
+      //   - DB rejected + local fresh upload  → use the local upload, do NOT
+      //     mark it in `rejectedDocKeys` (the user has already replaced it)
+      //   - DB rejected + nothing local       → mark rejected, no file
+      //   - DB approved/pending with file_path → DB wins, attach `approved`
+      //     flag so the UI shows the green "Approved" badge
+      //   - No DB file but local has one      → keep the local upload
+      setFiles((prev) => {
+        const merged: FileState = {};
+        const rejectedDocs = new Set<string>();
+
+        json.documents.forEach((doc) => {
+          const localUpload = prev[doc.doc_key];
+          if (doc.status === "rejected") {
+            if (localUpload?.path) {
+              merged[doc.doc_key] = localUpload;
+            } else {
+              rejectedDocs.add(doc.doc_key);
+            }
+            return;
+          }
+          if (doc.file_path && doc.file_name) {
+            merged[doc.doc_key] = {
+              name: doc.file_name,
+              size: 0,
+              path: doc.file_path,
+              approved: doc.status === "approved",
+            };
+          } else if (localUpload?.path) {
+            merged[doc.doc_key] = localUpload;
+          }
+        });
+
+        // setRejectedDocKeys inside setFiles' updater is intentional: we need
+        // the closure access to `prev` to know which rejected docs already
+        // have a local replacement. React batches both updates.
+        setRejectedDocKeys(rejectedDocs);
+        return merged;
+      });
+    } catch {
+      /* fail silent — user can re-fill */
+    }
+  };
+
+  // ────────── Auto-save draft to localStorage ──────────
+  // Restore on mount (form + step + uploaded file metadata)
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(DRAFT_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw) as {
+        form?: typeof EMPTY_FORM;
+        step?: number;
+        files?: FileState;
+      };
+      if (draft.form) {
+        setForm({ ...EMPTY_FORM, ...draft.form });
+        setHasDraft(true);
+      }
+      if (typeof draft.step === "number" && draft.step >= 1 && draft.step <= STEPS.length) {
+        setStep(draft.step);
+      }
+      if (draft.files) {
+        // Strip any in-progress uploads — they were lost on page exit
+        const restored: FileState = {};
+        Object.entries(draft.files).forEach(([k, v]) => {
+          if (v?.path) {
+            restored[k] = {
+              name: v.name,
+              size: v.size,
+              path: v.path,
+              approved: v.approved,
+            };
+          }
+        });
+        setFiles(restored);
+      }
+      setRestored(true);
+    } catch {
+      /* corrupted draft — ignore */
+    }
+  }, []);
+
+  // Save on every form/step/files change
+  useEffect(() => {
+    if (done) return;
+    const isEmpty =
+      Object.values(form).every((v) => v === "") &&
+      Object.keys(files).length === 0;
+    if (isEmpty) return; // don't store an empty draft on first load
+    try {
+      // Don't persist `uploading` or `error` states — only completed uploads
+      const persistableFiles: FileState = {};
+      Object.entries(files).forEach(([k, v]) => {
+        if (v?.path) {
+          persistableFiles[k] = {
+            name: v.name,
+            size: v.size,
+            path: v.path,
+            approved: v.approved,
+          };
+        }
+      });
+      localStorage.setItem(
+        DRAFT_KEY,
+        JSON.stringify({ form, step, files: persistableFiles, savedAt: Date.now() }),
+      );
+      setHasDraft(true);
+    } catch {
+      /* localStorage full or disabled */
+    }
+  }, [form, step, files, done]);
+
+  const clearDraft = () => {
+    try {
+      localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      /* */
+    }
+    setHasDraft(false);
+  };
+
+  /**
+   * Picks a file: shows an "Uploading…" state, uploads to Supabase Storage,
+   * then updates with the final path. If a previous file was uploaded for the
+   * same docKey, replaces it (deletes the old object first).
+   */
+  const handlePickFile = async (docKey: string, file: File) => {
+    if (!userId) {
+      setFiles((prev) => ({
+        ...prev,
+        [docKey]: { name: file.name, size: file.size, error: "Not signed in" },
+      }));
+      return;
+    }
+
+    // Track the previous path (if any) so we can clean it up after success
+    const previousPath = files[docKey]?.path;
+
+    // Optimistic state: uploading
+    setFiles((prev) => ({
+      ...prev,
+      [docKey]: { name: file.name, size: file.size, uploading: true },
+    }));
+
+    const result = await uploadDriverDocument({ userId, docKey, file });
+
+    if ("error" in result) {
+      setFiles((prev) => ({
+        ...prev,
+        [docKey]: { name: file.name, size: file.size, error: result.error },
+      }));
+      return;
+    }
+
+    setFiles((prev) => ({
+      ...prev,
+      [docKey]: { name: file.name, size: file.size, path: result.path },
+    }));
+
+    // Clean up the previous file (best effort; safe to ignore failure)
+    if (previousPath && previousPath !== result.path) {
+      removeDriverDocument(previousPath).catch(() => {});
+    }
+  };
+
+  const handleRemoveFile = async (docKey: string) => {
+    const current = files[docKey];
+    if (current?.path) {
+      removeDriverDocument(current.path).catch(() => {});
+    }
+    setFiles((prev) => {
+      const next = { ...prev };
+      delete next[docKey];
+      return next;
+    });
   };
 
   const setField = (key: keyof typeof form) => (v: string) =>
@@ -134,31 +538,39 @@ export default function DriverOnboardingPage() {
   const next = () => setStep((s) => Math.min(s + 1, STEPS.length));
   const back = () => setStep((s) => Math.max(s - 1, 1));
 
-  const submitOnboarding = async () => {
+  const saveAndExit = () => {
+    // Form + uploaded files auto-save on every change; this just navigates.
+    router.push("/driver");
+  };
+
+  const submit = async () => {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const uploadedDocs = Object.entries(files)
-        .filter((entry) => Boolean(entry[1]))
-        .map(([id, file]) => ({ id, fileName: file?.name ?? "unknown" }));
-
-      const response = await fetch("/api/driver/onboarding", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          driverId,
-          form,
-          uploadedDocs,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Failed to submit onboarding");
+      // Refuse if any file is still uploading
+      const pendingUpload = Object.values(files).some((f) => f?.uploading);
+      if (pendingUpload) {
+        setSubmitError("Please wait for all uploads to finish.");
+        setSubmitting(false);
+        return;
       }
 
-      setStep(STEPS.length + 1);
+      const uploadedDocs = Object.entries(files)
+        .filter(([, file]) => file?.path)
+        .map(([id, file]) => ({
+          id,
+          fileName: file!.name,
+          filePath: file!.path,
+        }));
+
+      const res = await fetch("/api/driver/onboarding", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ driverId, form, uploadedDocs }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      clearDraft();
+      setDone(true);
     } catch {
       setSubmitError("Submission failed. Please try again.");
     } finally {
@@ -166,266 +578,460 @@ export default function DriverOnboardingPage() {
     }
   };
 
-  const renderStep = () => {
-    switch (step) {
-      case 1:
-        return (
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <TextInput label="First Name" placeholder="e.g. Andre" value={form.firstName} onChange={setField("firstName")} required />
-              <TextInput label="Last Name" placeholder="e.g. Thompson" value={form.lastName} onChange={setField("lastName")} required />
-            </div>
-            <TextInput label="Mobile Number" placeholder="e.g. 876-XXX-XXXX" value={form.phone} onChange={setField("phone")} hint="Must match the number on your TA Badge application" required />
-            <TextInput label="Email Address" placeholder="e.g. driver@example.com" value={form.email} onChange={setField("email")} required />
-            <TextInput label="TRN (Taxpayer Registration Number)" placeholder="9-digit TRN" value={form.trn} onChange={setField("trn")} hint="Required for all TA fee processing" required />
-            <TextInput label="NIS Number" placeholder="NIS number" value={form.nis} onChange={setField("nis")} hint="National Insurance Scheme registration number" required />
-          </div>
-        );
-      case 2:
-        return (
-          <div className="space-y-5">
-            <TextInput label="Driver's Licence Number" placeholder="e.g. DL-123456" value={form.licenceNumber} onChange={setField("licenceNumber")} hint="Must be a valid Jamaican licence class that permits PPV / taxi operation" required />
-            <TextInput label="Licence Expiry Date" placeholder="YYYY-MM-DD" value={form.licenceExpiry} onChange={setField("licenceExpiry")} required />
-            <FileUploadField
-              field={{ id: "drivers_licence", label: "Driver's Licence (front + back)", hint: "Upload a clear photo or scanned copy of both sides", required: true }}
-              files={files}
-              onChange={handleFile}
-            />
-            <TextInput label="TA Driver Badge Number" placeholder="Badge number from Transport Authority" value={form.badgeNumber} onChange={setField("badgeNumber")} hint="The annual badge issued by the TA — must be displayed visibly in vehicle" required />
-            <FileUploadField
-              field={{ id: "driver_badge", label: "TA Driver Badge (front)", hint: "Must be current and in-date. Renewed annually at the TA.", required: true }}
-              files={files}
-              onChange={handleFile}
-            />
-          </div>
-        );
-      case 3:
-        return (
-          <div className="space-y-5">
-            <div
-              className="rounded-xl px-4 py-3 text-sm border"
-              style={{ background: "var(--primary-soft)", borderColor: "var(--primary)", color: "var(--primary)" }}
-            >
-              <strong>Red Plate Only</strong> — Rajlo is exclusively for vehicles carrying official Jamaican red (Public Passenger Vehicle) plates. Private or commercial white-plate vehicles are not eligible.
-            </div>
-            <TextInput label="Red Plate Number" placeholder="e.g. 5812 GK" value={form.plateNumber} onChange={setField("plateNumber")} hint="Must be a registered PPV red plate as shown on your TA docs" required />
-            <FileUploadField
-              field={{ id: "red_plate_reg", label: "Vehicle Registration (PPV Red Plate)", hint: "Official registration document confirming red plate status", required: true }}
-              files={files}
-              onChange={handleFile}
-            />
-            <TextInput label="Vehicle Make" placeholder="e.g. Toyota" value={form.vehicleMake} onChange={setField("vehicleMake")} required />
-            <div className="grid grid-cols-2 gap-4">
-              <TextInput label="Vehicle Model" placeholder="e.g. Axio" value={form.vehicleModel} onChange={setField("vehicleModel")} required />
-              <TextInput label="Vehicle Year" placeholder="e.g. 2019" value={form.vehicleYear} onChange={setField("vehicleYear")} required />
-            </div>
-            <FileUploadField
-              field={{ id: "cof", label: "Certificate of Fitness (COF)", hint: "Annual vehicle fitness inspection pass from the TA. Book at transportauthority.gov.jm or call 876-926-9937.", required: true }}
-              files={files}
-              onChange={handleFile}
-            />
-          </div>
-        );
-      case 4:
-        return (
-          <div className="space-y-5">
-            <p className="text-sm" style={{ color: "var(--muted)" }}>
-              The TA Franchise Certificate grants the right to operate on a specific route or zone. It is renewed annually and is the primary authorization for PPV operation in Jamaica.
-            </p>
-            <TextInput label="Franchise Certificate Number" placeholder="e.g. FC-2025-XXXXXX" value={form.franchiseNumber} onChange={setField("franchiseNumber")} required />
-            <TextInput label="Franchise Expiry Date" placeholder="YYYY-MM-DD" value={form.franchiseExpiry} onChange={setField("franchiseExpiry")} hint="Annual renewal — we'll remind you 60 days before expiry" required />
-            <FileUploadField
-              field={{ id: "franchise_cert", label: "TA Franchise Certificate", hint: "Upload the certificate as issued by the Jamaica Transport Authority", required: true }}
-              files={files}
-              onChange={handleFile}
-            />
-          </div>
-        );
-      case 5:
-        return (
-          <div className="space-y-5">
-            <p className="text-sm" style={{ color: "var(--muted)" }}>
-              Your insurance must explicitly cover Public Passenger Vehicle (PPV) / commercial use. Standard private motor vehicle insurance is not acceptable.
-            </p>
-            <FileUploadField
-              field={{ id: "insurance", label: "Comprehensive PPV Insurance Certificate", hint: "Upload your current insurance policy or cover note showing PPV/commercial coverage", required: true }}
-              files={files}
-              onChange={handleFile}
-            />
-          </div>
-        );
-      case 6:
-        return (
-          <div className="space-y-5">
-            <FileUploadField
-              field={{ id: "police_record", label: "Police Record / Good Conduct Certificate", hint: "Obtained from any police station in Jamaica. Required at first application; periodically thereafter.", required: true }}
-              files={files}
-              onChange={handleFile}
-            />
-            <FileUploadField
-              field={{ id: "selfie", label: "Live Identity Selfie", hint: "Clear photo of your face against a plain background. Used to match against your licence and TA badge. JPG or PNG only.", required: true }}
-              files={files}
-              onChange={handleFile}
-            />
-          </div>
-        );
-      case 7:
-        return (
-          <div className="space-y-4">
-            <p className="text-sm" style={{ color: "var(--muted)" }}>
-              Review your submission summary below. Once submitted, our operations team will verify your documents against Jamaica Transport Authority records. This typically takes 1–2 business days.
-            </p>
-            <div className="space-y-2">
-              {[
-                { label: "Full Name", value: `${form.firstName} ${form.lastName}`.trim() || "—" },
-                { label: "Mobile", value: form.phone || "—" },
-                { label: "TRN", value: form.trn || "—" },
-                { label: "NIS", value: form.nis || "—" },
-                { label: "Driver's Licence", value: form.licenceNumber || "—" },
-                { label: "TA Badge Number", value: form.badgeNumber || "—" },
-                { label: "Red Plate", value: form.plateNumber || "—" },
-                { label: "Vehicle", value: form.vehicleMake && form.vehicleModel ? `${form.vehicleYear} ${form.vehicleMake} ${form.vehicleModel}` : "—" },
-                { label: "Franchise Cert", value: form.franchiseNumber || "—" },
-              ].map((row) => (
-                <div key={row.label} className="flex justify-between items-center rounded-lg px-3 py-2" style={{ background: "var(--surface-soft)" }}>
-                  <span className="text-sm" style={{ color: "var(--muted)" }}>{row.label}</span>
-                  <span className="text-sm font-medium" style={{ color: "var(--foreground)" }}>{row.value}</span>
-                </div>
-              ))}
-            </div>
-            <div className="rounded-xl border px-4 py-3 text-sm space-y-1" style={{ borderColor: "var(--line)", background: "var(--surface-soft)" }}>
-              <p className="font-medium" style={{ color: "var(--foreground)" }}>Documents ready</p>
-              {Object.entries(files).map(([key, file]) =>
-                file ? (
-                  <p key={key} className="text-xs" style={{ color: "var(--muted)" }}>
-                    ✅ {file.name}
-                  </p>
-                ) : null
-              )}
-              {Object.keys(files).length === 0 && (
-                <p className="text-xs" style={{ color: "#e74c3c" }}>⚠️ No documents uploaded yet</p>
-              )}
-            </div>
-            <p className="text-xs" style={{ color: "var(--muted)" }}>
-              By submitting, you confirm that all information and documents are authentic. Providing false information will result in permanent account suspension and may be reported to the Jamaica Transport Authority.
-            </p>
-          </div>
-        );
-      default:
-        return null;
-    }
-  };
+  /* ───────────────── Loading (gating check) ───────────────── */
+  if (checkingAccess) {
+    return <LoadingScreen />;
+  }
 
-  if (step > STEPS.length) {
+  /* ───────────────── Done state ───────────────── */
+  if (done) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen px-6 text-center gap-4">
-        <div style={{ fontSize: 48 }}>🎉</div>
-        <h1 className="text-2xl font-bold" style={{ color: "var(--foreground)" }}>Application Submitted!</h1>
-        <p className="text-sm max-w-sm" style={{ color: "var(--muted)" }}>
-          Your documents are under review by our operations team against Jamaica Transport Authority records. You will be notified by SMS and email within 1–2 business days.
-        </p>
-        <button
-          onClick={() => router.push("/driver")}
-          className="mt-2 rounded-full px-6 py-2.5 text-sm font-semibold text-white"
-          style={{ background: "var(--primary)" }}
-        >
-          Back to Driver Home
-        </button>
+      <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden bg-surface-soft px-6 py-12 text-center">
+        <ArcWatermark size={620} variant="red" className="absolute -right-32 -top-20 opacity-[0.05]" />
+        <ArcWatermark size={520} variant="red" className="absolute -bottom-32 -left-20 opacity-[0.04]" />
+        <FadeUp>
+          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-rajlo-red text-white shadow-2xl shadow-rajlo-red/30">
+            <Icon name="check-circle" className="h-10 w-10" />
+          </div>
+        </FadeUp>
+        <FadeUp delay={0.1}>
+          <h1 className="mt-8 text-4xl font-extrabold tracking-tight md:text-5xl">
+            Application submitted!
+          </h1>
+        </FadeUp>
+        <FadeUp delay={0.2}>
+          <p className="mx-auto mt-4 max-w-md text-base text-muted">
+            Your documents are under review by Rajlo operations against Jamaica
+            Transport Authority records. You&apos;ll be notified by email and SMS within 1–2 business days.
+          </p>
+        </FadeUp>
+        <FadeUp delay={0.3}>
+          <button
+            onClick={() => router.push("/driver/pending")}
+            className="mt-8 inline-flex items-center gap-2 rounded-full bg-rajlo-red px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 transition-all hover:-translate-y-0.5 hover:bg-primary-hover"
+          >
+            Track verification status
+            <Icon name="arrow-right" className="h-4 w-4" />
+          </button>
+        </FadeUp>
       </div>
     );
   }
 
+  const current = STEPS[step - 1];
+  // Treat each step as 1/N of the journey — at step 7 of 7 the bar is full.
+  const progressPct = Math.round((step / STEPS.length) * 100);
+  const stepComplete = isStepComplete(step, form, files);
+
+  /* ───────────────── Wizard ───────────────── */
   return (
-    <div className="min-h-screen" style={{ background: "var(--background)" }}>
-      {/* Header */}
-      <div
-        className="sticky top-0 z-10 px-4 py-3 border-b"
-        style={{ background: "var(--surface)", borderColor: "var(--line)" }}
-      >
-        <div className="max-w-lg mx-auto flex items-center gap-3">
-          <button
-            onClick={() => router.push("/driver")}
-            className="text-sm"
-            style={{ color: "var(--muted)" }}
-          >
-            ✕
-          </button>
-          <div className="flex-1">
-            <p className="text-xs font-medium" style={{ color: "var(--muted)" }}>
-              Step {step} of {STEPS.length}
-            </p>
-            <p className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>
-              {STEPS[step - 1].title}
-            </p>
+    <div className="flex min-h-screen flex-col bg-surface-soft">
+      {/* ────── Top bar ────── */}
+      <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 md:px-6 md:py-4">
+          <Logo size="sm" tagline />
+          <div className="flex items-center gap-2">
+            {hasDraft && (
+              <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 ring-1 ring-emerald-100 sm:inline-flex">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                </span>
+                Draft saved
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={saveAndExit}
+              className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-muted hover:bg-surface-soft hover:text-foreground md:text-sm"
+            >
+              <Icon name="x" className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Save & exit</span>
+              <span className="sm:hidden">Exit</span>
+            </button>
           </div>
-          <span className="text-xs" style={{ color: "var(--muted)" }}>
-            {STEPS[step - 1].subtitle}
-          </span>
         </div>
 
         {/* Progress bar */}
-        <div className="max-w-lg mx-auto mt-2 h-1 rounded-full" style={{ background: "var(--line)" }}>
+        <div className="h-1 w-full bg-line">
           <div
-            className="h-1 rounded-full transition-all duration-300"
-            style={{ width: `${(step / STEPS.length) * 100}%`, background: "var(--primary)" }}
+            className="h-1 bg-gradient-to-r from-rajlo-red via-rajlo-red to-[#ff4d4d] transition-all duration-500 ease-out"
+            style={{ width: `${progressPct}%` }}
           />
         </div>
-      </div>
+      </header>
 
-      {/* Step indicators */}
-      <div className="max-w-lg mx-auto px-4 pt-4">
-        <div className="flex gap-1 overflow-x-auto pb-2">
-          {STEPS.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => s.id < step && setStep(s.id)}
-              className="flex-shrink-0 rounded-full px-3 py-1 text-xs font-medium transition-colors"
-              style={{
-                background: s.id === step ? "var(--primary)" : s.id < step ? "var(--primary-soft)" : "var(--surface-soft)",
-                color: s.id === step ? "#fff" : s.id < step ? "var(--primary)" : "var(--muted)",
-                cursor: s.id < step ? "pointer" : "default",
-              }}
-            >
-              {s.id < step ? "✓ " : ""}{s.title}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-lg mx-auto px-4 pt-4 pb-32">
-        {submitError && (
-          <div className="mb-3 rounded-xl border px-4 py-2 text-xs" style={{ borderColor: "#c0392b", color: "#c0392b", background: "#fdecea" }}>
-            {submitError}
-          </div>
+      {/* ────── Wizard body ────── */}
+      <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 md:px-6 md:py-12">
+        {/* Draft restored banner */}
+        {restored && (
+          <FadeUp>
+            <div className="mb-6 flex flex-col items-start justify-between gap-3 rounded-2xl border border-rajlo-red/15 bg-primary-soft/50 px-5 py-4 sm:flex-row sm:items-center">
+              <div className="flex items-start gap-3">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rajlo-red text-white">
+                  <Icon name="check-circle" className="h-4 w-4" />
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-rajlo-black">Welcome back</p>
+                  <p className="text-xs text-muted">
+                    We restored your draft — every field and uploaded document is exactly where you left it.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    confirm(
+                      "Discard your draft and start over? This cannot be undone.",
+                    )
+                  ) {
+                    clearDraft();
+                    setForm(EMPTY_FORM);
+                    setStep(1);
+                    setRestored(false);
+                  }
+                }}
+                className="shrink-0 rounded-full border border-rajlo-red/30 bg-white px-4 py-1.5 text-xs font-bold text-rajlo-red hover:bg-rajlo-red hover:text-white"
+              >
+                Discard & start over
+              </button>
+            </div>
+          </FadeUp>
         )}
-        {renderStep()}
+
+        {/* Resubmission banner */}
+        {isResubmission && (
+          <FadeUp>
+            <div className="mb-6 overflow-hidden rounded-2xl border border-rajlo-red/30 bg-primary-soft">
+              <div className="flex items-start gap-3 p-5">
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-rajlo-red text-white">
+                  <Icon name="alert-triangle" className="h-5 w-5" />
+                </span>
+                <div className="flex-1">
+                  <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                    Resubmission
+                  </p>
+                  <p className="mt-1 text-base font-extrabold tracking-tight">
+                    Some documents need attention
+                  </p>
+                  {adminNote ? (
+                    <div className="mt-3 rounded-xl bg-white px-4 py-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                        Note from operations
+                      </p>
+                      <p className="mt-1 text-sm leading-relaxed text-rajlo-black">
+                        {adminNote}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-sm text-rajlo-black/80">
+                      Re-upload the highlighted documents below. Your previously-approved files and form fields are preserved.
+                    </p>
+                  )}
+                  {rejectedDocKeys.size > 0 && (
+                    <div className="mt-3">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                        Tap a document to jump to it ({rejectedDocKeys.size})
+                      </p>
+                      <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                        {Array.from(rejectedDocKeys).map((key) => {
+                          const targetStep = DOC_TO_STEP[key];
+                          return (
+                            <li key={key}>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (targetStep) setStep(targetStep);
+                                }}
+                                disabled={!targetStep}
+                                className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-rajlo-red ring-1 ring-rajlo-red/30 transition-all hover:-translate-y-0.5 hover:bg-rajlo-red hover:text-white disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:bg-white disabled:hover:text-rajlo-red"
+                              >
+                                <span className="h-1.5 w-1.5 rounded-full bg-current" />
+                                {humanizeDocKey(key)}
+                                {targetStep && (
+                                  <Icon name="arrow-right" className="h-3 w-3" />
+                                )}
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </FadeUp>
+        )}
+
+        {/* Step pills (desktop) */}
+        <div className="mb-8 hidden gap-2 overflow-x-auto pb-1 md:flex">
+          {STEPS.map((s) => {
+            const isCurrent = s.id === step;
+            const isDone = s.id < step;
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => isDone && setStep(s.id)}
+                disabled={!isDone && !isCurrent}
+                className={`flex flex-1 items-center gap-2.5 rounded-xl border px-3 py-2 text-left text-xs font-semibold transition-all ${
+                  isCurrent
+                    ? "border-rajlo-red bg-rajlo-red text-white shadow-md shadow-rajlo-red/20"
+                    : isDone
+                      ? "border-line bg-surface text-foreground hover:border-rajlo-red hover:bg-primary-soft/40"
+                      : "cursor-not-allowed border-line bg-surface-soft text-muted/70"
+                }`}
+              >
+                <span
+                  className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${
+                    isCurrent
+                      ? "bg-white/20 text-white"
+                      : isDone
+                        ? "bg-primary-soft text-rajlo-red"
+                        : "bg-line text-muted"
+                  }`}
+                >
+                  {isDone ? (
+                    <Icon name="check-circle" className="h-3.5 w-3.5" />
+                  ) : (
+                    <span className="text-[11px] font-extrabold">{s.id}</span>
+                  )}
+                </span>
+                <span className="truncate">{s.title}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Step header (mobile + desktop) */}
+        <FadeUp key={step}>
+          <div className="mb-6 flex items-center gap-4 md:mb-10">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-rajlo-red text-white shadow-lg shadow-rajlo-red/25 md:hidden">
+              <Icon name={current.icon} className="h-5 w-5" />
+            </span>
+            <div className="flex-1">
+              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                Step {step} of {STEPS.length}
+              </p>
+              <h1 className="mt-1 text-3xl font-extrabold tracking-tight md:text-4xl">
+                {current.title}
+              </h1>
+              <p className="mt-1 text-sm text-muted md:text-base">{current.subtitle}</p>
+            </div>
+          </div>
+        </FadeUp>
+
+        {/* Card */}
+        <FadeUp key={`card-${step}`} delay={0.1}>
+          <div className="relative overflow-hidden rounded-3xl border border-line bg-surface p-6 shadow-xl shadow-rajlo-red/[0.04] md:p-10">
+            <div
+              aria-hidden
+              className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-rajlo-red via-rajlo-red/80 to-rajlo-red/40"
+            />
+
+            {step === 1 && (
+              <div className="space-y-5">
+                <div className="grid gap-5 md:grid-cols-2">
+                  <TextInput label="First name" placeholder="Andre" value={form.firstName} onChange={setField("firstName")} required />
+                  <TextInput label="Last name" placeholder="Thompson" value={form.lastName} onChange={setField("lastName")} required />
+                </div>
+                <TextInput label="Mobile number" placeholder="876-XXX-XXXX" value={form.phone} onChange={setField("phone")} hint="Must match the number on your TA Badge application" required />
+                <TextInput label="Email address" placeholder="driver@example.com" value={form.email} onChange={setField("email")} required />
+                <div className="grid gap-5 md:grid-cols-2">
+                  <TextInput label="TRN" placeholder="9-digit TRN" value={form.trn} onChange={setField("trn")} hint="Required for all TA fee processing" required />
+                  <TextInput label="NIS number" placeholder="NIS number" value={form.nis} onChange={setField("nis")} hint="National Insurance Scheme" required />
+                </div>
+              </div>
+            )}
+
+            {step === 2 && (
+              <div className="space-y-5">
+                <TextInput label="Driver's licence number" placeholder="DL-123456" value={form.licenceNumber} onChange={setField("licenceNumber")} hint="Class that permits PPV / taxi operation" required />
+                <TextInput label="Licence expiry date" type="date" value={form.licenceExpiry} onChange={setField("licenceExpiry")} required />
+                <div className="grid gap-5 md:grid-cols-2">
+                  <FileUpload field={{ id: "drivers_licence_front", label: "Driver's licence — front", hint: "Clear photo of the front of the licence", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
+                  <FileUpload field={{ id: "drivers_licence_back", label: "Driver's licence — back", hint: "Clear photo of the back of the licence", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
+                </div>
+                <TextInput label="TA Driver Badge number" placeholder="Badge number" value={form.badgeNumber} onChange={setField("badgeNumber")} hint="Annual badge issued by the TA — must be displayed in vehicle" required />
+                <FileUpload field={{ id: "driver_badge", label: "TA Driver Badge (front)", hint: "Must be current, in-date, and renewed annually at the TA", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="space-y-5">
+                <div className="rounded-2xl bg-primary-soft px-5 py-4 text-sm">
+                  <p className="font-bold text-rajlo-red">Red plate only</p>
+                  <p className="mt-1 text-rajlo-black/80">
+                    Rajlo is exclusively for vehicles carrying official Jamaican red (Public Passenger Vehicle) plates. Private and commercial white-plate vehicles are not eligible.
+                  </p>
+                </div>
+                <TextInput label="Red plate number" placeholder="5812 GK" value={form.plateNumber} onChange={setField("plateNumber")} hint="Must be a registered PPV red plate as shown on your TA docs" required />
+                <FileUpload field={{ id: "red_plate_reg", label: "Vehicle registration (PPV red plate)", hint: "Official registration document confirming red plate status", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
+                <div className="grid gap-5 md:grid-cols-3">
+                  <TextInput label="Make" placeholder="Toyota" value={form.vehicleMake} onChange={setField("vehicleMake")} required />
+                  <TextInput label="Model" placeholder="Axio" value={form.vehicleModel} onChange={setField("vehicleModel")} required />
+                  <TextInput label="Year" placeholder="2019" value={form.vehicleYear} onChange={setField("vehicleYear")} required />
+                </div>
+                <FileUpload field={{ id: "cof", label: "Certificate of Fitness (COF)", hint: "Annual vehicle fitness inspection. Book at transportauthority.gov.jm or 876-926-9937.", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
+              </div>
+            )}
+
+            {step === 4 && (
+              <div className="space-y-5">
+                <p className="text-sm leading-relaxed text-muted">
+                  The TA Franchise Certificate grants the right to operate on a specific route or zone. It&apos;s renewed annually and is the primary authorization for PPV operation in Jamaica.
+                </p>
+                <TextInput label="Franchise certificate number" placeholder="FC-2025-XXXXXX" value={form.franchiseNumber} onChange={setField("franchiseNumber")} required />
+                <TextInput label="Franchise expiry date" type="date" value={form.franchiseExpiry} onChange={setField("franchiseExpiry")} hint="Annual renewal — we'll remind you 60 days before expiry" required />
+                <FileUpload field={{ id: "franchise_cert", label: "TA Franchise Certificate", hint: "Upload the certificate as issued by the Jamaica Transport Authority", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
+              </div>
+            )}
+
+            {step === 5 && (
+              <div className="space-y-5">
+                <div className="rounded-2xl bg-amber-50 px-5 py-4 text-sm ring-1 ring-amber-100">
+                  <p className="font-bold text-amber-900">Important</p>
+                  <p className="mt-1 text-amber-900/85">
+                    Your insurance must explicitly cover Public Passenger Vehicle (PPV) / commercial use. Standard private motor vehicle insurance is not acceptable and will be rejected.
+                  </p>
+                </div>
+                <FileUpload field={{ id: "insurance", label: "Comprehensive PPV insurance certificate", hint: "Upload your current insurance policy or cover note showing PPV/commercial coverage", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
+              </div>
+            )}
+
+            {step === 6 && (
+              <div className="space-y-5">
+                <FileUpload field={{ id: "police_record", label: "Police record / Good Conduct Certificate", hint: "Obtained from any police station in Jamaica. Required at first application; periodically thereafter.", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
+                <FileUpload field={{ id: "selfie", label: "Live identity selfie", hint: "Clear photo of your face against a plain background. JPG or PNG. Used to match against your licence and TA badge.", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
+              </div>
+            )}
+
+            {step === 7 && (
+              <div className="space-y-6">
+                <p className="text-sm leading-relaxed text-muted">
+                  Review your submission below. Once submitted, our operations team will verify your documents against Jamaica Transport Authority records — typically within 1–2 business days.
+                </p>
+
+                <div>
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">
+                    Personal & vehicle details
+                  </p>
+                  <div className="grid gap-2 rounded-2xl border border-line bg-surface-soft p-3">
+                    {[
+                      ["Full name", `${form.firstName} ${form.lastName}`.trim() || "—"],
+                      ["Mobile", form.phone || "—"],
+                      ["TRN", form.trn || "—"],
+                      ["NIS", form.nis || "—"],
+                      ["Driver's licence", form.licenceNumber || "—"],
+                      ["TA badge", form.badgeNumber || "—"],
+                      ["Red plate", form.plateNumber || "—"],
+                      ["Vehicle", form.vehicleMake && form.vehicleModel ? `${form.vehicleYear} ${form.vehicleMake} ${form.vehicleModel}` : "—"],
+                      ["Franchise cert", form.franchiseNumber || "—"],
+                    ].map(([label, value]) => (
+                      <div key={label} className="flex items-center justify-between rounded-lg bg-surface px-3 py-2">
+                        <span className="text-xs font-medium text-muted">{label}</span>
+                        <span className="text-sm font-semibold">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-muted">
+                    Documents ready ({Object.values(files).filter((f) => f?.path).length})
+                  </p>
+                  <div className="rounded-2xl border border-line bg-surface-soft p-3">
+                    {Object.entries(files).filter(([, f]) => f?.path).length === 0 ? (
+                      <p className="rounded-lg bg-surface px-3 py-2 text-sm text-rajlo-red">
+                        ⚠ No documents uploaded yet — go back and add them.
+                      </p>
+                    ) : (
+                      <ul className="space-y-1.5">
+                        {Object.entries(files)
+                          .filter(([, f]) => f?.path)
+                          .map(([key, file]) => (
+                            <li key={key} className="flex items-center gap-2.5 rounded-lg bg-surface px-3 py-2 text-sm">
+                              <Icon name="check-circle" className="h-4 w-4 text-emerald-600" />
+                              <span className="flex-1 font-medium">{file!.name}</span>
+                              <span className="text-xs text-muted">{(file!.size / 1024).toFixed(0)} KB</span>
+                            </li>
+                          ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+
+                <p className="rounded-2xl border border-line bg-surface-soft px-4 py-3 text-xs leading-relaxed text-muted">
+                  By submitting, you confirm that all information and documents are authentic. Providing false information will result in permanent account suspension and may be reported to the Jamaica Transport Authority.
+                </p>
+
+                {submitError && (
+                  <div className="rounded-xl border border-rajlo-red/20 bg-primary-soft px-4 py-3 text-sm text-rajlo-red">
+                    {submitError}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </FadeUp>
       </div>
 
-      {/* Sticky footer nav */}
-      <div
-        className="fixed bottom-0 left-0 right-0 px-4 py-3 border-t"
-        style={{ background: "var(--surface)", borderColor: "var(--line)" }}
-      >
-        <div className="max-w-lg mx-auto flex gap-3">
-          {step > 1 && (
+      {/* ────── Sticky action bar ────── */}
+      <footer className="sticky bottom-0 z-20 border-t border-line bg-surface/90 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-4">
+          <button
+            type="button"
+            onClick={back}
+            disabled={step === 1}
+            className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-semibold text-foreground transition-all hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <Icon name="chevron-left" className="h-4 w-4" />
+            Back
+          </button>
+
+          <p className="hidden text-xs text-muted md:block">
+            {step}/{STEPS.length} · {progressPct}% complete
+          </p>
+
+          {step < STEPS.length ? (
             <button
-              onClick={back}
-              className="flex-1 rounded-full border py-3 text-sm font-semibold"
-              style={{ borderColor: "var(--line)", color: "var(--foreground)" }}
+              type="button"
+              onClick={next}
+              disabled={!stepComplete}
+              title={!stepComplete ? "Fill in all required fields to continue" : undefined}
+              className="group inline-flex items-center gap-1.5 rounded-full bg-rajlo-red px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-rajlo-red/20 transition-all hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-lg hover:shadow-rajlo-red/30 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:-translate-y-0 disabled:hover:bg-rajlo-red"
             >
-              Back
+              Continue
+              <Icon name="arrow-right" className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={submit}
+              disabled={submitting || !stepComplete}
+              title={!stepComplete ? "Complete every step before submitting" : undefined}
+              className="inline-flex items-center gap-1.5 rounded-full bg-rajlo-red px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-rajlo-red/20 transition-all hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:-translate-y-0"
+            >
+              {submitting ? "Submitting…" : "Submit application"}
+              {!submitting && <Icon name="check-circle" className="h-4 w-4" />}
             </button>
           )}
-          <button
-            onClick={step === STEPS.length ? submitOnboarding : next}
-            disabled={submitting}
-            className="flex-1 rounded-full py-3 text-sm font-semibold text-white"
-            style={{ background: submitting ? "#9ca3af" : "var(--primary)" }}
-          >
-            {step === STEPS.length ? (submitting ? "Submitting..." : "Submit Application") : "Continue"}
-          </button>
         </div>
+      </footer>
+
+      {/* Anchor link to legal — small print at bottom */}
+      <div className="border-t border-line/50 bg-surface px-4 py-3 text-center text-[11px] text-muted">
+        Need help? Visit the{" "}
+        <Link href="/help" className="font-semibold text-rajlo-red hover:underline">
+          Help Center
+        </Link>{" "}
+        or{" "}
+        <Link href="/contact" className="font-semibold text-rajlo-red hover:underline">
+          contact support
+        </Link>
+        .
       </div>
     </div>
   );

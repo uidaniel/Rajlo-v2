@@ -272,6 +272,87 @@ export function HoverLift({
   );
 }
 
+/* ─────────── Typewriter ─────────── */
+
+/**
+ * Cycles through an array of texts with typing-in / pausing / deleting / typing-next
+ * effect. Used on auth pages for the rotating brand statements.
+ *
+ * Performance: a single setTimeout per frame, no animation library overhead.
+ * Accessibility: the visible text is `aria-hidden` (decorative); screen readers
+ * read the joined `srText` if provided. Respects `prefers-reduced-motion` —
+ * shows just the first text statically.
+ */
+export function Typewriter({
+  texts,
+  typingSpeed = 45,
+  deletingSpeed = 25,
+  holdMs = 2400,
+  className,
+  cursorClassName = "ml-[3px] inline-block h-[0.95em] w-[3px] translate-y-[2px] bg-current align-middle",
+  srText,
+}: {
+  texts: string[];
+  typingSpeed?: number;
+  deletingSpeed?: number;
+  holdMs?: number;
+  className?: string;
+  cursorClassName?: string;
+  srText?: string;
+}) {
+  const reduced = useReducedMotion();
+  const [index, setIndex] = useState(0);
+  const [text, setText] = useState("");
+  const [phase, setPhase] = useState<"typing" | "holding" | "deleting">("typing");
+
+  useEffect(() => {
+    if (reduced) return;
+    const target = texts[index];
+    let t: ReturnType<typeof setTimeout> | undefined;
+
+    if (phase === "typing") {
+      if (text.length < target.length) {
+        t = setTimeout(
+          () => setText(target.slice(0, text.length + 1)),
+          typingSpeed,
+        );
+      } else {
+        setPhase("holding");
+      }
+    } else if (phase === "holding") {
+      t = setTimeout(() => setPhase("deleting"), holdMs);
+    } else {
+      if (text.length > 0) {
+        t = setTimeout(() => setText(text.slice(0, -1)), deletingSpeed);
+      } else {
+        setIndex((i) => (i + 1) % texts.length);
+        setPhase("typing");
+      }
+    }
+
+    return () => {
+      if (t) clearTimeout(t);
+    };
+  }, [text, phase, index, texts, typingSpeed, deletingSpeed, holdMs, reduced]);
+
+  if (reduced) {
+    return <span className={className}>{texts[0]}</span>;
+  }
+
+  return (
+    <span className={className}>
+      <span className="sr-only">{srText ?? texts.join(". ")}</span>
+      <span aria-hidden>{text}</span>
+      <m.span
+        aria-hidden
+        className={cursorClassName}
+        animate={{ opacity: [1, 1, 0, 0] }}
+        transition={{ duration: 1, repeat: Infinity, ease: "linear", times: [0, 0.5, 0.5, 1] }}
+      />
+    </span>
+  );
+}
+
 /* ─────────── ParallaxFloat ─────────── */
 
 /**

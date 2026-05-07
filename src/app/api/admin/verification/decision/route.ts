@@ -1,8 +1,30 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import {
+  sendDriverApprovedEmail,
+  sendDriverRejectedEmail,
+} from "@/lib/driver-emails";
 import type { AdminDecisionRequest } from "@/lib/api-types";
 
 export async function POST(request: Request) {
+  // Admin-only
+  const auth = await createSupabaseAuthServerClient();
+  const {
+    data: { user },
+  } = await auth.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const { data: profile } = await auth
+    .from("profiles")
+    .select("role")
+    .eq("id", user.id)
+    .single();
+  if (profile?.role !== "admin") {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
   const body = (await request.json()) as AdminDecisionRequest;
 
   if (!body?.driverId || !Array.isArray(body.docs)) {
@@ -21,7 +43,7 @@ export async function POST(request: Request) {
 
   const { data: driver, error: driverError } = await supabase
     .from("drivers")
-    .select("id")
+    .select("id, external_id, first_name, last_name, email")
     .eq("external_id", body.driverId)
     .single();
 
@@ -29,34 +51,66 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Driver record not found" }, { status: 404 });
   }
 
-  const updates = body.docs.map((doc) => ({
-    driver_id: driver.id,
-    doc_key: doc.id,
-    status: doc.status === "resubmit" ? "rejected" : doc.status,
-    note: doc.note || null,
-  }));
-
-  const { error: updateError } = await supabase
-    .from("driver_documents")
-    .upsert(updates, { onConflict: "driver_id,doc_key" });
-
-  if (updateError) {
-    return NextResponse.json({ error: "Failed to update document decisions" }, { status: 500 });
+  // Update documents one-at-a-time using `update().eq()` instead of upsert.
+  // Upsert was attempting INSERTs when its conflict resolution didn't match,
+  // which violated the NOT NULL constraints on `label`/`description` (those
+  // get set during onboarding submission, not here). UPDATE-only is the
+  // correct semantic anyway: admin decisions only mutate existing rows.
+  for (const doc of body.docs) {
+    const targetStatus = doc.status === "resubmit" ? "rejected" : doc.status;
+    // Clear `previously_approved` once the admin re-approves — it's purely
+    // an "attention needed" marker for pending docs that came from a prior
+    // approval. After re-approval the doc is back to a clean approved state.
+    const updateFields: Record<string, unknown> = {
+      status: targetStatus,
+      note: doc.note || null,
+      reviewed_by: "admin-web",
+      reviewed_at: new Date().toISOString(),
+    };
+    if (targetStatus === "approved") {
+      updateFields.previously_approved = false;
+    }
+    const { error: updateError } = await supabase
+      .from("driver_documents")
+      .update(updateFields)
+      .eq("driver_id", driver.id)
+      .eq("doc_key", doc.id);
+    if (updateError) {
+      return NextResponse.json(
+        {
+          error: `Failed to update document ${doc.id}: ${updateError.message}`,
+          details: updateError,
+        },
+        { status: 500 },
+      );
+    }
   }
 
   const allApproved = body.docs.every((d) => d.status === "approved");
 
+  const willActivate = body.activateDriver && allApproved;
   const { error: driverUpdateError } = await supabase
     .from("drivers")
     .update({
-      activated: body.activateDriver && allApproved,
-      onboarding_status: allApproved ? "approved" : "pending_corrections",
+      activated: willActivate,
+      onboarding_status: allApproved ? "approved" : "rejected",
       admin_note: body.adminNote || null,
+      // Clear the deactivation marker when the driver is being re-activated.
+      // Otherwise leave it alone — a partial decision (some docs still
+      // rejected) on a previously-deactivated driver should keep them in the
+      // deactivated state until everything is approved.
+      ...(willActivate ? { deactivated_at: null } : {}),
     })
     .eq("id", driver.id);
 
   if (driverUpdateError) {
-    return NextResponse.json({ error: "Failed to update driver activation status" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: `Failed to update driver: ${driverUpdateError.message}`,
+        details: driverUpdateError,
+      },
+      { status: 500 },
+    );
   }
 
   const { error: auditError } = await supabase.from("driver_audit_logs").insert({
@@ -69,8 +123,50 @@ export async function POST(request: Request) {
   });
 
   if (auditError) {
-    return NextResponse.json({ error: "Failed to write admin audit log" }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: `Failed to write audit log: ${auditError.message}`,
+        details: auditError,
+      },
+      { status: 500 },
+    );
   }
 
-  return NextResponse.json({ ok: true, source: "supabase" });
+  // Send notification email to the driver. Failure here doesn't block the
+  // decision — the DB state is already updated; we just log a warning so
+  // the admin can be told the email may not have gone out.
+  let emailStatus: "sent" | "skipped" | "failed" = "skipped";
+  let emailError: string | null = null;
+  if (driver.email) {
+    const driverName =
+      [driver.first_name, driver.last_name].filter(Boolean).join(" ") ||
+      "driver";
+    const result = allApproved
+      ? await sendDriverApprovedEmail({
+          to: driver.email,
+          driverName,
+          externalId: driver.external_id,
+        })
+      : await sendDriverRejectedEmail({
+          to: driver.email,
+          driverName,
+          externalId: driver.external_id,
+          adminNote: body.adminNote || null,
+        });
+
+    if (result.ok) {
+      emailStatus = "sent";
+    } else if ("skipped" in result) {
+      emailStatus = "skipped";
+    } else {
+      emailStatus = "failed";
+      emailError = result.error;
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    source: "supabase",
+    email: { status: emailStatus, error: emailError },
+  });
 }

@@ -3,15 +3,29 @@
 import Link from "next/link";
 import { useState } from "react";
 import { AuthShell, AuthField, AuthSubmit } from "@/components/auth-shell";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async () => {
     setIsLoading(true);
-    await new Promise((r) => setTimeout(r, 600));
+    setError(null);
+
+    const supabase = createSupabaseBrowserClient();
+    const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
+    });
+
+    if (authError) {
+      setError(authError.message);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(false);
     setSent(true);
   };
@@ -44,16 +58,14 @@ export default function ForgotPasswordPage() {
     <AuthShell
       title="Forgot your password?"
       subtitle="Enter the email associated with your Rajlo account and we'll send you a reset link."
-      footer={
-        <>
-          Remembered it?{" "}
-          <Link href="/auth/rider/login" className="font-semibold text-rajlo-red hover:underline">
-            Sign in
-          </Link>
-        </>
-      }
     >
       <div className="space-y-5">
+        {error && (
+          <div className="rounded-xl border border-rajlo-red/20 bg-primary-soft px-4 py-3 text-sm text-rajlo-red">
+            {error}
+          </div>
+        )}
+
         <AuthField
           label="Email"
           type="email"
@@ -61,11 +73,18 @@ export default function ForgotPasswordPage() {
           value={email}
           onChange={setEmail}
           autoComplete="email"
+          icon="email"
           required
         />
         <AuthSubmit onClick={handleSubmit} loading={isLoading} disabled={!email}>
           Send reset link
         </AuthSubmit>
+        <p className="text-center text-sm text-muted">
+          Remembered it?{" "}
+          <Link href="/auth/rider/login" className="font-semibold text-rajlo-red hover:underline">
+            Sign in
+          </Link>
+        </p>
       </div>
     </AuthShell>
   );

@@ -20,6 +20,7 @@ export type OnboardingSubmitRequest = {
   uploadedDocs: Array<{
     id: string;
     fileName: string;
+    filePath?: string;
   }>;
 };
 

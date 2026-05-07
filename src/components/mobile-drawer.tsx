@@ -1,12 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { Logo } from "./logo";
+import { ArcWatermark } from "./arc-pattern";
+import { Icon, type IconName } from "./icons";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 type NavLink = {
   label: string;
   href: string;
+  icon: IconName;
 };
 
 type MobileDrawerProps = {
@@ -16,6 +21,17 @@ type MobileDrawerProps = {
   children: React.ReactNode;
 };
 
+/**
+ * Dark sidebar with brand-red accents on the active item + user profile
+ * footer with sign-out. Used by all rider/driver/admin portal pages.
+ *
+ * Why dark, not red: the sidebar is on-screen all day, so a neutral chrome
+ * keeps the main content (which uses red for CTAs and badges) actually
+ * legible. Red is reserved for the active nav item, the chevron, and a
+ * faint corner bloom for brand presence.
+ *
+ * Layout: fixed-width sidebar on the left (md+), drawer overlay on mobile.
+ */
 export function MobileDrawer({
   title,
   subtitle,
@@ -23,76 +39,211 @@ export function MobileDrawer({
   children,
 }: MobileDrawerProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [profile, setProfile] = useState<{
+    full_name: string | null;
+    email: string | null;
+    role: string | null;
+    avatar_url: string | null;
+  } | null>(null);
+  const pathname = usePathname();
+  const router = useRouter();
+
+  // Fetch the signed-in user's profile for the footer block.
+  useEffect(() => {
+    const supabase = createSupabaseBrowserClient();
+    let cancelled = false;
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      const { data } = await supabase
+        .from("profiles")
+        .select("full_name, role, avatar_url")
+        .eq("id", user.id)
+        .single();
+      if (cancelled) return;
+      // Prefer the profile's avatar_url (synced by trigger), but fall back to
+      // user_metadata.avatar_url so the picture appears immediately on the
+      // very first OAuth sign-in (before the next page load picks up the row).
+      const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+      const metaAvatar =
+        (typeof meta.avatar_url === "string" ? meta.avatar_url : null) ??
+        (typeof meta.picture === "string" ? meta.picture : null);
+      setProfile({
+        full_name: data?.full_name ?? null,
+        email: user.email ?? null,
+        role: data?.role ?? null,
+        avatar_url: data?.avatar_url ?? metaAvatar ?? null,
+      });
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleSignOut = async () => {
+    const supabase = createSupabaseBrowserClient();
+    // Capture role BEFORE signOut so we know which login page to bounce to.
+    const role = profile?.role ?? "rider";
+    await supabase.auth.signOut();
+    const loginPath =
+      role === "admin"
+        ? "/auth/admin/login"
+        : role === "driver"
+          ? "/auth/driver/login"
+          : "/auth/rider/login";
+    router.push(loginPath);
+    router.refresh();
+  };
+
+  const initials = profile?.full_name
+    ? profile.full_name
+        .split(" ")
+        .filter(Boolean)
+        .slice(0, 2)
+        .map((s) => s[0]?.toUpperCase() ?? "")
+        .join("")
+    : (profile?.email?.[0]?.toUpperCase() ?? "·");
 
   return (
-    <div className="min-h-screen flex flex-col md:grid md:grid-cols-[280px_1fr]">
-      {/* Mobile Header */}
+    <div className="min-h-screen bg-background md:grid md:grid-cols-[280px_1fr]">
+      {/* ============== Mobile top bar ============== */}
       <header className="sticky top-0 z-40 flex items-center justify-between gap-4 border-b border-line bg-surface px-4 py-3 md:hidden">
-        <div className="flex-1">
-          <Logo size="sm" tagline />
-        </div>
+        <Logo size="sm" tagline />
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="rounded-lg p-2 hover:bg-surface-soft"
-          aria-label="Toggle menu"
+          className="grid h-9 w-9 place-items-center rounded-lg border border-line bg-surface-soft hover:bg-surface"
+          aria-label={isOpen ? "Close menu" : "Open menu"}
+          aria-expanded={isOpen}
         >
-          <svg
-            className="h-5 w-5"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            {isOpen ? (
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            ) : (
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            )}
-          </svg>
+          <Icon name={isOpen ? "x" : "menu"} className="h-5 w-5" />
         </button>
       </header>
 
-      {/* Mobile Drawer */}
+      {/* Mobile backdrop */}
       {isOpen && (
-        <div className="fixed inset-0 top-12 z-30 bg-black/50 md:hidden" onClick={() => setIsOpen(false)} />
+        <button
+          aria-hidden
+          tabIndex={-1}
+          className="fixed inset-0 top-14 z-30 bg-black/50 md:hidden"
+          onClick={() => setIsOpen(false)}
+        />
       )}
+
+      {/* ============== Sidebar ============== */}
       <aside
-        className={`fixed top-12 left-0 z-40 w-72 h-[calc(100vh-3rem)] transform transition-transform md:static md:top-0 md:h-auto bg-surface border-b border-line md:border-r md:border-b-0 overflow-y-auto ${
-          isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        className={`fixed left-0 top-14 z-40 flex h-[calc(100vh-3.5rem)] w-72 flex-col overflow-hidden text-white shadow-2xl transition-transform md:static md:top-0 md:h-screen md:w-auto md:translate-x-0 md:shadow-none ${
+          isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
+        style={{
+          // Premium dark surface: a faint white glaze at the very top for that
+          // glassy SaaS feel, a warm-to-deep gradient body, and a soft red
+          // bloom in the bottom-right corner so the brand still whispers.
+          background:
+            "radial-gradient(circle at 100% 100%, rgba(241,1,0,0.18) 0%, rgba(241,1,0,0) 38%), linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 24%), linear-gradient(165deg, #1a1d10 0%, #111906 55%, #07090a 100%)",
+        }}
       >
-        <div className="p-4 md:sticky md:top-0 md:z-10 md:bg-surface">
-          <div className="hidden md:block mb-4">
-            <Logo size="sm" tagline />
-          </div>
-          <h1 className="text-lg font-semibold">{title}</h1>
-          <p className="text-xs text-muted mt-1">{subtitle}</p>
+        {/* Decorative arc — kept very faint so it sits behind the nav text */}
+
+        {/* Top: Logo + portal label */}
+        <div className="relative hidden border-b border-white/10 px-6 pb-5 pt-7 md:block">
+          <Logo size="sm" variant="white" tagline />
         </div>
-        <nav className="grid gap-1 p-4 border-t border-line md:border-t-0">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setIsOpen(false)}
-              className="rounded-lg px-3 py-2 text-sm text-muted hover:bg-surface-soft hover:text-foreground transition-colors"
-            >
-              {item.label}
-            </Link>
-          ))}
+
+        <div className="relative px-6 pb-3 pt-5 md:pt-6">
+          <p className="font-secondary text-[10px] font-bold uppercase tracking-[0.18em] text-white/70">
+            {subtitle}
+          </p>
+          <h1 className="mt-1 text-xl font-extrabold tracking-tight">
+            {title}
+          </h1>
+        </div>
+
+        {/* Nav with icons + active state */}
+        <nav
+          className="relative flex-1 overflow-y-auto px-3 pb-3"
+          aria-label="Portal navigation"
+        >
+          <ul className="grid gap-1">
+            {nav.map((item) => {
+              const active =
+                pathname === item.href || pathname?.startsWith(`${item.href}/`);
+              return (
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    onClick={() => setIsOpen(false)}
+                    aria-current={active ? "page" : undefined}
+                    className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all ${
+                      active
+                        ? "bg-white text-rajlo-red shadow-md shadow-black/10"
+                        : "text-white/85 hover:bg-white/10 hover:text-white"
+                    }`}
+                  >
+                    <span
+                      className={`grid h-7 w-7 place-items-center rounded-lg transition-colors ${
+                        active
+                          ? "bg-primary-soft text-rajlo-red"
+                          : "bg-white/10 text-white/90"
+                      }`}
+                    >
+                      <Icon name={item.icon} className="h-4 w-4" />
+                    </span>
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {active && (
+                      <Icon
+                        name="chevron-right"
+                        className="h-3.5 w-3.5 text-rajlo-red"
+                      />
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
         </nav>
+
+        {/* User profile + sign out */}
+        <div className="relative border-t border-white/10 p-4">
+          <div className="flex items-center gap-3 rounded-xl bg-white/10 p-3 backdrop-blur">
+            <div className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-white/20 text-sm font-bold uppercase ring-1 ring-white/15">
+              {profile?.avatar_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={profile.avatar_url}
+                  alt=""
+                  referrerPolicy="no-referrer"
+                  className="h-full w-full object-cover"
+                />
+              ) : (
+                initials
+              )}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-semibold">
+                {profile?.full_name ?? "Loading…"}
+              </p>
+              <p className="truncate text-[11px] text-white/70">
+                {profile?.email ?? ""}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleSignOut}
+              aria-label="Sign out"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+            >
+              <Icon name="log-out" className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto pb-20 md:pb-0">{children}</main>
+      {/* ============== Main content ============== */}
+      <main className="relative overflow-x-hidden pb-20 md:overflow-y-auto md:pb-0">
+        {children}
+      </main>
     </div>
   );
 }
