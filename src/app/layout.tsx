@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { MotionProvider } from "@/components/motion-provider";
+import { NO_FOUC_SCRIPT } from "@/lib/preferences-client";
 
 /**
  * Brand fonts (per Rajlo Brand Guidelines, Sept 2024):
@@ -41,6 +42,34 @@ export const metadata: Metadata = {
   // so we don't need to declare them here. The manifest link drives
   // PWA install (which iOS web push needs).
   manifest: "/manifest.webmanifest",
+  // themeColor lives on the `viewport` export below — it moved out
+  // of `metadata` in Next.js 14+ and Next will warn about it here.
+};
+
+/**
+ * Explicit viewport config — fixes the iOS Safari "page loads zoomed
+ * in" symptom. Without this, Safari falls back to a 980px viewport
+ * heuristic + scales to fit, which renders Rajlo at ~50% zoom and
+ * forces the user to pinch out manually on every page load.
+ *
+ * Settings:
+ *  - `width: device-width` ties the layout viewport to the actual
+ *    device width.
+ *  - `initialScale: 1` opens at 100% zoom every time.
+ *  - We deliberately DON'T set `userScalable: false` or
+ *    `maximumScale: 1` — accessibility users with low vision still
+ *    need pinch-to-zoom. The font-size: 16px rule on inputs in
+ *    globals.css already prevents the auto-zoom-on-focus annoyance.
+ *  - `viewportFit: cover` lets us paint behind the iPhone's
+ *    notch / dynamic island; pages opt into safe-area insets where
+ *    needed (the chat sheet "Cancel" pill already does).
+ *  - Theme colour is duplicated here so the iOS / Android status
+ *    bar tints brand-red when Rajlo opens from the home screen.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
   themeColor: "#f10100",
 };
 
@@ -59,6 +88,12 @@ export default function RootLayout({
         className="min-h-full bg-background text-foreground"
         suppressHydrationWarning
       >
+        {/* No-FOUC theme bootstrap: synchronous read from localStorage
+           that applies `data-theme` to <html> before any CSS paints,
+           so dark-mode users never flash white on navigation. */}
+        <script
+          dangerouslySetInnerHTML={{ __html: NO_FOUC_SCRIPT }}
+        />
         <MotionProvider>
           <div className="min-h-screen">{children}</div>
         </MotionProvider>

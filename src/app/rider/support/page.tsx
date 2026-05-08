@@ -94,25 +94,42 @@ const CATEGORY: Record<FAQ["category"], { label: string; icon: IconName }> = {
   account: { label: "Account", icon: "user" },
 };
 
-const QUICK_ACTIONS: {
+/**
+ * Quick-action tiles. Each one is either:
+ *   - a `href` that routes elsewhere (settings, safety toolkit, mailto), or
+ *   - a `faqAnchor` that scrolls to + opens the relevant FAQ entry on
+ *     this same page (so the answer is immediately visible inline).
+ *
+ * Earlier the first two tiles bluntly routed to `/rider/history`,
+ * which felt wrong: a help quick-action shouldn't dump you on the
+ * generic trip-history list. Now they expand the matching FAQ on this
+ * page so the user gets an actual answer + can contact us if needed.
+ */
+type QuickAction = {
   label: string;
   description: string;
   icon: IconName;
-  href: string;
-}[] = [
+} & (
+  | { href: string; faqAnchor?: never }
+  | { faqAnchor: { category: FAQ["category"]; question: string }; href?: never }
+);
+
+const QUICK_ACTIONS: QuickAction[] = [
   {
     label: "Issue with a recent trip",
     description:
-      "Driver, fare, route, or anything else — open the trip and tap report.",
+      "Driver, fare, route, or anything else — see how to report it.",
     icon: "history",
-    href: "/rider/history",
+    faqAnchor: {
+      category: "trips",
+      question: "What if my driver doesn't show up?",
+    },
   },
   {
     label: "Lost something in a vehicle?",
-    description:
-      "Contact your driver via the trip's detail page within 24 hours.",
+    description: "Email support with your trip ID — we'll route it to the driver.",
     icon: "search",
-    href: "/rider/history",
+    href: "mailto:support@rajlo.com?subject=Lost%20item%20in%20Rajlo%20trip&body=Trip%20ID%3A%20%0A%0AItem%20description%3A%20%0A%0AAny%20other%20details%3A%20",
   },
   {
     label: "Update payment method",
@@ -193,27 +210,57 @@ export default function RiderSupportPage() {
       {/* Quick actions */}
       <FadeUp delay={0.06}>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {QUICK_ACTIONS.map((qa) => (
-            <Link
-              key={qa.label}
-              href={qa.href}
-              className="group flex items-start gap-3 rounded-2xl border border-line bg-surface p-5 transition-all hover:-translate-y-0.5 hover:border-rajlo-red/30 hover:shadow-md"
-            >
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-rajlo-red transition-colors group-hover:bg-rajlo-red group-hover:text-white">
-                <Icon name={qa.icon} className="h-5 w-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-extrabold tracking-tight">
-                  {qa.label}
-                </p>
-                <p className="mt-0.5 text-xs text-muted">{qa.description}</p>
-              </div>
-              <Icon
-                name="chevron-right"
-                className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-rajlo-red"
-              />
-            </Link>
-          ))}
+          {QUICK_ACTIONS.map((qa) => {
+            const tileBody = (
+              <>
+                <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-rajlo-red transition-colors group-hover:bg-rajlo-red group-hover:text-white">
+                  <Icon name={qa.icon} className="h-5 w-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-extrabold tracking-tight">
+                    {qa.label}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">{qa.description}</p>
+                </div>
+                <Icon
+                  name="chevron-right"
+                  className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-rajlo-red"
+                />
+              </>
+            );
+            const className =
+              "group flex items-start gap-3 rounded-2xl border border-line bg-surface p-5 text-left transition-all hover:-translate-y-0.5 hover:border-rajlo-red/30 hover:shadow-md";
+
+            // FAQ-anchor tiles: open the matching FAQ inline + scroll
+            // it into view. Far better UX than routing to a list page
+            // and making the rider hunt for the answer.
+            if (qa.faqAnchor) {
+              const targetId = `${qa.faqAnchor.category}-${qa.faqAnchor.question}`;
+              return (
+                <button
+                  key={qa.label}
+                  type="button"
+                  onClick={() => {
+                    setQuery("");
+                    setOpenId(targetId);
+                    requestAnimationFrame(() => {
+                      const el = document.getElementById(`faq-${targetId}`);
+                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                    });
+                  }}
+                  className={`${className} w-full`}
+                >
+                  {tileBody}
+                </button>
+              );
+            }
+
+            return (
+              <Link key={qa.label} href={qa.href} className={className}>
+                {tileBody}
+              </Link>
+            );
+          })}
         </div>
       </FadeUp>
 
@@ -258,7 +305,8 @@ export default function RiderSupportPage() {
                   return (
                     <li
                       key={id}
-                      className="border-b border-line last:border-b-0"
+                      id={`faq-${id}`}
+                      className="scroll-mt-24 border-b border-line last:border-b-0"
                     >
                       <button
                         type="button"

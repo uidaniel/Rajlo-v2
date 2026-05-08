@@ -629,8 +629,22 @@ function WaypointSlot({
         typeof codeAndMessage.code === "string" ? codeAndMessage.code : null;
 
       if (numericCode === 1) {
-        msg =
-          "Location access is blocked. Click the lock icon next to the URL → Site settings → Location → Allow, then try again.";
+        // iOS users: the recovery path is in iOS Settings, not Safari.
+        // Detect (lazy require to keep the existing import block tidy)
+        // and surface the literal menu route.
+        const ua =
+          typeof navigator !== "undefined" ? navigator.userAgent : "";
+        const onIOS =
+          /iPad|iPhone|iPod/.test(ua) ||
+          (ua.includes("Macintosh") &&
+            "maxTouchPoints" in navigator &&
+            (navigator as Navigator & { maxTouchPoints?: number })
+              .maxTouchPoints !== undefined &&
+            ((navigator as Navigator & { maxTouchPoints?: number })
+              .maxTouchPoints ?? 0) > 1);
+        msg = onIOS
+          ? "Location is blocked. Open Settings → Privacy & Security → Location Services → Safari Websites → While Using the App, then refresh and try again."
+          : "Location access is blocked. Click the lock icon next to the URL → Site settings → Location → Allow, then try again.";
       } else if (numericCode === 2) {
         msg = "Couldn't determine your location. Try again.";
       } else if (numericCode === 3) {

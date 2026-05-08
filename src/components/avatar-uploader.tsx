@@ -127,30 +127,41 @@ export function AvatarUploader({
 
   return (
     <div className="space-y-2">
+      {/* Outer wrapper holds the avatar + the floating upload badge.
+         The badge has to sit OUTSIDE the avatar's clipping circle —
+         otherwise `overflow-hidden` (needed to crop the photo into a
+         circle) chops the badge in half. We achieve this by putting
+         the clip on an INNER div and the badge as a sibling. */}
       <button
         type="button"
         onClick={onPick}
         disabled={uploading}
         aria-label="Change profile picture"
-        className={`group relative grid ${dimensionClass} place-items-center overflow-hidden rounded-full bg-primary-soft font-extrabold text-rajlo-red ring-2 ring-rajlo-red/20 transition-all hover:ring-rajlo-red disabled:cursor-wait disabled:opacity-70`}
+        className={`group relative inline-block ${dimensionClass} disabled:cursor-wait disabled:opacity-70`}
       >
-        {currentUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={currentUrl}
-            alt=""
-            referrerPolicy="no-referrer"
-            className="h-full w-full object-cover"
-          />
-        ) : (
-          fallbackInitials
-        )}
+        <span
+          className={`relative grid h-full w-full place-items-center overflow-hidden rounded-full bg-primary-soft font-extrabold text-rajlo-red ring-2 ring-rajlo-red/20 transition-all group-hover:ring-rajlo-red`}
+        >
+          {currentUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={currentUrl}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            fallbackInitials
+          )}
+        </span>
 
-        {/* Camera badge — always visible bottom-right, signals
-           tap-to-change. Glows on hover. */}
+        {/* Camera badge — bottom-right, NOT inside the clipped circle
+           so the white border ring around it stays crisp. The slight
+           negative offsets (-bottom-0.5 -right-0.5) make it look like
+           a notification badge sitting on top of the photo. */}
         <span
           aria-hidden
-          className="absolute bottom-0 right-0 grid h-7 w-7 place-items-center rounded-full border-2 border-white bg-rajlo-red text-white shadow-md transition-transform group-hover:-translate-y-0.5"
+          className="absolute -bottom-0.5 -right-0.5 grid h-8 w-8 place-items-center rounded-full border-2 border-white bg-rajlo-red text-white shadow-lg transition-transform group-hover:-translate-y-0.5"
         >
           {uploading ? (
             <span className="h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />

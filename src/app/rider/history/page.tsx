@@ -170,7 +170,10 @@ export default function RiderHistoryPage() {
       </FadeUp>
 
       {/* Quick stats — completed + spent. Visually quiet so it doesn't
-         compete with the trip list. */}
+         compete with the trip list. The "Total spent" tile deep-links
+         to /rider/analytics for the full breakdown (trend, parishes,
+         top routes), which is what most riders are reaching for when
+         they tap a money number anyway. */}
       <FadeUp delay={0.04}>
         <div className="grid grid-cols-2 gap-3">
           <StatCard
@@ -182,6 +185,7 @@ export default function RiderHistoryPage() {
             label="Total spent"
             value={formatJMD(stats.spent)}
             icon="trending-up"
+            href="/rider/analytics"
           />
         </div>
       </FadeUp>
@@ -330,13 +334,18 @@ function StatCard({
   label,
   value,
   icon,
+  href,
 }: {
   label: string;
   value: string;
   icon: "check-circle" | "trending-up";
+  /** Optional — when set, the whole card becomes a link, gains a
+   *  subtle chevron, and lifts on hover. Used by the spend tile to
+   *  deep-link into the analytics page. */
+  href?: string;
 }) {
-  return (
-    <div className="rounded-2xl border border-line bg-surface p-4">
+  const inner = (
+    <>
       <div className="flex items-center justify-between">
         <p className="text-[10px] font-bold uppercase tracking-wider text-muted">
           {label}
@@ -348,7 +357,28 @@ function StatCard({
       <p className="mt-2 text-2xl font-extrabold tracking-tight text-rajlo-red md:text-3xl">
         {value}
       </p>
-    </div>
+      {href && (
+        <p className="mt-1 inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-muted transition-colors group-hover:text-rajlo-red">
+          See breakdown
+          <Icon name="chevron-right" className="h-3 w-3" />
+        </p>
+      )}
+    </>
+  );
+
+  if (href) {
+    return (
+      <Link
+        href={href}
+        className="group block rounded-2xl border border-line bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-rajlo-red/30 hover:shadow-md"
+      >
+        {inner}
+      </Link>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4">{inner}</div>
   );
 }
 

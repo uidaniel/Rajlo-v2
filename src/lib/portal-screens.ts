@@ -51,15 +51,6 @@ export const riderScreens: Record<string, ScreenConfig> = {
       { label: "Seats Occupied", value: "3/4" },
     ],
   },
-  "trip-details": {
-    title: "Trip Details",
-    description: "Driver profile, vehicle details, route summary, and rider safety controls.",
-    items: [
-      { title: "Driver", meta: "Andre Thompson • 4.8 stars", status: "good" },
-      { title: "Vehicle", meta: "Toyota Probox • 5812 GK", status: "info" },
-      { title: "Emergency", meta: "SOS sharing ready", status: "warn" },
-    ],
-  },
   payments: {
     title: "Payment Methods",
     description: "Manage cards, wallet balances, and cash payment preferences.",

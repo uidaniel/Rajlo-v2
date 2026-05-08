@@ -23,6 +23,14 @@ export type TripShareView = {
     | "cancelled";
   pickup: { name: string; lat: number; lng: number };
   dropoff: { name: string; lat: number; lng: number };
+  /** Intermediate stops in the order the driver visits them. Empty
+   *  array for a simple A → B trip. */
+  stops: Array<{
+    position: number;
+    name: string;
+    lat: number;
+    lng: number;
+  }>;
   estimatedEtaMinutes: number | null;
   driver: {
     name: string;
@@ -114,6 +122,14 @@ export async function getTripShareData(
     .maybeSingle();
   riderFirstName = riderProfile?.full_name?.split(" ")[0] ?? null;
 
+  /* Intermediate stops — needed so multi-stop trips render correctly
+     on the share view (markers + route line) and in the route list. */
+  const { data: stopRows } = await supabase
+    .from("ride_stops")
+    .select("position, name, lat, lng")
+    .eq("ride_id", ride.id)
+    .order("position", { ascending: true });
+
   return {
     rideId: ride.id,
     status: ride.status as TripShareView["status"],
@@ -127,6 +143,12 @@ export async function getTripShareData(
       lat: ride.dropoff_lat,
       lng: ride.dropoff_lng,
     },
+    stops: (stopRows ?? []).map((s) => ({
+      position: s.position,
+      name: s.name,
+      lat: s.lat,
+      lng: s.lng,
+    })),
     estimatedEtaMinutes: ride.estimated_eta_minutes,
     driver,
     recipientLabel: link.recipient_label,
@@ -135,10 +157,10 @@ export async function getTripShareData(
 }
 
 /**
- * Build a Google Static Maps URL with the route + start/end markers.
- * The image is publicly cacheable on Google's CDN so we can hand the
- * URL straight to og:image. Same API key as the live map (it has to
- * be a public-domain key for static maps to work in <img> tags).
+ * Build a Google Static Maps URL with the route + markers for pickup,
+ * each intermediate stop (in order), and dropoff. The image is
+ * publicly cacheable on Google's CDN so we can hand the URL straight
+ * to og:image.
  *
  * Returns null when the API key is missing — caller should fall back
  * to a static brand image.
@@ -146,30 +168,46 @@ export async function getTripShareData(
 export function buildStaticMapImageUrl(
   pickup: { lat: number; lng: number },
   dropoff: { lat: number; lng: number },
+  stops: Array<{ lat: number; lng: number }> = [],
 ): string | null {
   const key = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   if (!key) return null;
-  // 1200×630 = the standard OG card size most platforms render at.
-  // `path=enc:...` would be tighter but requires polyline encoding;
-  // a straight A→B path is already informative for a preview.
   const params = new URLSearchParams({
     size: "1200x630",
     scale: "2",
     maptype: "roadmap",
     key,
   });
-  // Pickup (green A) and dropoff (red B) markers.
+
+  // Pickup (green A), each stop (black B/C/...), dropoff (red final
+  // letter). Static Maps caps total marker labels at single chars, so
+  // anything past the 24-letter alphabet gets a numeric placeholder —
+  // not a real concern given Rajlo allows max 4 stops per ride.
   params.append(
     "markers",
     `color:0x10b981|label:A|${pickup.lat},${pickup.lng}`,
   );
+  stops.forEach((s, i) => {
+    const label = String.fromCharCode(66 + i); // B, C, D, ...
+    params.append(
+      "markers",
+      `color:0x111906|label:${label}|${s.lat},${s.lng}`,
+    );
+  });
+  const finalLabel = String.fromCharCode(66 + stops.length);
   params.append(
     "markers",
-    `color:0xf10100|label:B|${dropoff.lat},${dropoff.lng}`,
+    `color:0xf10100|label:${finalLabel}|${dropoff.lat},${dropoff.lng}`,
   );
-  params.append(
-    "path",
-    `color:0xf10100ff|weight:5|${pickup.lat},${pickup.lng}|${dropoff.lat},${dropoff.lng}`,
-  );
+
+  // Path goes in the same order. Joins all the waypoints with a red
+  // line so the preview reads as a route, not just a pin scatter.
+  const pathPoints = [
+    `${pickup.lat},${pickup.lng}`,
+    ...stops.map((s) => `${s.lat},${s.lng}`),
+    `${dropoff.lat},${dropoff.lng}`,
+  ].join("|");
+  params.append("path", `color:0xf10100ff|weight:5|${pathPoints}`);
+
   return `https://maps.googleapis.com/maps/api/staticmap?${params.toString()}`;
 }

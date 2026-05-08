@@ -2,6 +2,24 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "./supabase-browser";
+import { isIOS } from "./platform-detect";
+
+/**
+ * Driver-facing version of the geolocation error mapper. Same iOS
+ * Settings path advice as `use-ride-position.ts` but worded for the
+ * driver context (they need GPS to be visible on the rider's map).
+ */
+function driverGeoErrorMessage(code: number): string {
+  if (code === 1) {
+    if (isIOS()) {
+      return "Location is blocked. On iPhone, open Settings → Privacy & Security → Location Services → Safari Websites → While Using the App, then refresh and toggle online again.";
+    }
+    return "Location access is blocked — allow location for Rajlo in your browser's site settings, then toggle online again.";
+  }
+  if (code === 2) return "Couldn't determine your location. Try moving outside or to a window.";
+  if (code === 3) return "Location request timed out. Try again.";
+  return "Live location failed.";
+}
 
 /**
  * Fleet visibility — the "see nearby drivers on the booking screen" feature.
@@ -196,15 +214,7 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
         (err) => {
           // eslint-disable-next-line no-console
           console.warn("[fleet] geolocation error:", err.code, err.message);
-          setError(
-            err.code === 1
-              ? "Location access blocked — drivers must allow location to appear on the map."
-              : err.code === 2
-                ? "Couldn't determine your location."
-                : err.code === 3
-                  ? "Location request timed out."
-                  : "Live location failed.",
-          );
+          setError(driverGeoErrorMessage(err.code));
         },
         { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 },
       );

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "./supabase-browser";
+import { isIOS } from "./platform-detect";
 
 export type LivePosition = {
   lat: number;
@@ -136,17 +137,10 @@ export function useRidePosition(
           });
         },
         (err) => {
-          // Code 1 = denied, 2 = unavailable, 3 = timeout. Surface a brief
-          // string rather than blowing up the whole UI.
-          setGeoError(
-            err.code === 1
-              ? "Location access blocked — enable it in your browser to share your position."
-              : err.code === 2
-                ? "Couldn't determine your location."
-                : err.code === 3
-                  ? "Location request timed out."
-                  : "Live location failed.",
-          );
+          // Code 1 = denied, 2 = unavailable, 3 = timeout. iOS users
+          // see the denied case most often and the fix is buried in
+          // their iOS Settings, not in Safari — give them the path.
+          setGeoError(buildGeoErrorMessage(err.code));
         },
         {
           enableHighAccuracy: true,
@@ -165,6 +159,24 @@ export function useRidePosition(
   }, [rideId, role, streamSelf]);
 
   return { driverPosition, riderPosition, geoError };
+}
+
+/**
+ * Translates a GeolocationPositionError code into a user-friendly
+ * message. iOS users hit code 1 (denied) most often and the recovery
+ * path is non-obvious — the fix is in iOS Settings, not Safari — so
+ * we give them the literal Settings menu route.
+ */
+function buildGeoErrorMessage(code: number): string {
+  if (code === 1) {
+    if (isIOS()) {
+      return "Location is blocked. Open Settings → Privacy & Security → Location Services → Safari Websites → While Using the App, then refresh.";
+    }
+    return "Location access is blocked. Allow location for Rajlo in your browser's site settings, then refresh.";
+  }
+  if (code === 2) return "Couldn't determine your location. Try moving outside or to a window.";
+  if (code === 3) return "Location request timed out. Try again.";
+  return "Live location failed.";
 }
 
 function parsePosition(payload: unknown): LivePosition | null {

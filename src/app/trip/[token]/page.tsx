@@ -28,6 +28,12 @@ type TripData = {
     | "cancelled";
   pickup: { name: string; lat: number; lng: number };
   dropoff: { name: string; lat: number; lng: number };
+  stops: Array<{
+    position: number;
+    name: string;
+    lat: number;
+    lng: number;
+  }>;
   estimatedEtaMinutes: number | null;
   driver: {
     name: string;
@@ -151,6 +157,17 @@ export default function TripSharePage({
     lng: data.dropoff.lng,
     parish: null,
   };
+  // Multi-stop rides need each waypoint on the map AND in the route
+  // list below. Map markers come from this array (ordered); route-list
+  // letter labels are computed from the index in render below.
+  const stops: Place[] = (data.stops ?? []).map((s) => ({
+    placeId: "",
+    name: s.name,
+    address: "",
+    lat: s.lat,
+    lng: s.lng,
+    parish: null,
+  }));
 
   const isTerminal = data.status === "completed" || data.status === "cancelled";
 
@@ -198,7 +215,7 @@ export default function TripSharePage({
         <div className="overflow-hidden rounded-3xl border border-line bg-surface shadow-lg shadow-rajlo-red/[0.04]">
           <MapView
             pickup={pickup}
-            stops={[]}
+            stops={stops}
             dropoff={dropoff}
             driverPosition={driverPosition}
             riderPosition={riderPosition}
@@ -221,7 +238,9 @@ export default function TripSharePage({
           />
         )}
 
-        {/* Pickup → Dropoff */}
+        {/* Pickup → stops → dropoff. Letter labels match the map
+           markers: A = pickup, B/C/... = each stop, final letter =
+           dropoff. Same convention as the rider history detail page. */}
         <div className="rounded-2xl border border-line bg-surface p-5">
           <div className="flex items-start gap-3">
             <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500 text-[11px] font-extrabold text-white">
@@ -236,9 +255,22 @@ export default function TripSharePage({
               </p>
             </div>
           </div>
+          {data.stops.map((s, i) => (
+            <div key={s.position} className="mt-4 flex items-start gap-3">
+              <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rajlo-black text-[11px] font-extrabold text-white">
+                {String.fromCharCode(66 + i)}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+                  Stop {i + 1}
+                </p>
+                <p className="mt-0.5 truncate text-sm font-bold">{s.name}</p>
+              </div>
+            </div>
+          ))}
           <div className="mt-4 flex items-start gap-3">
             <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rajlo-red text-[11px] font-extrabold text-white">
-              B
+              {String.fromCharCode(66 + data.stops.length)}
             </span>
             <div className="min-w-0 flex-1">
               <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">

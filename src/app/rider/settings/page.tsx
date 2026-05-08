@@ -9,6 +9,14 @@ import { ToggleRowsSkeleton } from "@/components/skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { usePush } from "@/lib/use-push";
 import { clearSessionPolicy } from "@/lib/session-policy";
+import {
+  applyTheme,
+  applyLocale,
+  writeLocalPrefs,
+  type Theme as PrefsTheme,
+  type Locale as PrefsLocale,
+} from "@/lib/preferences-client";
+import { useT } from "@/lib/i18n";
 
 /**
  * Rider settings — account profile + push preferences + app
@@ -79,14 +87,20 @@ export default function RiderSettingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
   const push = usePush();
+  const { t, setLocale: setLocaleI18n } = useT();
 
   // Debounced PATCH — coalesces rapid-fire toggle taps into a single
   // request. Held in a ref so changing prefs doesn't reset the timer.
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savePayload = useRef<Partial<WirePrefs>>({});
 
-  // Initial load — auth user + preferences. We do them in parallel
-  // so the page renders fast.
+  // Initial load — auth user + preferences + avatar. Three fetches in
+  // parallel for fast first paint. The avatar comes from
+  // /api/me/avatar (NOT user_metadata) so users who uploaded a custom
+  // photo via /rider/profile see it here too — that uploaded URL
+  // lives in `profiles.avatar_url`, which the OAuth metadata never
+  // mirrors. Falls back to OAuth picture for users who never
+  // uploaded.
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -96,23 +110,43 @@ export default function RiderSettingsPage() {
           data: { user },
         },
         prefsRes,
+        avatarRes,
       ] = await Promise.all([
         supabase.auth.getUser(),
         fetch("/api/rider/preferences").then((r) =>
           r.ok ? (r.json() as Promise<{ preferences: ServerPrefs }>) : null,
         ),
+        fetch("/api/me/avatar").then((r) =>
+          r.ok ? (r.json() as Promise<{ avatarUrl: string | null }>) : null,
+        ),
       ]);
       if (cancelled) return;
+      const metaAvatar =
+        (user?.user_metadata?.avatar_url as string | undefined) ?? null;
       setProfile({
         fullName:
           (user?.user_metadata?.full_name as string | undefined) ??
           user?.email ??
           "Rider",
         email: user?.email ?? "",
-        avatarUrl:
-          (user?.user_metadata?.avatar_url as string | undefined) ?? null,
+        // Server-resolved avatar wins (uploaded photo for riders,
+        // verified TA selfie for drivers). Falls back to OAuth raw
+        // metadata only if the endpoint is unreachable.
+        avatarUrl: avatarRes?.avatarUrl ?? metaAvatar,
       });
-      if (prefsRes) setPrefs(fromServer(prefsRes.preferences));
+      if (prefsRes) {
+        const wire = fromServer(prefsRes.preferences);
+        setPrefs(wire);
+        // Sync the freshly-loaded theme + locale into the live <html>
+        // attributes + localStorage cache. Most of the time these are
+        // already in agreement (the no-FOUC script applied from
+        // localStorage on page paint), but cross-device changes can
+        // diverge — server wins.
+        applyTheme(wire.theme);
+        applyLocale(wire.language);
+        writeLocalPrefs({ theme: wire.theme, locale: wire.language });
+        window.dispatchEvent(new Event("rajlo:prefs-changed"));
+      }
     })();
     return () => {
       cancelled = true;
@@ -135,6 +169,23 @@ export default function RiderSettingsPage() {
     savePayload.current = { ...savePayload.current, [key]: value };
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(flushSave, 500);
+
+    // Side-effects for app preferences — apply theme + locale to the
+    // <html> element AND the localStorage cache immediately, so the
+    // UI changes before the debounced server save lands. Other tabs
+    // pick up the change via the storage event.
+    if (key === "theme" && (value === "system" || value === "light" || value === "dark")) {
+      const next = value as PrefsTheme;
+      applyTheme(next);
+      writeLocalPrefs({ theme: next });
+      window.dispatchEvent(new Event("rajlo:prefs-changed"));
+    }
+    if (key === "language" && (value === "en" || value === "patois")) {
+      const next = value as PrefsLocale;
+      applyLocale(next);
+      writeLocalPrefs({ locale: next });
+      setLocaleI18n(next);
+    }
   };
 
   const flushSave = async () => {
@@ -191,13 +242,16 @@ export default function RiderSettingsPage() {
           <div className="relative flex items-start justify-between gap-4">
             <div>
               <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                Account
+                {t("settings.eyebrow", "Account")}
               </p>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-                Settings
+                {t("settings.title", "Settings")}
               </h1>
               <p className="mt-1 text-sm text-white/75">
-                Profile, notifications, app preferences, and account safety.
+                {t(
+                  "settings.subtitle",
+                  "Profile, notifications, app preferences, and account safety.",
+                )}
               </p>
             </div>
             <span
@@ -205,7 +259,7 @@ export default function RiderSettingsPage() {
                 savedAt ? "opacity-100" : "opacity-0"
               }`}
             >
-              Saved
+              {t("settings.saved", "Saved")}
             </span>
           </div>
         </div>
@@ -261,22 +315,62 @@ export default function RiderSettingsPage() {
         <Section title="Push notifications" icon="bell">
           {prefs ? (
             <>
-              {/* Status banner — surfaces the browser-side state so the
-                  user understands why the toggle behaves the way it does. */}
-              {push.ready && !push.support && (
+              {/* iOS-specific banner — push only works after PWA
+                  install on iOS. Step-by-step beats a one-liner here:
+                  "Share → Add to Home Screen" is genuinely how it
+                  works and is hidden behind a button users may not
+                  recognise. */}
+              {push.ready && push.iosNeedsInstall && (
                 <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
-                  This browser doesn&apos;t support push notifications. On
-                  iPhone, install Rajlo to your home screen first
-                  (Share → Add to Home Screen) and then come back here.
+                  <p className="font-bold">
+                    Install Rajlo first to enable push on iPhone
+                  </p>
+                  <ol className="mt-1.5 list-decimal space-y-0.5 pl-4">
+                    <li>
+                      Tap the <strong>Share button</strong> at the bottom
+                      of Safari (square with an up arrow)
+                    </li>
+                    <li>
+                      Choose <strong>Add to Home Screen</strong> →
+                      Add
+                    </li>
+                    <li>
+                      Open Rajlo from the new icon on your home screen,
+                      then come back here
+                    </li>
+                  </ol>
                 </div>
               )}
+              {push.ready &&
+                !push.support &&
+                !push.iosNeedsInstall && (
+                  <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
+                    This browser doesn&apos;t support push notifications.
+                    Try Chrome, Safari, Edge, or Firefox.
+                  </div>
+                )}
               {push.ready &&
                 push.support &&
                 push.permission === "denied" && (
                   <div className="mb-3 rounded-xl border border-rajlo-red/30 bg-primary-soft px-3 py-2.5 text-xs leading-relaxed text-rajlo-red">
-                    Notifications are blocked for this site. Open your
-                    browser&apos;s site settings and allow notifications
-                    for Rajlo, then refresh this page.
+                    {push.iosHint ? (
+                      <>
+                        <p className="font-bold">
+                          Notifications are blocked for Rajlo on iOS
+                        </p>
+                        <p className="mt-1">
+                          Open <strong>Settings → Notifications →
+                          Rajlo</strong> on your iPhone and turn{" "}
+                          <strong>Allow Notifications</strong> on.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        Notifications are blocked for this site. Open your
+                        browser&apos;s site settings and allow
+                        notifications for Rajlo, then refresh this page.
+                      </>
+                    )}
                   </div>
                 )}
               {push.error && (
@@ -362,31 +456,55 @@ export default function RiderSettingsPage() {
 
       {/* Preferences */}
       <FadeUp delay={0.15}>
-        <Section title="App preferences" icon="settings">
+        <Section
+          title={t("settings.section.app", "App preferences")}
+          icon="settings"
+        >
           {prefs ? (
             <>
               <SegmentedRow
-                label="Language"
-                description="Used across the app + email receipts."
+                label={t("settings.app.language", "Language")}
+                description={t(
+                  "settings.app.language.desc",
+                  "Used across the app + email receipts.",
+                )}
                 value={prefs.language}
                 onChange={(v) => update("language", v as "en" | "patois")}
                 options={[
-                  { value: "en", label: "English" },
-                  { value: "patois", label: "Patois" },
+                  {
+                    value: "en",
+                    label: t("settings.app.language.en", "English"),
+                  },
+                  {
+                    value: "patois",
+                    label: t("settings.app.language.patois", "Patois"),
+                  },
                 ]}
               />
               <Divider />
               <SegmentedRow
-                label="Theme"
-                description="Match your device or pin to one mode."
+                label={t("settings.app.theme", "Theme")}
+                description={t(
+                  "settings.app.theme.desc",
+                  "Match your device or pin to one mode.",
+                )}
                 value={prefs.theme}
                 onChange={(v) =>
                   update("theme", v as "system" | "light" | "dark")
                 }
                 options={[
-                  { value: "system", label: "System" },
-                  { value: "light", label: "Light" },
-                  { value: "dark", label: "Dark" },
+                  {
+                    value: "system",
+                    label: t("settings.app.theme.system", "System"),
+                  },
+                  {
+                    value: "light",
+                    label: t("settings.app.theme.light", "Light"),
+                  },
+                  {
+                    value: "dark",
+                    label: t("settings.app.theme.dark", "Dark"),
+                  },
                 ]}
               />
             </>

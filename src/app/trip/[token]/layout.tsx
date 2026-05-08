@@ -72,6 +72,7 @@ export async function generateMetadata({
   const mapImage = buildStaticMapImageUrl(
     { lat: trip.pickup.lat, lng: trip.pickup.lng },
     { lat: trip.dropoff.lat, lng: trip.dropoff.lng },
+    trip.stops.map((s) => ({ lat: s.lat, lng: s.lng })),
   );
 
   return {

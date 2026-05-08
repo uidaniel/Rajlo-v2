@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { iosNeedsPwaInstall, isIOS } from "./platform-detect";
 
 /**
  * Browser-side web push lifecycle hook.
@@ -8,22 +9,26 @@ import { useCallback, useEffect, useState } from "react";
  * Returns the current state + a small set of actions the settings page
  * (or any "enable notifications" CTA) can call:
  *
- *   - `support`         — true if this browser supports web push at all.
- *   - `permission`      — "default" | "granted" | "denied" (Notification API).
- *   - `subscribed`      — true if a PushSubscription exists in the SW.
- *   - `enable()`        — registers SW, requests permission, subscribes,
- *                         posts the subscription to /api/push/subscribe.
- *   - `disable()`       — unsubscribes from the SW + clears server side.
- *   - `sendTest()`      — POSTs /api/push/test for a self-buzz.
- *
- * Designed so the caller can render a single toggle: "Enable push" with
- * a "Send test" button that becomes active after subscribing. iOS Safari
- * requires the page to be installed as a PWA — `support` is false there
- * until that's done, which we surface in the UI.
+ *   - `support`            — true if this browser CAN support web push
+ *                             right now (not just "the API exists").
+ *   - `iosNeedsInstall`    — true on iOS Safari running in a regular
+ *                             tab. iOS only allows web push from a
+ *                             home-screen-installed PWA — the user
+ *                             must Share → Add to Home Screen, then
+ *                             open from the icon, before push works.
+ *                             We surface this distinct from `support`
+ *                             so the UI can show the right hint.
+ *   - `permission`         — "default" | "granted" | "denied".
+ *   - `subscribed`         — true if a PushSubscription exists in SW.
+ *   - `enable()`           — registers SW, requests permission, subscribes,
+ *                             posts the subscription to /api/push/subscribe.
+ *   - `disable()`          — unsubscribes from the SW + clears server side.
+ *   - `sendTest()`         — POSTs /api/push/test for a self-buzz.
  */
 
 type Status = {
   support: boolean;
+  iosNeedsInstall: boolean;
   permission: NotificationPermission | "default";
   subscribed: boolean;
   ready: boolean;
@@ -34,6 +39,7 @@ const SW_PATH = "/sw.js";
 export function usePush() {
   const [status, setStatus] = useState<Status>({
     support: false,
+    iosNeedsInstall: false,
     permission: "default",
     subscribed: false,
     ready: false,
@@ -45,12 +51,27 @@ export function usePush() {
   // to keep the UI in sync with the SW state).
   const refresh = useCallback(async () => {
     if (typeof window === "undefined") return;
-    const support =
+    const apiPresent =
       "serviceWorker" in navigator &&
       "PushManager" in window &&
       "Notification" in window;
+
+    // iOS Safari ships the Notification + PushManager APIs in any
+    // mode, but actually subscribing only works when the page is
+    // running as an installed PWA (Add to Home Screen). Treat that
+    // case as "not yet supported" so the UI tells the user what to
+    // do instead of letting them tap Enable and hit a cryptic error.
+    const iosNeedsInstall = iosNeedsPwaInstall();
+    const support = apiPresent && !iosNeedsInstall;
+
     if (!support) {
-      setStatus({ support: false, permission: "default", subscribed: false, ready: true });
+      setStatus({
+        support: false,
+        iosNeedsInstall,
+        permission: "default",
+        subscribed: false,
+        ready: true,
+      });
       return;
     }
 
@@ -67,6 +88,7 @@ export function usePush() {
 
     setStatus({
       support: true,
+      iosNeedsInstall: false,
       permission: Notification.permission,
       subscribed,
       ready: true,
@@ -88,6 +110,16 @@ export function usePush() {
     try {
       if (!("serviceWorker" in navigator)) {
         throw new Error("This browser doesn't support push notifications.");
+      }
+
+      // iOS Safari guard — even if the API surface exists, push only
+      // works after the user installs the PWA. Surface the path
+      // instead of letting Notification.requestPermission silently
+      // resolve "denied".
+      if (iosNeedsPwaInstall()) {
+        throw new Error(
+          "On iPhone you have to install Rajlo first. Tap the Share button (square with up arrow), then Add to Home Screen, then open Rajlo from the new icon and try again.",
+        );
       }
 
       const vapid = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
@@ -209,6 +241,9 @@ export function usePush() {
     /** Surfaced for the UI to render a "Configure server" hint when the
      *  VAPID public key isn't baked into the bundle. */
     configured: !!process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
+    /** True when the device is iOS and the page is in a regular tab.
+     *  Lets the UI surface a "Add to Home Screen first" guide. */
+    iosHint: isIOS(),
   };
 }
 

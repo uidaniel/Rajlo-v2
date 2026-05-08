@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { validateVehicleSpec } from "@/lib/vehicle-catalog";
 import { sendVehicleChangeSubmittedEmail } from "@/lib/email-templates";
+import { resolveDriverEmail } from "@/lib/driver-email-resolver";
 
 /**
  * GET /api/driver/vehicle-change
@@ -89,7 +90,7 @@ export async function POST(request: Request) {
 
   const { data: driver } = await supabase
     .from("drivers")
-    .select("id, external_id, first_name, last_name, email")
+    .select("id, external_id, first_name, last_name, email, user_id")
     .eq("user_id", user.id)
     .maybeSingle();
   if (!driver) {
@@ -201,19 +202,22 @@ export async function POST(request: Request) {
     event: `Vehicle change requested: ${body.brand} ${body.model} (${yearNum})`,
   });
 
-  // Best-effort confirmation email so the driver has a record of the
-  // submission outside the app.
-  if (driver.email) {
+  // Best-effort confirmation email — uses the resolver so OAuth
+  // signups + legacy rows where drivers.email is null still reach
+  // their auth.users.email.
+  void (async () => {
+    const email = await resolveDriverEmail(supabase, driver);
+    if (!email) return;
     const newVehicle = [yearNum, body.color, body.brand, body.model]
       .filter(Boolean)
       .join(" ");
-    void sendVehicleChangeSubmittedEmail(driver.email, {
+    await sendVehicleChangeSubmittedEmail(email, {
       driverName: [driver.first_name, driver.last_name].filter(Boolean).join(" ") || "Driver",
       externalId: driver.external_id,
       newVehicle,
       newPlate: plate ?? "(plate pending)",
     }).catch(() => null);
-  }
+  })();
 
   return NextResponse.json({ ok: true, requestId: created.id });
 }

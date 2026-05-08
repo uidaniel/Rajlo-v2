@@ -6,6 +6,7 @@ import {
   sendDriverRejectedEmail,
 } from "@/lib/driver-emails";
 import { notifyDriver } from "@/lib/notify";
+import { resolveDriverEmail } from "@/lib/driver-email-resolver";
 import type { AdminDecisionRequest } from "@/lib/api-types";
 
 export async function POST(request: Request) {
@@ -138,18 +139,21 @@ export async function POST(request: Request) {
   // the admin can be told the email may not have gone out.
   let emailStatus: "sent" | "skipped" | "failed" = "skipped";
   let emailError: string | null = null;
-  if (driver.email) {
+  // Resolve the driver's email through the multi-source helper —
+  // covers OAuth signups + legacy rows where drivers.email is null.
+  const targetEmail = await resolveDriverEmail(supabase, driver);
+  if (targetEmail) {
     const driverName =
       [driver.first_name, driver.last_name].filter(Boolean).join(" ") ||
       "driver";
     const result = allApproved
       ? await sendDriverApprovedEmail({
-          to: driver.email,
+          to: targetEmail,
           driverName,
           externalId: driver.external_id,
         })
       : await sendDriverRejectedEmail({
-          to: driver.email,
+          to: targetEmail,
           driverName,
           externalId: driver.external_id,
           adminNote: body.adminNote || null,

@@ -1,5 +1,6 @@
 import { PortalLayout } from "@/components/portal-layout";
 import { SessionGuard } from "@/components/session-guard";
+import { PreferencesProvider } from "@/components/preferences-provider";
 import { riderNav } from "@/lib/mock-data";
 
 export default function RiderLayout({ children }: { children: React.ReactNode }) {
@@ -10,6 +11,7 @@ export default function RiderLayout({ children }: { children: React.ReactNode })
       nav={riderNav}
     >
       <SessionGuard />
+      <PreferencesProvider />
       {children}
     </PortalLayout>
   );

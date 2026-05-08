@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { sendDriverDeactivatedEmail } from "@/lib/driver-emails";
 import { notifyDriver } from "@/lib/notify";
+import { resolveDriverEmail } from "@/lib/driver-email-resolver";
 
 /**
  * POST /api/admin/verification/deactivate
@@ -143,12 +144,13 @@ export async function POST(request: Request) {
   // block the API; the DB state is what matters.
   let emailStatus: "sent" | "skipped" | "failed" = "skipped";
   let emailError: string | null = null;
-  if (driver.email) {
+  const targetEmail = await resolveDriverEmail(supabase, driver);
+  if (targetEmail) {
     const driverName =
       [driver.first_name, driver.last_name].filter(Boolean).join(" ") ||
       "driver";
     const result = await sendDriverDeactivatedEmail({
-      to: driver.email,
+      to: targetEmail,
       driverName,
       externalId: driver.external_id,
       reason,

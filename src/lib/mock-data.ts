@@ -6,7 +6,6 @@ export const riderNav: NavItem[] = [
   { label: "Dashboard", href: "/rider", icon: "home" },
   { label: "Request a ride", href: "/rider/request", icon: "plus-circle" },
   { label: "Live trip", href: "/rider/live-trip", icon: "navigation" },
-  { label: "Trip details", href: "/rider/trip-details", icon: "file-text" },
   { label: "Fare breakdown", href: "/rider/fare-breakdown", icon: "calculator" },
   { label: "Payments", href: "/rider/payments", icon: "credit-card" },
   { label: "History", href: "/rider/history", icon: "clock" },

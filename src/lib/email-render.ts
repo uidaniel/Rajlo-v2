@@ -300,50 +300,41 @@ function renderCta(href: string, label: string): string {
 }
 
 /* ──────────────────────────────────────────────────────────────────────
-   Brand mark — inline SVG for header
-   Uses the canonical official Rajlo wordmark (from public/Rajlo white.svg
-   and public/Rajlo main logo.svg). The header band is dark, so we render
-   "Rajl" in white and the "o" + arc in brand red — matching the
-   "white" variant of <Logo> with the brand-mark accent retained.
+   Brand mark — hosted PNG icon + styled text wordmark
+   ──────────────────────────────────────────────────────────────────────
 
-   Inline SVG so retina-clients render crisp; Outlook desktop is the only
-   client that fails to render <svg> — there we fall back to a hosted
-   PNG/SVG via the <img> stack (the next.js public folder serves
-   `/Rajlo white.svg` if a public app URL is configured).
+   Why not inline SVG: Gmail's HTML sanitizer strips <svg> tags entirely
+   for security — the only thing that survived was the tagline text.
+   Apple Mail renders inline SVG fine, but the email has to look right
+   in Gmail too (it's the dominant inbox).
+
+   Why this works in every client:
+     - The brand square mark is a hosted PNG (`/icon.png`, served by
+       Next.js from `app/icon.png`) — every email client renders <img>.
+     - The "Rajlo" wordmark is plain styled text in spans, which is
+       universal HTML so it works even when images are blocked.
+     - Result: even with images-off, the recipient still sees a
+       branded "Rajlo · Let's go!" header in the right colours.
    ────────────────────────────────────────────────────────────────────── */
 
 function renderHeaderMark(): string {
-  // The wordmark SVG. Two-color: "Rajl" in white, "o" + arc in red.
-  // Renders at 38px tall — width auto-scales to 75px (343.32 / 173.36 * 38).
-  const wordmarkSvg = `
-    <svg width="148" height="74" viewBox="0 0 343.32 173.36" xmlns="http://www.w3.org/2000/svg" style="display:block;" role="img" aria-label="Rajlo">
-      <g transform="translate(-133.9 -316.11)">
-        <path fill="${BRAND.white}" d="M133.9,324.46h43.34c31.5,0,39.51,19,39.51,34.46,0,15.67-11.66,30.46-30.29,32.55l35,56.22H200.56l-31.33-54.3H150.61v54.3H133.9Zm16.71,54.31h21.93c13.23,0,26.45-3.14,26.45-19.85s-13.22-19.84-26.45-19.84H150.61Z"/>
-        <path fill="${BRAND.white}" d="M223.54,375.28c8.7-8.18,21.23-12.18,32.72-12.18,24.37,0,34.46,13.23,34.46,27.5v42.12a127.52,127.52,0,0,0,.7,15H277.49q-.51-6.26-.52-12.53h-.35c-7,10.62-16.36,14.62-28.89,14.62-15.32,0-28.54-8.7-28.54-24.71,0-21.24,20.36-28.55,45.42-28.55H276.1V393c0-8.53-6.26-17.41-19.67-17.41-12,0-17.75,5.05-23.49,9.4ZM267.75,408c-14.8,0-32.9,2.61-32.9,15.84,0,9.4,7,13.4,17.75,13.4,17.41,0,23.5-12.88,23.5-24V408Z"/>
-        <path fill="${BRAND.white}" d="M317.35,365.19v94.34c0,8.53-.17,29.94-25.24,29.94A28.45,28.45,0,0,1,282,487.9l1.74-14.45a20.18,20.18,0,0,0,6.44,1.4c8.53,0,11.49-5.57,11.49-16V365.19Zm-7.83-41.08A11.49,11.49,0,1,1,298,335.6,11.59,11.59,0,0,1,309.52,324.11Z"/>
-        <path fill="${BRAND.white}" d="M330.41,316.11h15.66V447.69H330.41Z"/>
-        <path fill="${BRAND.red}" d="M413.75,363.1c24.55,0,43.87,19.32,43.87,43.34s-19.32,43.34-43.87,43.34-43.86-19.32-43.86-43.34S389.21,363.1,413.75,363.1Zm0,72.06c16.71,0,27.16-12,27.16-28.72s-10.45-28.72-27.16-28.72-27.15,12-27.15,28.72S397,435.16,413.75,435.16Z"/>
-        <path fill="${BRAND.red}" d="M413.53,339.93a64.37,64.37,0,0,0-63.7,55.7H365a49.27,49.27,0,0,1,97,0h15.18A64.37,64.37,0,0,0,413.53,339.93Z"/>
-      </g>
-    </svg>`;
-
-  // Outlook fall-back: hosted PNG/SVG of the white wordmark. We point
-  // Outlook at the public asset; everyone else gets the inline SVG.
-  const fallbackImg = `<img src="${APP_URL}/Rajlo%20white.svg" width="148" height="74" alt="Rajlo" style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;" />`;
-
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0">
     <tr>
-      <td style="vertical-align:middle;">
-        <!--[if mso]>
-        ${fallbackImg}
-        <![endif]-->
-        <!--[if !mso]><!-- -->
-        ${wordmarkSvg}
-        <!--<![endif]-->
+      <td style="vertical-align:middle;padding-right:14px;">
+        <img
+          src="${APP_URL}/icon.png"
+          width="48"
+          height="48"
+          alt="Rajlo"
+          style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;border-radius:10px;"
+        />
       </td>
-    </tr>
-    <tr>
-      <td style="padding-top:8px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-style:italic;color:#bcc2bd;letter-spacing:0.04em;">Let's go!</td>
+      <td style="vertical-align:middle;">
+        <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:900;font-size:30px;letter-spacing:-0.02em;line-height:1;">
+          <span style="color:${BRAND.white};">Rajl</span><span style="color:${BRAND.red};">o</span>
+        </div>
+        <div style="margin-top:6px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-style:italic;color:#bcc2bd;letter-spacing:0.04em;">Let's go!</div>
+      </td>
     </tr>
   </table>`;
 }

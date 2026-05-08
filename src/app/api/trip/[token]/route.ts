@@ -40,6 +40,7 @@ export async function GET(
     status: trip.status,
     pickup: trip.pickup,
     dropoff: trip.dropoff,
+    stops: trip.stops,
     estimatedEtaMinutes: trip.estimatedEtaMinutes,
     driver: trip.driver,
     recipientLabel: trip.recipientLabel,

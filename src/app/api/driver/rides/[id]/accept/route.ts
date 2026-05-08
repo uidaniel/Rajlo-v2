@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
-import { sendDriverMatchedEmail } from "@/lib/email-templates";
+import {
+  sendDriverMatchedEmail,
+  sendDriverRideAcceptedEmail,
+} from "@/lib/email-templates";
 import { notifyRider } from "@/lib/notify";
+import { resolveDriverEmail } from "@/lib/driver-email-resolver";
 
 /**
  * POST /api/driver/rides/[id]/accept
@@ -192,13 +196,13 @@ export async function POST(
         supabase
           .from("rides")
           .select(
-            "id, rider_id, pickup_name, dropoff_name, estimated_eta_minutes",
+            "id, rider_id, pickup_name, dropoff_name, seats, estimated_fare_jmd, estimated_eta_minutes",
           )
           .in("id", claimedIds),
         supabase
           .from("drivers")
           .select(
-            "first_name, last_name, plate_number, vehicle_make, vehicle_model, vehicle_year, vehicle_color",
+            "first_name, last_name, email, user_id, plate_number, vehicle_make, vehicle_model, vehicle_year, vehicle_color",
           )
           .eq("id", driver.id)
           .maybeSingle(),
@@ -209,6 +213,7 @@ export async function POST(
       const driverName =
         [driverFull.first_name, driverFull.last_name].filter(Boolean).join(" ") ||
         "Your driver";
+
       const vehicle = [
         driverFull.vehicle_year ? String(driverFull.vehicle_year) : null,
         driverFull.vehicle_color,
@@ -226,6 +231,27 @@ export async function POST(
         .select("id, full_name")
         .in("id", riderIds);
       const profileMap = new Map(profiles?.map((p) => [p.id, p]) ?? []);
+
+      // Driver-side confirmation email — one per accepted ride. Uses
+      // the resolver so OAuth signups w/o drivers.email still receive.
+      const driverEmail = await resolveDriverEmail(supabase, driverFull);
+      if (driverEmail) {
+        await Promise.all(
+          rideRows.map(async (row) => {
+            const profile = profileMap.get(row.rider_id);
+            await sendDriverRideAcceptedEmail(driverEmail, {
+              driverName,
+              rideId: row.id,
+              riderFirstName:
+                profile?.full_name?.split(" ")[0] ?? null,
+              pickup: row.pickup_name,
+              dropoff: row.dropoff_name,
+              fareJMD: row.estimated_fare_jmd,
+              seats: row.seats,
+            }).catch(() => null);
+          }),
+        );
+      }
 
       const userLookups = await Promise.all(
         riderIds.map((id) =>

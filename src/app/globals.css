@@ -31,12 +31,13 @@
 }
 
 :root {
-  /* Rajlo brand palette (Sept 2024 guidelines) */
+  /* Rajlo brand palette (Sept 2024 guidelines) — these stay constant
+     in light + dark; brand colours don't shift. */
   --rajlo-red: #f10100;
   --rajlo-black: #111906;
   --rajlo-white: #ffffff;
 
-  /* Semantic tokens */
+  /* Semantic tokens (light theme defaults) */
   --background: #ffffff;
   --foreground: var(--rajlo-black);
   --muted: #6b7077;
@@ -46,6 +47,44 @@
   --primary: var(--rajlo-red);
   --primary-soft: #fde8e7;
   --primary-hover: #d40100;
+}
+
+/*
+ * Dark theme — applied via `[data-theme="dark"]` on <html>. The
+ * PreferencesProvider sets it from the rider's saved preference;
+ * an inline no-FOUC script in the root layout applies the value
+ * before first paint so the page never flashes light.
+ *
+ * Brand red stays exactly as-is (it's the brand). Black/white-anchored
+ * tokens flip: surfaces darken, foreground lightens, lines + muted
+ * shift to subtler shades that read against the new dark base.
+ */
+[data-theme="dark"] {
+  --background: #0a0d08;
+  --foreground: #ebede6;
+  --muted: #9ba39c;
+  --surface: #131811;
+  --surface-soft: #1c211a;
+  --line: #2a3026;
+  --primary: var(--rajlo-red);
+  --primary-soft: #391010;
+  --primary-hover: #ff2424;
+}
+
+/* When the user picks "system", we drop the data-theme attribute and
+   let the OS preference drive — these vars match the dark block above. */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] {
+    --background: #0a0d08;
+    --foreground: #ebede6;
+    --muted: #9ba39c;
+    --surface: #131811;
+    --surface-soft: #1c211a;
+    --line: #2a3026;
+    --primary: var(--rajlo-red);
+    --primary-soft: #391010;
+    --primary-hover: #ff2424;
+  }
 }
 
 @theme inline {

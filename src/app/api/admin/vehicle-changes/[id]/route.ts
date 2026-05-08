@@ -7,6 +7,7 @@ import {
   sendVehicleChangeRejectedEmail,
 } from "@/lib/email-templates";
 import { notifyDriver } from "@/lib/notify";
+import { resolveDriverEmail } from "@/lib/driver-email-resolver";
 
 /**
  * POST /api/admin/vehicle-changes/[id]
@@ -146,8 +147,9 @@ export async function POST(
           pushRenotify: true,
         });
       }
-      if (!d.email) return;
-      await sendVehicleChangeRejectedEmail(d.email, {
+      const email = await resolveDriverEmail(supabase, d);
+      if (!email) return;
+      await sendVehicleChangeRejectedEmail(email, {
         driverName: [d.first_name, d.last_name].filter(Boolean).join(" ") || "Driver",
         externalId: d.external_id,
         newPlate: req.requested_plate ?? "(plate pending)",
@@ -292,8 +294,9 @@ export async function POST(
         pushRenotify: true,
       });
     }
-    if (!d.email) return;
-    await sendVehicleChangeApprovedEmail(d.email, {
+    const email = await resolveDriverEmail(supabase, d);
+    if (!email) return;
+    await sendVehicleChangeApprovedEmail(email, {
       driverName: [d.first_name, d.last_name].filter(Boolean).join(" ") || "Driver",
       externalId: d.external_id,
       newVehicle,

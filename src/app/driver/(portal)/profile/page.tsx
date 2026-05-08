@@ -478,19 +478,55 @@ export default function DriverProfilePage() {
             rider cancellations so you can stand down quickly.
           </p>
 
-          {push.ready && !push.support && (
+          {/* iOS-specific install banner — push only works after PWA
+             install on iOS, regardless of browser permission state. */}
+          {push.ready && push.iosNeedsInstall && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
-              This browser doesn&apos;t support push. On iPhone, install
-              Rajlo to your home screen first (Share → Add to Home Screen)
-              and come back here.
+              <p className="font-bold">
+                Install Rajlo first to enable push on iPhone
+              </p>
+              <ol className="mt-1.5 list-decimal space-y-0.5 pl-4">
+                <li>
+                  Tap the <strong>Share button</strong> at the bottom of
+                  Safari (square with an up arrow)
+                </li>
+                <li>
+                  Choose <strong>Add to Home Screen</strong> → Add
+                </li>
+                <li>
+                  Open Rajlo from the new icon on your home screen, then
+                  come back here
+                </li>
+              </ol>
+            </div>
+          )}
+          {push.ready && !push.support && !push.iosNeedsInstall && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
+              This browser doesn&apos;t support push notifications. Try
+              Chrome, Safari, Edge, or Firefox.
             </div>
           )}
           {push.ready &&
             push.support &&
             push.permission === "denied" && (
               <div className="rounded-xl border border-rajlo-red/30 bg-primary-soft px-3 py-2.5 text-xs leading-relaxed text-rajlo-red">
-                Notifications are blocked. Open your browser&apos;s site
-                settings and allow notifications for Rajlo, then refresh.
+                {push.iosHint ? (
+                  <>
+                    <p className="font-bold">
+                      Notifications are blocked for Rajlo on iOS
+                    </p>
+                    <p className="mt-1">
+                      Open <strong>Settings → Notifications → Rajlo</strong>{" "}
+                      and turn <strong>Allow Notifications</strong> on.
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    Notifications are blocked. Open your browser&apos;s
+                    site settings and allow notifications for Rajlo, then
+                    refresh.
+                  </>
+                )}
               </div>
             )}
           {push.error && (

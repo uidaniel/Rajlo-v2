@@ -884,3 +884,141 @@ export async function sendVehicleChangeRejectedEmail(
   const t = vehicleChangeRejectedTemplate(args);
   return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+   15. Ride accepted (driver-side confirmation)
+   ────────────────────────────────────────────────────────────────────── */
+
+export function driverRideAcceptedTemplate(args: {
+  driverName: string;
+  rideId: string;
+  riderFirstName?: string | null;
+  pickup: string;
+  dropoff: string;
+  fareJMD: number;
+  seats: number;
+}) {
+  const first = firstNameOf(args.driverName);
+  const riderLabel = args.riderFirstName?.trim() || "your rider";
+  const subject = `Ride accepted · ${args.pickup} → ${args.dropoff}`;
+
+  const sections: EmailSection[] = [
+    { type: "intro", text: `Heads up, ${first} — you've claimed a new trip. Head to pickup and tap "I've arrived" when you're outside.` },
+    {
+      type: "card",
+      title: "Trip details",
+      rows: [
+        { label: "Rider", value: riderLabel },
+        { label: "From", value: args.pickup },
+        { label: "To", value: args.dropoff },
+        { label: "Seats", value: String(args.seats) },
+        { label: "Fare", value: JMD(args.fareJMD), emphasize: true },
+      ],
+    },
+    {
+      type: "highlight",
+      tone: "neutral",
+      eyebrow: "Safety reminder",
+      text: "Confirm the rider's name before they get in. If anything feels off, you can cancel from the active-trip screen with no penalty before the trip starts.",
+    },
+    { type: "cta", href: `${APP_URL}/driver/active-trip`, label: "Open active trip" },
+  ];
+
+  const html = renderEmail({
+    preheader: `Trip from ${args.pickup} to ${args.dropoff} · ${JMD(args.fareJMD)}`,
+    eyebrow: "Ride accepted",
+    title: `${args.pickup} → ${args.dropoff}`,
+    sections,
+  });
+
+  const text = plaintext([
+    `Hi ${first}, you accepted a ride.`,
+    `${args.pickup} → ${args.dropoff} · ${JMD(args.fareJMD)} · ${args.seats} seat${args.seats > 1 ? "s" : ""}`,
+    `Open active trip: ${APP_URL}/driver/active-trip`,
+  ]);
+
+  return { subject, html, text };
+}
+
+export async function sendDriverRideAcceptedEmail(
+  to: string,
+  args: Parameters<typeof driverRideAcceptedTemplate>[0],
+) {
+  const t = driverRideAcceptedTemplate(args);
+  return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   16. Trip completed (driver-side earnings receipt)
+   ────────────────────────────────────────────────────────────────────── */
+
+export function driverTripCompletedTemplate(args: {
+  driverName: string;
+  rideId: string;
+  pickup: string;
+  dropoff: string;
+  fareJMD: number;
+  distanceKm?: number | null;
+  durationMinutes?: number | null;
+  riderFirstName?: string | null;
+  completedAt?: string | Date | null;
+}) {
+  const first = firstNameOf(args.driverName);
+  const subject = `Trip earnings · ${JMD(args.fareJMD)} · ${args.dropoff}`;
+
+  const sections: EmailSection[] = [
+    { type: "intro", text: `Nice work, ${first}. The trip wrapped clean — here's your earnings record.` },
+    {
+      type: "card",
+      title: "Earnings",
+      rows: [
+        { label: "Earned", value: JMD(args.fareJMD), emphasize: true },
+        { label: "From", value: args.pickup },
+        { label: "To", value: args.dropoff },
+        ...(args.riderFirstName
+          ? [{ label: "Rider", value: args.riderFirstName }]
+          : []),
+        ...(args.distanceKm != null
+          ? [{ label: "Distance", value: `${args.distanceKm.toFixed(1)} km` }]
+          : []),
+        ...(args.durationMinutes != null
+          ? [{ label: "Duration", value: `${args.durationMinutes} min` }]
+          : []),
+        ...(args.completedAt
+          ? [{ label: "Completed", value: fmtDateTime(args.completedAt) }]
+          : []),
+      ],
+    },
+    {
+      type: "highlight",
+      tone: "positive",
+      eyebrow: "Logged",
+      text: "This trip is now in your earnings dashboard. Payouts run weekly — Friday cut-off, money lands the next business day.",
+    },
+    { type: "cta", href: `${APP_URL}/driver/earnings`, label: "Open earnings" },
+    { type: "footnote", text: `Need a corrected receipt? Reply with trip ID ${args.rideId}.` },
+  ];
+
+  const html = renderEmail({
+    preheader: `${JMD(args.fareJMD)} earned · ${args.pickup} → ${args.dropoff}`,
+    eyebrow: "Trip complete",
+    title: `${JMD(args.fareJMD)} earned`,
+    sections,
+  });
+
+  const text = plaintext([
+    `Trip done. Earned ${JMD(args.fareJMD)}.`,
+    `${args.pickup} → ${args.dropoff}`,
+    `Open earnings: ${APP_URL}/driver/earnings`,
+  ]);
+
+  return { subject, html, text };
+}
+
+export async function sendDriverTripCompletedEmail(
+  to: string,
+  args: Parameters<typeof driverTripCompletedTemplate>[0],
+) {
+  const t = driverTripCompletedTemplate(args);
+  return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
+}

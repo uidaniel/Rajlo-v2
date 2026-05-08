@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
-import { sendTripCompletedEmail } from "@/lib/email-templates";
+import {
+  sendTripCompletedEmail,
+  sendDriverTripCompletedEmail,
+} from "@/lib/email-templates";
 import { notifyRider } from "@/lib/notify";
+import { resolveDriverEmail } from "@/lib/driver-email-resolver";
 
 /**
  * POST /api/driver/rides/[id]/status
@@ -180,7 +184,7 @@ export async function POST(
             .in("id", ids),
           supabase
             .from("drivers")
-            .select("first_name, last_name")
+            .select("first_name, last_name, email, user_id")
             .eq("id", driver.id)
             .maybeSingle(),
         ]);
@@ -207,6 +211,11 @@ export async function POST(
         );
         const emailMap = new Map(userLookups.map((u) => [u.id, u.email]));
 
+        // Resolve driver-side email once for the earnings receipts.
+        const driverEmail = driverFull
+          ? await resolveDriverEmail(supabase, driverFull)
+          : null;
+
         await Promise.all(
           rideRows.flatMap((row) => {
             const email = emailMap.get(row.rider_id);
@@ -222,6 +231,8 @@ export async function POST(
                   )
                 : null;
             const fare = `JMD ${Math.round(row.final_fare_jmd ?? 0).toLocaleString("en-JM")}`;
+            const riderFullName =
+              profileMap.get(row.rider_id)?.full_name ?? null;
             const tasks: Array<Promise<unknown>> = [
               notifyRider(supabase, {
                 riderId: row.rider_id,
@@ -236,7 +247,7 @@ export async function POST(
             if (email) {
               tasks.push(
                 sendTripCompletedEmail(email, {
-                  riderFirstName: profileMap.get(row.rider_id)?.full_name ?? null,
+                  riderFirstName: riderFullName,
                   rideId: row.id,
                   pickup: row.pickup_name,
                   dropoff: row.dropoff_name,
@@ -244,6 +255,23 @@ export async function POST(
                   distanceKm: row.estimated_distance_km,
                   durationMinutes,
                   driverName,
+                  completedAt: row.completed_at,
+                }).catch(() => null),
+              );
+            }
+            // Driver earnings receipt — one per completed ride
+            // (carpool: one earnings email per leg).
+            if (driverEmail) {
+              tasks.push(
+                sendDriverTripCompletedEmail(driverEmail, {
+                  driverName,
+                  rideId: row.id,
+                  pickup: row.pickup_name,
+                  dropoff: row.dropoff_name,
+                  fareJMD: row.final_fare_jmd,
+                  distanceKm: row.estimated_distance_km,
+                  durationMinutes,
+                  riderFirstName: riderFullName?.split(" ")[0] ?? null,
                   completedAt: row.completed_at,
                 }).catch(() => null),
               );
