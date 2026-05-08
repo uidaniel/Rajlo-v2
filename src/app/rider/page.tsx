@@ -1,99 +1,84 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Icon, type IconName } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp, Stagger, StaggerItem } from "@/components/anim";
+import {
+  ListRowSkeleton,
+  Skeleton,
+  StatsGridSkeleton,
+} from "@/components/skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { formatJMD } from "@/lib/jamaica";
 
 /**
- * Rider home / dashboard. Designed to make booking feel inevitable —
- * single big hero CTA, one-tap re-book chips, recent rides at a glance.
+ * Rider home / dashboard. All sections are backed by real endpoints —
+ * no mock data. Three parallel fetches on mount:
  *
- * Phase 2 will replace the mock active trip + recent rides with real data
- * from the `rides` table once the booking backend lands.
+ *   /api/rider/rides/active   — current in-flight trip if any
+ *   /api/rider/rides/history?limit=50&status=all
+ *                             — drives recent trips, top destinations,
+ *                               and the stats strip
+ *   /api/rider/ratings        — rider's lifetime rating-given average
+ *
+ * The "Top destinations" section is computed client-side by grouping
+ * history rows by dropoff_name and ranking by frequency. Riders with
+ * zero history see an onboarding-style empty state instead.
  */
 
-type SavedDestination = {
-  label: string;
-  address: string;
-  icon: IconName;
-  estimateJMD: number;
-  travelTime: string;
+type ActiveRideMini = {
+  id: string;
+  status:
+    | "requested"
+    | "accepted"
+    | "arrived"
+    | "in_progress";
+  pickup: { name: string };
+  dropoff: { name: string };
+  estimatedEtaMinutes: number | null;
 };
 
-const QUICK_DESTINATIONS: SavedDestination[] = [
-  {
-    label: "Norman Manley Airport",
-    address: "Palisadoes, Kingston",
-    icon: "navigation",
-    estimateJMD: 2400,
-    travelTime: "32 min",
-  },
-  {
-    label: "Half-Way Tree",
-    address: "Constant Spring Rd, St. Andrew",
-    icon: "map-pin",
-    estimateJMD: 580,
-    travelTime: "11 min",
-  },
-  {
-    label: "New Kingston",
-    address: "Knutsford Blvd, Kingston",
-    icon: "map-pin",
-    estimateJMD: 720,
-    travelTime: "14 min",
-  },
-  {
-    label: "Sangster Int'l Airport",
-    address: "Sunset Drive, St. James",
-    icon: "navigation",
-    estimateJMD: 9800,
-    travelTime: "3 hr 10 min",
-  },
-];
+type ActiveDriverMini = {
+  name: string;
+  vehicle: string | null;
+  plateNumber: string | null;
+} | null;
 
-const RECENT_RIDES = [
-  {
-    from: "Hope Road",
-    to: "Devon House",
-    when: "Yesterday · 6:14 PM",
-    fareJMD: 480,
-  },
-  {
-    from: "Cross Roads",
-    to: "Half-Way Tree",
-    when: "Tue · 8:02 AM",
-    fareJMD: 620,
-  },
-  {
-    from: "Spanish Town",
-    to: "Portmore Toll",
-    when: "Last Sat · 10:31 AM",
-    fareJMD: 1240,
-  },
-];
+type HistoryRow = {
+  id: string;
+  status: "requested" | "accepted" | "arrived" | "in_progress" | "completed" | "cancelled";
+  pickup: { name: string; address: string };
+  dropoff: { name: string; address: string };
+  fareJMD: number;
+  endedAt: string | null;
+  driverName: string | null;
+  myRatingStars: number | null;
+  carpool: boolean;
+};
 
-// Mocked active trip — will be wired to Supabase once the rides table lands.
-const ACTIVE_TRIP = null as null | {
-  driverName: string;
-  driverRating: number;
-  vehicle: string;
-  plate: string;
-  etaMin: number;
-  pickup: string;
-  dropoff: string;
+type RatingSummary = {
+  total: number;
+  average: number | null;
 };
 
 export default function RiderDashboardPage() {
   const [firstName, setFirstName] = useState<string | null>(null);
+  const [activeTrip, setActiveTrip] = useState<{
+    ride: ActiveRideMini;
+    driver: ActiveDriverMini;
+  } | null>(null);
+  const [history, setHistory] = useState<HistoryRow[]>([]);
+  const [ratingSummary, setRatingSummary] = useState<RatingSummary | null>(null);
+  const [loading, setLoading] = useState(true);
 
+  // First name from profiles (separately from the rest because it
+  // doesn't block the page — render "Hey there" while it loads).
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
     let cancelled = false;
     (async () => {
+      const supabase = createSupabaseBrowserClient();
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -104,13 +89,127 @@ export default function RiderDashboardPage() {
         .eq("id", user.id)
         .single();
       if (cancelled) return;
-      const name = data?.full_name?.split(" ")[0] ?? null;
-      setFirstName(name);
+      setFirstName(data?.full_name?.split(" ")[0] ?? null);
     })();
     return () => {
       cancelled = true;
     };
   }, []);
+
+  // Active trip + history + ratings — three parallel fetches. None
+  // are individually required to render, so we degrade gracefully if
+  // any one fails (the others still populate their respective
+  // sections).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [activeRes, historyRes, ratingsRes] = await Promise.allSettled([
+        fetch("/api/rider/rides/active"),
+        fetch("/api/rider/rides/history?status=all&limit=50"),
+        fetch("/api/rider/ratings"),
+      ]);
+      if (cancelled) return;
+
+      if (activeRes.status === "fulfilled" && activeRes.value.ok) {
+        const j = (await activeRes.value.json()) as {
+          ride: ActiveRideMini | null;
+          driver: ActiveDriverMini;
+        };
+        if (j.ride) setActiveTrip({ ride: j.ride, driver: j.driver });
+      }
+      if (historyRes.status === "fulfilled" && historyRes.value.ok) {
+        const j = (await historyRes.value.json()) as { rides: HistoryRow[] };
+        setHistory(j.rides ?? []);
+      }
+      if (ratingsRes.status === "fulfilled" && ratingsRes.value.ok) {
+        const j = (await ratingsRes.value.json()) as { summary: RatingSummary };
+        setRatingSummary(j.summary);
+      }
+      setLoading(false);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /* ─── Derived: top destinations from history ───
+   *
+   * Group completed trips by dropoff_name (case-folded), rank by
+   * frequency, take the top 4. For each, average the actual fares
+   * paid so the "from JMD X" hint reflects what the rider has
+   * historically paid for that destination — not a guess.
+   */
+  const topDestinations = useMemo(() => {
+    if (history.length === 0) return [];
+    const buckets = new Map<
+      string,
+      { label: string; address: string; count: number; totalFare: number }
+    >();
+    for (const r of history) {
+      if (r.status !== "completed") continue;
+      const key = r.dropoff.name.trim().toLowerCase();
+      if (!key) continue;
+      const existing = buckets.get(key);
+      if (existing) {
+        existing.count += 1;
+        existing.totalFare += r.fareJMD;
+      } else {
+        buckets.set(key, {
+          label: r.dropoff.name,
+          address: r.dropoff.address,
+          count: 1,
+          totalFare: r.fareJMD,
+        });
+      }
+    }
+    return Array.from(buckets.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 4)
+      .map((b) => ({
+        label: b.label,
+        address: b.address,
+        count: b.count,
+        avgFareJMD: Math.round(b.totalFare / b.count / 50) * 50,
+      }));
+  }, [history]);
+
+  /* ─── Derived: 3 most recent rides ─── */
+  const recentRides = useMemo(
+    () =>
+      history
+        .filter((r) => r.status === "completed" || r.status === "cancelled")
+        .slice(0, 3),
+    [history],
+  );
+
+  /* ─── Derived: stats ─── */
+  const stats = useMemo(() => {
+    const completed = history.filter((r) => r.status === "completed");
+    const totalSpent = completed.reduce((s, r) => s + r.fareJMD, 0);
+    const carpoolTrips = completed.filter((r) => r.carpool).length;
+    return {
+      totalTrips: completed.length,
+      totalSpent,
+      carpoolTrips,
+    };
+  }, [history]);
+
+  /* ─── Derived: most recent unrated completed trip ───
+   *
+   * If the rider has at least one completed trip they haven't
+   * rated, surface a "Rate your last trip" CTA instead of the
+   * carpool promo — feedback loop > marketing.
+   */
+  const unratedTrip = useMemo(
+    () =>
+      history.find(
+        (r) =>
+          r.status === "completed" &&
+          r.driverName &&
+          r.myRatingStars === null,
+      ) ?? null,
+    [history],
+  );
 
   const greeting = firstName ? `Hi, ${firstName}` : "Hey there";
 
@@ -119,7 +218,6 @@ export default function RiderDashboardPage() {
       {/* ============== HERO ============== */}
       <FadeUp>
         <section className="relative overflow-hidden rounded-3xl bg-rajlo-black p-7 text-white shadow-xl shadow-rajlo-black/30 md:p-10">
-          {/* Brand bloom + arc watermarks */}
           <div
             aria-hidden
             className="absolute inset-0 opacity-90"
@@ -157,7 +255,6 @@ export default function RiderDashboardPage() {
               tap once and ride.
             </p>
 
-            {/* Search-style entry that routes to /rider/request */}
             <Link
               href="/rider/request"
               className="group mt-7 inline-flex w-full items-center gap-3 rounded-2xl bg-white p-2 pl-5 text-left shadow-2xl shadow-black/30 transition-all hover:-translate-y-0.5 hover:shadow-rajlo-red/30 sm:max-w-md"
@@ -178,7 +275,6 @@ export default function RiderDashboardPage() {
               </span>
             </Link>
 
-            {/* Trust strip */}
             <div className="mt-7 flex flex-wrap items-center gap-x-5 gap-y-2 text-[11px] font-semibold text-white/75">
               <TrustChip icon="shield-check" label="TA-verified drivers" />
               <TrustChip icon="check-circle" label="Upfront fares" />
@@ -188,8 +284,65 @@ export default function RiderDashboardPage() {
         </section>
       </FadeUp>
 
+      {/* ============== LOADING SHIMMER ==============
+         While the three parallel fetches are in flight, render
+         skeletons in the same slots the real content will occupy
+         (active trip banner, top-destinations grid, recent-rides
+         list, stats strip). Prevents the layout-shift "pop" when
+         data lands. */}
+      {loading && (
+        <>
+          <FadeUp delay={0.05}>
+            <div className="rounded-2xl border border-rajlo-red/20 bg-primary-soft/40 p-5">
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-12 w-12" rounded="xl" />
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="h-2.5 w-20" rounded="md" />
+                  <Skeleton className="h-3.5 w-3/4 max-w-64" rounded="md" />
+                  <Skeleton className="h-2.5 w-1/2 max-w-40" rounded="md" />
+                </div>
+              </div>
+            </div>
+          </FadeUp>
+
+          <FadeUp delay={0.08}>
+            <div className="space-y-3">
+              <div className="flex items-end justify-between">
+                <div className="space-y-1.5">
+                  <Skeleton className="h-2.5 w-16" rounded="md" />
+                  <Skeleton className="h-6 w-44" rounded="md" />
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {[0, 1, 2, 3].map((i) => (
+                  <ListRowSkeleton key={i} />
+                ))}
+              </div>
+            </div>
+          </FadeUp>
+
+          <FadeUp delay={0.12}>
+            <div className="space-y-2.5">
+              <div className="mb-2 flex items-end justify-between">
+                <div className="space-y-1.5">
+                  <Skeleton className="h-2.5 w-16" rounded="md" />
+                  <Skeleton className="h-6 w-44" rounded="md" />
+                </div>
+              </div>
+              {[0, 1, 2].map((i) => (
+                <ListRowSkeleton key={i} />
+              ))}
+            </div>
+          </FadeUp>
+
+          <FadeUp delay={0.16}>
+            <StatsGridSkeleton count={3} variant="dark" />
+          </FadeUp>
+        </>
+      )}
+
       {/* ============== ACTIVE TRIP (if any) ============== */}
-      {ACTIVE_TRIP && (
+      {activeTrip && (
         <FadeUp delay={0.05}>
           <Link
             href="/rider/live-trip"
@@ -201,7 +354,7 @@ export default function RiderDashboardPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
-                  Live trip
+                  {ACTIVE_LABEL[activeTrip.ride.status]}
                 </span>
                 <span className="relative flex h-1.5 w-1.5">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rajlo-red opacity-60" />
@@ -209,11 +362,18 @@ export default function RiderDashboardPage() {
                 </span>
               </div>
               <p className="mt-0.5 truncate text-sm font-bold">
-                {ACTIVE_TRIP.driverName} · {ACTIVE_TRIP.vehicle}{" "}
-                <span className="text-muted">({ACTIVE_TRIP.plate})</span>
+                {activeTrip.driver
+                  ? `${activeTrip.driver.name}${activeTrip.driver.vehicle ? ` · ${activeTrip.driver.vehicle}` : ""}`
+                  : "Looking for a driver…"}
+                {activeTrip.driver?.plateNumber ? (
+                  <span className="text-muted"> ({activeTrip.driver.plateNumber})</span>
+                ) : null}
               </p>
               <p className="truncate text-xs text-muted">
-                Heading to {ACTIVE_TRIP.dropoff} · ETA {ACTIVE_TRIP.etaMin} min
+                Heading to {activeTrip.ride.dropoff.name}
+                {activeTrip.ride.estimatedEtaMinutes !== null
+                  ? ` · ETA ${activeTrip.ride.estimatedEtaMinutes} min`
+                  : ""}
               </p>
             </div>
             <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface-soft text-muted transition-all group-hover:bg-rajlo-red group-hover:text-white">
@@ -223,166 +383,286 @@ export default function RiderDashboardPage() {
         </FadeUp>
       )}
 
-      {/* ============== QUICK DESTINATIONS ============== */}
-      <FadeUp delay={0.1}>
-        <div className="mb-3 flex items-end justify-between">
-          <div>
-            <p className="font-secondary text-[11px] font-bold uppercase tracking-wider text-rajlo-red">
-              Quick book
-            </p>
-            <h2 className="mt-1 text-xl font-extrabold tracking-tight md:text-2xl">
-              Popular trips, ready to roll
-            </h2>
-          </div>
-          <Link
-            href="/rider/request"
-            className="hidden text-xs font-bold text-rajlo-red hover:underline sm:inline-flex"
-          >
-            Plan custom →
-          </Link>
-        </div>
-      </FadeUp>
+      {/* ============== TOP DESTINATIONS ============== */}
+      {!loading && topDestinations.length > 0 && (
+        <>
+          <FadeUp delay={0.1}>
+            <div className="mb-3 flex items-end justify-between">
+              <div>
+                <p className="font-secondary text-[11px] font-bold uppercase tracking-wider text-rajlo-red">
+                  Quick book
+                </p>
+                <h2 className="mt-1 text-xl font-extrabold tracking-tight md:text-2xl">
+                  Where you go most
+                </h2>
+              </div>
+              <Link
+                href="/rider/request"
+                className="hidden text-xs font-bold text-rajlo-red hover:underline sm:inline-flex"
+              >
+                Plan custom →
+              </Link>
+            </div>
+          </FadeUp>
 
-      <Stagger className="grid gap-3 sm:grid-cols-2" amount={0.05}>
-        {QUICK_DESTINATIONS.map((dest) => (
-          <StaggerItem key={dest.label}>
-            <Link
-              href="/rider/request"
-              className="group relative flex h-full items-stretch overflow-hidden rounded-2xl border border-line bg-surface transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-lg hover:shadow-rajlo-red/10"
-            >
-              {/* Side accent bar */}
-              <span
-                aria-hidden
-                className="w-1 shrink-0 bg-gradient-to-b from-rajlo-red via-rajlo-red/70 to-rajlo-red/30"
-              />
-              <div className="flex min-w-0 flex-1 items-center gap-3 p-4 md:p-5">
-                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-rajlo-red transition-colors group-hover:bg-rajlo-red group-hover:text-white">
-                  <Icon name={dest.icon} className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-extrabold tracking-tight">
-                    {dest.label}
-                  </p>
-                  <p className="truncate text-xs text-muted">{dest.address}</p>
-                  <div className="mt-1 flex items-center gap-2 text-[11px]">
-                    <span className="font-bold text-rajlo-red">
-                      from {formatJMD(dest.estimateJMD)}
+          <Stagger className="grid gap-3 sm:grid-cols-2" amount={0.05}>
+            {topDestinations.map((dest) => (
+              <StaggerItem key={dest.label}>
+                <Link
+                  href="/rider/request"
+                  className="group relative flex h-full items-stretch overflow-hidden rounded-2xl border border-line bg-surface transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-lg hover:shadow-rajlo-red/10"
+                >
+                  <span
+                    aria-hidden
+                    className="w-1 shrink-0 bg-gradient-to-b from-rajlo-red via-rajlo-red/70 to-rajlo-red/30"
+                  />
+                  <div className="flex min-w-0 flex-1 items-center gap-3 p-4 md:p-5">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-rajlo-red transition-colors group-hover:bg-rajlo-red group-hover:text-white">
+                      <Icon name="map-pin" className="h-5 w-5" />
                     </span>
-                    <span className="text-muted">·</span>
-                    <span className="font-medium text-muted">
-                      {dest.travelTime}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-extrabold tracking-tight">
+                        {dest.label}
+                      </p>
+                      <p className="truncate text-xs text-muted">
+                        {dest.address}
+                      </p>
+                      <div className="mt-1 flex items-center gap-2 text-[11px]">
+                        <span className="font-bold text-rajlo-red">
+                          ~{formatJMD(dest.avgFareJMD)}
+                        </span>
+                        <span className="text-muted">·</span>
+                        <span className="font-medium text-muted">
+                          {dest.count} trip{dest.count === 1 ? "" : "s"}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-soft text-muted transition-all group-hover:bg-rajlo-red group-hover:text-white">
+                      <Icon name="arrow-right" className="h-3.5 w-3.5" />
                     </span>
                   </div>
-                </div>
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-surface-soft text-muted transition-all group-hover:bg-rajlo-red group-hover:text-white">
-                  <Icon name="arrow-right" className="h-3.5 w-3.5" />
-                </span>
-              </div>
-            </Link>
-          </StaggerItem>
-        ))}
-      </Stagger>
+                </Link>
+              </StaggerItem>
+            ))}
+          </Stagger>
+        </>
+      )}
 
       {/* ============== RECENT TRIPS ============== */}
-      <FadeUp delay={0.15}>
-        <div className="mb-3 mt-6 flex items-end justify-between">
-          <div>
-            <p className="font-secondary text-[11px] font-bold uppercase tracking-wider text-rajlo-red">
-              Take it again
-            </p>
-            <h2 className="mt-1 text-xl font-extrabold tracking-tight md:text-2xl">
-              Your recent trips
-            </h2>
-          </div>
-          <Link
-            href="/rider/history"
-            className="text-xs font-bold text-rajlo-red hover:underline"
-          >
-            See all →
-          </Link>
-        </div>
-      </FadeUp>
+      {!loading && recentRides.length > 0 && (
+        <>
+          <FadeUp delay={0.15}>
+            <div className="mb-3 mt-6 flex items-end justify-between">
+              <div>
+                <p className="font-secondary text-[11px] font-bold uppercase tracking-wider text-rajlo-red">
+                  Take it again
+                </p>
+                <h2 className="mt-1 text-xl font-extrabold tracking-tight md:text-2xl">
+                  Your recent trips
+                </h2>
+              </div>
+              <Link
+                href="/rider/history"
+                className="text-xs font-bold text-rajlo-red hover:underline"
+              >
+                See all →
+              </Link>
+            </div>
+          </FadeUp>
 
-      <Stagger className="space-y-2.5" amount={0.04}>
-        {RECENT_RIDES.map((r, i) => (
-          <StaggerItem key={`${r.from}-${r.to}-${i}`}>
+          <Stagger className="space-y-2.5" amount={0.04}>
+            {recentRides.map((r) => (
+              <StaggerItem key={r.id}>
+                <Link
+                  href={`/rider/history/${r.id}`}
+                  className="group flex items-center gap-3 rounded-xl border border-line bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-md"
+                >
+                  <span
+                    className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${
+                      r.status === "cancelled"
+                        ? "bg-rajlo-black/10 text-rajlo-black"
+                        : "bg-surface-soft text-muted group-hover:bg-primary-soft group-hover:text-rajlo-red"
+                    }`}
+                  >
+                    <Icon
+                      name={r.status === "cancelled" ? "x" : "clock"}
+                      className="h-4 w-4"
+                    />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-bold">
+                      {r.pickup.name}{" "}
+                      <span className="text-rajlo-red">→</span>{" "}
+                      {r.dropoff.name}
+                    </p>
+                    <p className="truncate text-[11px] text-muted">
+                      {r.endedAt ? friendlyDate(r.endedAt) : "—"}
+                      {r.carpool ? " · Carpool" : ""}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p
+                      className={`text-xs font-bold ${
+                        r.status === "cancelled"
+                          ? "text-muted line-through"
+                          : "text-foreground"
+                      }`}
+                    >
+                      {formatJMD(r.fareJMD)}
+                    </p>
+                    <p className="text-[10px] text-muted">
+                      {r.status === "cancelled" ? "cancelled" : "tap for receipt"}
+                    </p>
+                  </div>
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-muted transition-all group-hover:bg-rajlo-red group-hover:text-white">
+                    <Icon name="chevron-right" className="h-3.5 w-3.5" />
+                  </span>
+                </Link>
+              </StaggerItem>
+            ))}
+          </Stagger>
+        </>
+      )}
+
+      {/* ============== EMPTY STATE (no history) ============== */}
+      {!loading && history.length === 0 && (
+        <FadeUp delay={0.1}>
+          <div className="rounded-3xl border border-dashed border-line bg-surface-soft p-8 text-center md:p-10">
+            <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-white text-rajlo-red shadow-sm">
+              <Icon name="navigation" className="h-6 w-6" />
+            </span>
+            <h2 className="mt-5 text-xl font-extrabold tracking-tight md:text-2xl">
+              Take your first ride
+            </h2>
+            <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
+              Once you ride with Rajlo, your favourite destinations and recent
+              trips show up right here for one-tap rebooking.
+            </p>
             <Link
               href="/rider/request"
-              className="group flex items-center gap-3 rounded-xl border border-line bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-md"
+              className="mt-5 inline-flex items-center gap-2 rounded-full bg-rajlo-red px-6 py-3 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 hover:-translate-y-0.5"
             >
-              <span className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-surface-soft text-muted group-hover:bg-primary-soft group-hover:text-rajlo-red">
-                <Icon name="clock" className="h-4 w-4" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-bold">
-                  {r.from} <span className="text-rajlo-red">→</span> {r.to}
-                </p>
-                <p className="truncate text-[11px] text-muted">{r.when}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs font-bold text-foreground">
-                  {formatJMD(r.fareJMD)}
-                </p>
-                <p className="text-[10px] text-muted">tap to rebook</p>
-              </div>
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-muted transition-all group-hover:bg-rajlo-red group-hover:text-white">
-                <Icon name="chevron-right" className="h-3.5 w-3.5" />
-              </span>
+              Book a ride
+              <Icon name="arrow-right" className="h-4 w-4" />
             </Link>
-          </StaggerItem>
-        ))}
-      </Stagger>
+          </div>
+        </FadeUp>
+      )}
 
       {/* ============== STATS STRIP ============== */}
-      <FadeUp delay={0.2}>
-        <div className="mt-6 overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-rajlo-black via-rajlo-black to-[#1a1d10] p-6 text-white">
-          <div className="grid grid-cols-3 divide-x divide-white/10">
-            <Stat label="Trips" value="24" />
-            <Stat label="Rating" value="4.9" suffix="★" />
-            <Stat label="CO₂ saved" value="320" suffix=" kg" />
+      {!loading && stats.totalTrips > 0 && (
+        <FadeUp delay={0.2}>
+          <div className="mt-6 overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-rajlo-black via-rajlo-black to-[#1a1d10] p-6 text-white">
+            <div className="grid grid-cols-3 divide-x divide-white/10">
+              <Stat label="Trips" value={stats.totalTrips.toString()} />
+              <Stat
+                label="Avg rating"
+                value={
+                  ratingSummary?.average !== null && ratingSummary?.average !== undefined
+                    ? ratingSummary.average.toFixed(1)
+                    : "—"
+                }
+                suffix="★"
+              />
+              <Stat
+                label="Total spent"
+                value={`${(stats.totalSpent / 1000).toFixed(1)}k`}
+                prefix="JMD "
+              />
+            </div>
+            {stats.carpoolTrips > 0 ? (
+              <p className="mt-5 text-[11px] leading-relaxed text-white/60">
+                You&apos;ve carpooled {stats.carpoolTrips} time
+                {stats.carpoolTrips === 1 ? "" : "s"} — that&apos;s real money
+                saved and one fewer car on Jamaica&apos;s roads.
+              </p>
+            ) : (
+              <p className="mt-5 text-[11px] leading-relaxed text-white/60">
+                Try carpool on your next trip and save 35% on the fare.
+              </p>
+            )}
           </div>
-          <p className="mt-5 text-[11px] leading-relaxed text-white/55">
-            Multi-seat shared rides cut emissions vs. driving solo. Every trip
-            you take with someone else is one less car on the road.
-          </p>
-        </div>
-      </FadeUp>
+        </FadeUp>
+      )}
 
-      {/* ============== REFERRAL ============== */}
-      <FadeUp delay={0.25}>
-        <Link
-          href="/rider/settings"
-          className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-rajlo-red/30 bg-primary-soft p-5 transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-lg"
-        >
-          <ArcWatermark
-            size={220}
-            variant="red"
-            className="pointer-events-none absolute -right-12 -bottom-12 opacity-20"
-          />
-          <span className="relative grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-rajlo-red text-white shadow-md shadow-rajlo-red/30">
-            <Icon name="users" className="h-5 w-5" />
-          </span>
-          <div className="relative min-w-0 flex-1">
-            <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
-              Refer a friend
-            </p>
-            <p className="mt-0.5 text-sm font-extrabold tracking-tight md:text-base">
-              Get JMD 500 in credit when they take their first ride
-            </p>
-            <p className="hidden text-xs text-rajlo-black/70 sm:block">
-              Share your invite link · they save · you save
-            </p>
-          </div>
-          <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white text-rajlo-red transition-all group-hover:bg-rajlo-red group-hover:text-white">
-            <Icon name="arrow-right" className="h-4 w-4" />
-          </span>
-        </Link>
-      </FadeUp>
+      {/* ============== UNRATED TRIP CTA  ==============
+         If there's a recent trip the rider hasn't rated, surface it
+         here. Falls back to the carpool promo if everyone's rated. */}
+      {unratedTrip ? (
+        <FadeUp delay={0.25}>
+          <Link
+            href={`/rider/history/${unratedTrip.id}`}
+            className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-rajlo-red/30 bg-primary-soft p-5 transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-lg"
+          >
+            <ArcWatermark
+              size={220}
+              variant="red"
+              className="pointer-events-none absolute -right-12 -bottom-12 opacity-20"
+            />
+            <span className="relative grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-rajlo-red text-white shadow-md shadow-rajlo-red/30">
+              <Icon name="star" className="h-5 w-5" />
+            </span>
+            <div className="relative min-w-0 flex-1">
+              <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                Rate your last trip
+              </p>
+              <p className="mt-0.5 truncate text-sm font-extrabold tracking-tight md:text-base">
+                {unratedTrip.driverName} · {unratedTrip.dropoff.name}
+              </p>
+              <p className="truncate text-xs text-rajlo-black/70">
+                Your feedback helps other riders pick the right driver.
+              </p>
+            </div>
+            <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white text-rajlo-red transition-all group-hover:bg-rajlo-red group-hover:text-white">
+              <Icon name="arrow-right" className="h-4 w-4" />
+            </span>
+          </Link>
+        </FadeUp>
+      ) : (
+        !loading && (
+          <FadeUp delay={0.25}>
+            <Link
+              href="/rider/request"
+              className="group relative flex items-center gap-4 overflow-hidden rounded-2xl border border-rajlo-red/30 bg-primary-soft p-5 transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-lg"
+            >
+              <ArcWatermark
+                size={220}
+                variant="red"
+                className="pointer-events-none absolute -right-12 -bottom-12 opacity-20"
+              />
+              <span className="relative grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-rajlo-red text-white shadow-md shadow-rajlo-red/30">
+                <Icon name="users" className="h-5 w-5" />
+              </span>
+              <div className="relative min-w-0 flex-1">
+                <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                  Save 35% with carpool
+                </p>
+                <p className="mt-0.5 text-sm font-extrabold tracking-tight md:text-base">
+                  Match with a rider going your way
+                </p>
+                <p className="hidden text-xs text-rajlo-black/70 sm:block">
+                  Toggle &ldquo;Share this ride&rdquo; on your next booking
+                </p>
+              </div>
+              <span className="relative grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white text-rajlo-red transition-all group-hover:bg-rajlo-red group-hover:text-white">
+                <Icon name="arrow-right" className="h-4 w-4" />
+              </span>
+            </Link>
+          </FadeUp>
+        )
+      )}
     </div>
   );
 }
 
 /* ─────────── Inline subcomponents ─────────── */
+
+const ACTIVE_LABEL: Record<ActiveRideMini["status"], string> = {
+  requested: "Looking for a driver",
+  accepted: "Driver on the way",
+  arrived: "Driver at pickup",
+  in_progress: "Trip in progress",
+};
 
 function TrustChip({ icon, label }: { icon: IconName; label: string }) {
   return (
@@ -399,10 +679,12 @@ function Stat({
   label,
   value,
   suffix,
+  prefix,
 }: {
   label: string;
   value: string;
   suffix?: string;
+  prefix?: string;
 }) {
   return (
     <div className="px-3 text-center first:pl-0 last:pr-0">
@@ -410,9 +692,37 @@ function Stat({
         {label}
       </p>
       <p className="mt-1 text-2xl font-extrabold tracking-tight md:text-3xl">
+        {prefix && <span className="text-sm font-bold text-white/70">{prefix}</span>}
         {value}
         {suffix && <span className="text-sm font-bold text-white/70">{suffix}</span>}
       </p>
     </div>
   );
+}
+
+/** Friendly relative date — "Yesterday · 6:14 PM" / "Tue · 8:02 AM"
+ *  / "21 Mar · 10:31 AM". */
+function friendlyDate(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  const t = d.getTime();
+  const time = d.toLocaleTimeString("en-JM", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  if (t >= startOfToday) return `Today · ${time}`;
+  if (t >= startOfToday - 86_400_000) return `Yesterday · ${time}`;
+  if (t >= startOfToday - 6 * 86_400_000) {
+    const wkday = d.toLocaleDateString("en-JM", { weekday: "short" });
+    return `${wkday} · ${time}`;
+  }
+  return d.toLocaleDateString("en-JM", {
+    day: "numeric",
+    month: "short",
+  }) + ` · ${time}`;
 }

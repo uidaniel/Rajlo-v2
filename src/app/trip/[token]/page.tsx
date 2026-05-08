@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { Logo } from "@/components/logo";
 import { Icon } from "@/components/icons";
 import { MapView } from "@/components/map-view";
+import { DriverVehicleCard } from "@/components/driver-vehicle-card";
 import { useRidePosition } from "@/lib/use-ride-position";
 import { type Place } from "@/lib/jamaica";
 
@@ -29,7 +30,16 @@ type TripData = {
   pickup: { name: string; lat: number; lng: number };
   dropoff: { name: string; lat: number; lng: number };
   estimatedEtaMinutes: number | null;
-  driver: { name: string; plateNumber: string | null } | null;
+  driver: {
+    name: string;
+    plateNumber: string | null;
+    vehicle: string | null;
+    vehicleMake: string | null;
+    vehicleModel: string | null;
+    vehicleYear: number | null;
+    vehicleColor: string | null;
+    avatarUrl: string | null;
+  } | null;
   recipientLabel: string | null;
 };
 
@@ -197,21 +207,19 @@ export default function TripSharePage({
           />
         </div>
 
-        {/* Driver card */}
+        {/* Driver + vehicle card. Phone is intentionally NOT passed
+           on the public share view — the rider shares "where I am",
+           not "how to reach my driver". */}
         {data.driver && (
-          <div className="rounded-2xl border border-line bg-surface p-5">
-            <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
-              Driver
-            </p>
-            <p className="mt-1 text-base font-extrabold tracking-tight">
-              {data.driver.name}
-            </p>
-            {data.driver.plateNumber && (
-              <p className="mt-1 text-xs text-muted">
-                Red plate · {data.driver.plateNumber}
-              </p>
-            )}
-          </div>
+          <DriverVehicleCard
+            name={data.driver.name}
+            avatarUrl={data.driver.avatarUrl}
+            plateNumber={data.driver.plateNumber}
+            vehicleMake={data.driver.vehicleMake}
+            vehicleModel={data.driver.vehicleModel}
+            vehicleYear={data.driver.vehicleYear}
+            vehicleColor={data.driver.vehicleColor}
+          />
         )}
 
         {/* Pickup → Dropoff */}

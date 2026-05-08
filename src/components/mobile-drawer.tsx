@@ -119,6 +119,20 @@ export function MobileDrawer({
     return longest;
   }, null);
 
+  // Lock body scroll while the mobile drawer is open. Without this, a
+  // swipe on the backdrop scrolls the page underneath, which makes the
+  // drawer feel like it's not even open. Also kills the iOS rubber-band
+  // bounce on the visible area outside the drawer.
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    if (!isOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isOpen]);
+
   return (
     // Lock the desktop layout to viewport height + clip overflow so only the
     // <main> below can scroll. Sidebar stays put in its grid cell, page
@@ -137,19 +151,29 @@ export function MobileDrawer({
         </button>
       </header>
 
-      {/* Mobile backdrop */}
+      {/* Mobile backdrop. `top-14` keeps the navbar tappable so the close
+         button still works; `bottom-0` + h-auto pin to the actually-
+         visible area. `touch-none` makes sure swipes on the backdrop
+         don't pass through and scroll content underneath — body
+         overflow is also locked via the effect below as a backup. */}
       {isOpen && (
         <button
           aria-hidden
           tabIndex={-1}
-          className="fixed inset-0 top-14 z-30 bg-black/50 md:hidden"
+          className="fixed inset-x-0 bottom-0 top-14 z-30 touch-none bg-black/50 md:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
 
-      {/* ============== Sidebar ============== */}
+      {/* ============== Sidebar ==============
+         Mobile: pinned below the top bar (top-14 = 3.5rem) and sized
+         with `100dvh` (dynamic viewport height) so the iOS URL bar
+         doesn't push the footer off-screen. `100vh` would *over*-size
+         the drawer because vh includes the URL-bar slot even when
+         it's hidden — dvh tracks the actually-visible area.
+         Desktop: takes the full viewport in its grid cell. */}
       <aside
-        className={`fixed left-0 top-14 z-40 flex h-[calc(100vh-3.5rem)] w-72 flex-col overflow-hidden text-white shadow-2xl transition-transform md:static md:top-0 md:h-screen md:w-auto md:translate-x-0 md:shadow-none ${
+        className={`fixed left-0 top-14 z-40 flex h-[calc(100dvh-3.5rem)] w-72 flex-col overflow-hidden text-white shadow-2xl transition-transform md:static md:top-0 md:h-screen md:w-auto md:translate-x-0 md:shadow-none ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
@@ -166,9 +190,13 @@ export function MobileDrawer({
         </div>
 
         {/* Nav with icons + active state. Hidden scrollbar — still scrollable
-            for very long nav lists, just no visible scrollbar. */}
+            for very long nav lists, just no visible scrollbar.
+            `min-h-0` is the canonical fix for "flex child should scroll":
+            without it, the flex item won't shrink below its content's
+            intrinsic height, so `overflow-y-auto` never triggers and
+            the OUTER page scrolls instead of the nav. */}
         <nav
-          className="relative flex-1 overflow-y-auto px-3 pb-3 pt-4 [&::-webkit-scrollbar]:hidden md:pt-5"
+          className="relative min-h-0 flex-1 overflow-y-auto overscroll-contain px-3 pb-3 pt-4 [&::-webkit-scrollbar]:hidden md:pt-5"
           style={{ scrollbarWidth: "none" }}
           aria-label="Portal navigation"
         >

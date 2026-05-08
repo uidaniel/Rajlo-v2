@@ -10,6 +10,13 @@ import { MapView } from "@/components/map-view";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRidePosition } from "@/lib/use-ride-position";
 import { SafetySheet } from "@/components/safety-sheet";
+import { DriverVehicleCard } from "@/components/driver-vehicle-card";
+import {
+  DriverVehicleCardSkeleton,
+  HeroSkeleton,
+  MapSkeleton,
+  Skeleton,
+} from "@/components/skeleton";
 import { formatJMD, type Place } from "@/lib/jamaica";
 
 /**
@@ -56,9 +63,16 @@ type ActiveRide = {
 
 type DriverInfo = {
   name: string;
+  phone: string | null;
   plateNumber: string | null;
   vehicle: string | null;
-  rating: number;
+  vehicleMake: string | null;
+  vehicleModel: string | null;
+  vehicleYear: number | null;
+  vehicleColor: string | null;
+  /** null = no ratings yet (we render a "new driver" pill instead). */
+  rating: number | null;
+  ratingCount: number;
   avatarUrl: string | null;
 };
 
@@ -266,13 +280,25 @@ export default function RiderLiveTripPage() {
     }
   };
 
-  /* ── Loading ── */
+  /* ── Loading — skeleton mirrors the real shape: hero + map +
+       driver card + trip details. Same vertical rhythm as the
+       loaded view so it doesn't jump when data arrives. ── */
   if (loading) {
     return (
-      <div className="grid place-items-center px-4 py-16">
-        <div className="flex items-center gap-3 text-sm font-semibold text-muted">
-          <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
-          Loading your trip…
+      <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6 md:py-8">
+        <HeroSkeleton />
+        <MapSkeleton />
+        <DriverVehicleCardSkeleton />
+        <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
+          {[0, 1].map((i) => (
+            <div key={i} className="flex items-start gap-3">
+              <Skeleton className="h-8 w-8" rounded="full" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-3 w-44" rounded="md" />
+                <Skeleton className="h-2.5 w-32" rounded="md" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
@@ -344,15 +370,6 @@ export default function RiderLiveTripPage() {
     lng: s.lng,
     parish: null,
   }));
-
-  const driverInitials = driver?.name
-    ? driver.name
-        .split(" ")
-        .filter(Boolean)
-        .slice(0, 2)
-        .map((s) => s[0]?.toUpperCase())
-        .join("")
-    : "?";
 
   const isTerminal = ride.status === "completed" || ride.status === "cancelled";
   const canCancel = ["requested", "accepted", "arrived"].includes(ride.status);
@@ -463,37 +480,18 @@ export default function RiderLiveTripPage() {
 
       {driver && (
         <FadeUp delay={0.1}>
-          <div className="flex items-center gap-4 rounded-2xl border border-rajlo-red/30 bg-primary-soft p-5">
-            <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full bg-white text-base font-extrabold text-rajlo-red ring-1 ring-rajlo-red/20">
-              {driver.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={driver.avatarUrl}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                driverInitials
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
-                Your driver
-              </p>
-              <p className="mt-0.5 truncate text-base font-extrabold tracking-tight">
-                {driver.name}
-              </p>
-              <p className="mt-0.5 truncate text-xs text-muted">
-                {driver.vehicle ?? "Red plate vehicle"}
-                {driver.plateNumber ? ` · ${driver.plateNumber}` : ""}
-              </p>
-              <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-bold text-rajlo-red">
-                <Icon name="star" className="h-3 w-3" />
-                {driver.rating.toFixed(1)}
-              </p>
-            </div>
-          </div>
+          <DriverVehicleCard
+            name={driver.name}
+            avatarUrl={driver.avatarUrl}
+            rating={driver.rating}
+            ratingCount={driver.ratingCount}
+            phone={driver.phone}
+            plateNumber={driver.plateNumber}
+            vehicleMake={driver.vehicleMake}
+            vehicleModel={driver.vehicleModel}
+            vehicleYear={driver.vehicleYear}
+            vehicleColor={driver.vehicleColor}
+          />
         </FadeUp>
       )}
 
@@ -636,15 +634,42 @@ function CompletionDialog({
 }) {
   const [stars, setStars] = useState(0);
   const [hoverStars, setHoverStars] = useState(0);
-  // Once the rider taps a star we lock the input + flip the CTA copy
-  // — gives them feedback that their rating registered without us
-  // needing to do an actual round-trip yet.
+  // After tapping a star we POST to the rating endpoint, lock the
+  // input, and flip the CTA copy. If the POST fails (network blip,
+  // already-rated, etc.) we surface a small error line but keep the
+  // selection visible so the rider can retry on close + reopen.
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
-  const submitRating = (n: number) => {
+  const submitRating = async (n: number) => {
+    if (submitting || submitted) return;
     setStars(n);
-    setSubmitted(true);
-    // Future: POST /api/rider/rides/{snapshot.id}/rate { stars: n }
+    setSubmitting(true);
+    setSubmitError(null);
+    try {
+      const res = await fetch(`/api/rider/rides/${snapshot.id}/rate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stars: n }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        // 409 already-rated is a benign "you can't rate twice" case —
+        // treat it like success so the rider isn't confused.
+        if (res.status === 409) {
+          setSubmitted(true);
+        } else {
+          throw new Error(j.error ?? `Server returned ${res.status}`);
+        }
+      } else {
+        setSubmitted(true);
+      }
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Couldn't save rating");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -692,7 +717,9 @@ function CompletionDialog({
           <p className="text-center text-sm font-bold">
             {submitted
               ? "Thanks for rating!"
-              : "How was your ride?"}
+              : submitting
+                ? "Saving your rating…"
+                : "How was your ride?"}
           </p>
           <div
             className="mt-3 flex items-center justify-center gap-2"
@@ -700,25 +727,31 @@ function CompletionDialog({
           >
             {[1, 2, 3, 4, 5].map((n) => {
               const filled = n <= (hoverStars || stars);
+              const locked = submitted || submitting;
               return (
                 <button
                   key={n}
                   type="button"
-                  disabled={submitted}
-                  onMouseEnter={() => !submitted && setHoverStars(n)}
+                  disabled={locked}
+                  onMouseEnter={() => !locked && setHoverStars(n)}
                   onClick={() => submitRating(n)}
                   aria-label={`Rate ${n} star${n === 1 ? "" : "s"}`}
                   className={`grid h-11 w-11 place-items-center rounded-full transition-all ${
                     filled
                       ? "bg-rajlo-red text-white shadow-md shadow-rajlo-red/30"
                       : "bg-surface-soft text-muted hover:bg-primary-soft hover:text-rajlo-red"
-                  } ${submitted ? "cursor-default" : "hover:-translate-y-0.5"}`}
+                  } ${locked ? "cursor-default" : "hover:-translate-y-0.5"}`}
                 >
                   <Icon name="star" className="h-5 w-5" />
                 </button>
               );
             })}
           </div>
+          {submitError && (
+            <p className="mt-3 text-center text-xs font-semibold text-rajlo-red">
+              {submitError}
+            </p>
+          )}
 
           <div className="mt-6 flex flex-col gap-2">
             <button

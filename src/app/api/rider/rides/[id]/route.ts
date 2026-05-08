@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import { getAverageRating } from "@/lib/ratings";
 
 /**
  * GET /api/rider/rides/[id]
@@ -62,9 +63,16 @@ export async function GET(
   // rider sees who's picking them up.
   let driver: {
     name: string;
+    phone: string | null;
     plateNumber: string | null;
     vehicle: string | null;
-    rating: number;
+    vehicleMake: string | null;
+    vehicleModel: string | null;
+    vehicleYear: number | null;
+    vehicleColor: string | null;
+    /** null = no ratings yet (UI shows "new driver" pill instead). */
+    rating: number | null;
+    ratingCount: number;
     avatarUrl: string | null;
   } | null = null;
 
@@ -72,29 +80,40 @@ export async function GET(
     const { data: d } = await supabase
       .from("drivers")
       .select(
-        "first_name, last_name, plate_number, vehicle_make, vehicle_model, user_id",
+        "first_name, last_name, phone, plate_number, vehicle_make, vehicle_model, vehicle_year, vehicle_color, user_id",
       )
       .eq("id", ride.driver_id)
       .maybeSingle();
 
     if (d) {
-      // Pull avatar from the driver's profile (synced from Google OAuth).
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("avatar_url")
-        .eq("id", d.user_id)
-        .maybeSingle();
+      const [{ data: profile }, ratingSummary] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("avatar_url")
+          .eq("id", d.user_id)
+          .maybeSingle(),
+        getAverageRating(supabase, d.user_id, "driver"),
+      ]);
+
+      const vehicleParts = [
+        d.vehicle_year ? String(d.vehicle_year) : null,
+        d.vehicle_color,
+        d.vehicle_make,
+        d.vehicle_model,
+      ].filter(Boolean);
 
       driver = {
         name:
           [d.first_name, d.last_name].filter(Boolean).join(" ") || "Driver",
+        phone: d.phone,
         plateNumber: d.plate_number,
-        vehicle:
-          d.vehicle_make && d.vehicle_model
-            ? `${d.vehicle_make} ${d.vehicle_model}`
-            : null,
-        // Rating system lands later — placeholder so the UI has a value.
-        rating: 4.9,
+        vehicle: vehicleParts.length > 0 ? vehicleParts.join(" ") : null,
+        vehicleMake: d.vehicle_make,
+        vehicleModel: d.vehicle_model,
+        vehicleYear: d.vehicle_year,
+        vehicleColor: d.vehicle_color,
+        rating: ratingSummary.average,
+        ratingCount: ratingSummary.count,
         avatarUrl: profile?.avatar_url ?? null,
       };
     }

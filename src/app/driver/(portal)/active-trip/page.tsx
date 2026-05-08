@@ -9,6 +9,7 @@ import { MapView } from "@/components/map-view";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRidePosition } from "@/lib/use-ride-position";
 import { formatJMD, type Place } from "@/lib/jamaica";
+import { HeroSkeleton, MapSkeleton, Skeleton } from "@/components/skeleton";
 
 /**
  * Driver's active-trip console.
@@ -84,7 +85,21 @@ export default function DriverActiveTripPage() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [completedFare, setCompletedFare] = useState<number | null>(null);
+  // Snapshot of the just-completed trip so the completion flash can
+  // show the rider's name + offer a star rating. We capture this at
+  // tap-time because by the time the flash renders, `data.ride` has
+  // already been cleared.
+  const [completed, setCompleted] = useState<{
+    fare: number;
+    primaryRideId: string;
+    primaryRiderName: string;
+    secondary: { rideId: string; riderName: string } | null;
+  } | null>(null);
+  // Per-ride local state for which ratings the driver has already
+  // submitted in this session. Avoids the awkward case where they tap
+  // a star, see "saved", and the row stays visually un-rated. Keyed by
+  // ride_id since a carpool produces two ratings.
+  const [ratedRides, setRatedRides] = useState<Record<string, number>>({});
 
   // Live position channel: driver streams own GPS so the rider can watch
   // the car move on the map. Hook also receives the rider's position so
@@ -153,7 +168,21 @@ export default function DriverActiveTripPage() {
         throw new Error(err.error ?? `Server returned ${res.status}`);
       }
       if (action === "complete") {
-        setCompletedFare(fareForCompletion);
+        // Capture the rider info BEFORE we clear `data` — the flash
+        // card uses this snapshot to render the names + rating UI.
+        const primary = data?.ride;
+        const primaryRider = data?.rider?.name ?? "Rider";
+        const partner = data?.carpool?.partner ?? null;
+        if (primary) {
+          setCompleted({
+            fare: fareForCompletion,
+            primaryRideId: primary.id,
+            primaryRiderName: primaryRider,
+            secondary: partner
+              ? { rideId: partner.rideId, riderName: partner.riderName }
+              : null,
+          });
+        }
         setData({ ride: null, rider: null, carpool: null });
       } else {
         await refresh();
@@ -187,44 +216,96 @@ export default function DriverActiveTripPage() {
     }
   };
 
-  /* ─── Loading ─── */
+  /* ─── Loading ─── Skeleton mirrors the active-trip layout: hero
+     + map + rider card + trip details. */
   if (loading) {
     return (
-      <div className="grid place-items-center px-4 py-16">
-        <div className="flex items-center gap-3 text-sm font-semibold text-muted">
-          <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
-          Loading your active trip…
+      <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6 md:py-8">
+        <HeroSkeleton />
+        <MapSkeleton />
+        <div className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-5">
+          <Skeleton className="h-14 w-14" rounded="full" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-2.5 w-12" rounded="md" />
+            <Skeleton className="h-4 w-40" rounded="md" />
+            <Skeleton className="h-2.5 w-32" rounded="md" />
+          </div>
+        </div>
+        <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
+          {[0, 1].map((i) => (
+            <div key={i} className="flex items-start gap-3">
+              <Skeleton className="h-8 w-8" rounded="full" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-3 w-44" rounded="md" />
+                <Skeleton className="h-2.5 w-32" rounded="md" />
+              </div>
+            </div>
+          ))}
         </div>
       </div>
     );
   }
 
   /* ─── Just-completed flash ─── */
-  if (completedFare !== null) {
+  if (completed) {
     return (
-      <div className="mx-auto max-w-md px-4 py-12 text-center">
+      <div className="mx-auto max-w-md space-y-6 px-4 py-12">
         <FadeUp>
-          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-emerald-600 text-white shadow-2xl shadow-emerald-600/40">
-            <Icon name="check-circle" className="h-10 w-10" />
+          <div className="text-center">
+            <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-emerald-600 text-white shadow-2xl shadow-emerald-600/40">
+              <Icon name="check-circle" className="h-10 w-10" />
+            </div>
+            <h1 className="mt-6 text-3xl font-extrabold tracking-tight">
+              Trip complete
+            </h1>
+            <p className="mt-3 text-sm text-muted">
+              Great job. Your earnings for this trip:
+            </p>
+            <p className="mt-1 text-4xl font-extrabold tracking-tight text-rajlo-red">
+              {formatJMD(completed.fare)}
+            </p>
           </div>
         </FadeUp>
+
+        {/* Per-rider rating row(s). For a solo trip there's just one;
+           for carpool, two cards stacked. Each card calls the rating
+           endpoint for its own ride_id, so the carpool case produces
+           two independent ride_ratings rows. */}
         <FadeUp delay={0.1}>
-          <h1 className="mt-8 text-3xl font-extrabold tracking-tight">
-            Trip complete
-          </h1>
+          <RateRiderInline
+            rideId={completed.primaryRideId}
+            riderName={completed.primaryRiderName}
+            label={completed.secondary ? "Rider 1" : "Your rider"}
+            alreadyStars={ratedRides[completed.primaryRideId] ?? null}
+            onRated={(s) =>
+              setRatedRides((m) => ({ ...m, [completed.primaryRideId]: s }))
+            }
+          />
         </FadeUp>
+
+        {completed.secondary && (
+          <FadeUp delay={0.15}>
+            <RateRiderInline
+              rideId={completed.secondary.rideId}
+              riderName={completed.secondary.riderName}
+              label="Rider 2"
+              alreadyStars={
+                ratedRides[completed.secondary.rideId] ?? null
+              }
+              onRated={(s) =>
+                setRatedRides((m) => ({
+                  ...m,
+                  [completed.secondary!.rideId]: s,
+                }))
+              }
+            />
+          </FadeUp>
+        )}
+
         <FadeUp delay={0.2}>
-          <p className="mt-3 text-sm text-muted">
-            Great job. Your earnings for this trip:
-          </p>
-          <p className="mt-2 text-4xl font-extrabold tracking-tight text-rajlo-red">
-            {formatJMD(completedFare)}
-          </p>
-        </FadeUp>
-        <FadeUp delay={0.3}>
           <Link
             href="/driver"
-            className="mt-8 inline-flex items-center gap-2 rounded-full bg-rajlo-red px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 hover:-translate-y-0.5 hover:bg-primary-hover"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-rajlo-red px-7 py-3.5 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 hover:-translate-y-0.5 hover:bg-primary-hover"
           >
             Back to dashboard
             <Icon name="arrow-right" className="h-4 w-4" />
@@ -623,6 +704,104 @@ export default function DriverActiveTripPage() {
           )}
         </div>
       </FadeUp>
+    </div>
+  );
+}
+
+/**
+ * Inline "rate the rider" card shown on the post-completion flash.
+ * One per ride — for a carpool, two cards stacked. We do this inline
+ * (rather than a modal) because the post-trip flash is a focused
+ * moment with nothing else competing for attention; popping a modal
+ * over a centered hero would feel weirdly redundant.
+ */
+function RateRiderInline({
+  rideId,
+  riderName,
+  label,
+  alreadyStars,
+  onRated,
+}: {
+  rideId: string;
+  riderName: string;
+  label: string;
+  alreadyStars: number | null;
+  onRated: (stars: number) => void;
+}) {
+  const [hover, setHover] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const stars = alreadyStars ?? 0;
+  const submitted = alreadyStars !== null;
+
+  const submit = async (n: number) => {
+    if (submitting || submitted) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/driver/rides/${rideId}/rate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ stars: n }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        if (res.status === 409) {
+          // Already rated — treat as success so the UI doesn't get stuck.
+          onRated(n);
+        } else {
+          throw new Error(j.error ?? `Server returned ${res.status}`);
+        }
+      } else {
+        onRated(n);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't save rating");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-5">
+      <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+        {label} · rate the trip
+      </p>
+      <p className="mt-1 text-sm font-bold tracking-tight">{riderName}</p>
+      <div
+        className="mt-3 flex items-center gap-2"
+        onMouseLeave={() => setHover(0)}
+      >
+        {[1, 2, 3, 4, 5].map((n) => {
+          const filled = n <= (hover || stars);
+          const locked = submitting || submitted;
+          return (
+            <button
+              key={n}
+              type="button"
+              disabled={locked}
+              onMouseEnter={() => !locked && setHover(n)}
+              onClick={() => submit(n)}
+              aria-label={`Rate ${n} star${n === 1 ? "" : "s"}`}
+              className={`grid h-10 w-10 place-items-center rounded-full transition-all ${
+                filled
+                  ? "bg-rajlo-red text-white shadow-md shadow-rajlo-red/30"
+                  : "bg-surface-soft text-muted hover:bg-primary-soft hover:text-rajlo-red"
+              } ${locked ? "cursor-default" : "hover:-translate-y-0.5"}`}
+            >
+              <Icon name="star" className="h-4 w-4" />
+            </button>
+          );
+        })}
+        {submitted && (
+          <span className="ml-2 text-xs font-bold text-emerald-700">
+            Thanks!
+          </span>
+        )}
+      </div>
+      {error && (
+        <p className="mt-2 text-xs font-semibold text-rajlo-red">{error}</p>
+      )}
     </div>
   );
 }

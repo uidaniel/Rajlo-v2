@@ -57,18 +57,54 @@ export async function GET(
     return NextResponse.json({ error: "Trip no longer available" }, { status: 404 });
   }
 
-  let driver: { name: string; plateNumber: string | null } | null = null;
+  // Public-share driver block. Includes vehicle make/model/year/colour
+  // so the friend watching can spot the car at pickup, plus the
+  // driver's avatar so they can recognise them on sight. Phone is
+  // *not* included — that's a private channel between rider and driver.
+  let driver:
+    | {
+        name: string;
+        plateNumber: string | null;
+        vehicle: string | null;
+        vehicleMake: string | null;
+        vehicleModel: string | null;
+        vehicleYear: number | null;
+        vehicleColor: string | null;
+        avatarUrl: string | null;
+      }
+    | null = null;
   if (ride.driver_id) {
     const { data: d } = await supabase
       .from("drivers")
-      .select("first_name, last_name, plate_number")
+      .select(
+        "first_name, last_name, plate_number, vehicle_make, vehicle_model, vehicle_year, vehicle_color, user_id",
+      )
       .eq("id", ride.driver_id)
       .maybeSingle();
     if (d) {
+      const { data: profile } = d.user_id
+        ? await supabase
+            .from("profiles")
+            .select("avatar_url")
+            .eq("id", d.user_id)
+            .maybeSingle()
+        : { data: null };
+      const vehicleParts = [
+        d.vehicle_year ? String(d.vehicle_year) : null,
+        d.vehicle_color,
+        d.vehicle_make,
+        d.vehicle_model,
+      ].filter(Boolean);
       driver = {
         name:
           [d.first_name, d.last_name].filter(Boolean).join(" ") || "Driver",
         plateNumber: d.plate_number,
+        vehicle: vehicleParts.length > 0 ? vehicleParts.join(" ") : null,
+        vehicleMake: d.vehicle_make,
+        vehicleModel: d.vehicle_model,
+        vehicleYear: d.vehicle_year,
+        vehicleColor: d.vehicle_color,
+        avatarUrl: profile?.avatar_url ?? null,
       };
     }
   }

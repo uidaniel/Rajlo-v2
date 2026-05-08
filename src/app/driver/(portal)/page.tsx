@@ -12,6 +12,12 @@ import { FadeUp, Stagger, StaggerItem } from "@/components/anim";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { formatJMD } from "@/lib/jamaica";
 import { useFleetBroadcaster } from "@/lib/use-fleet";
+import {
+  HeroSkeleton,
+  RideCardSkeleton,
+  Skeleton,
+  StatsGridSkeleton,
+} from "@/components/skeleton";
 
 type RidePlace = { name: string; address: string; parish: string | null };
 
@@ -232,15 +238,20 @@ export default function DriverHomePage() {
 
   const incomingCount = inboxRides.length;
 
-  /* While the active-trip check is in flight, hold off rendering — we
-     don't want to flash the empty inbox/dashboard if the driver is
-     about to be sent to the active-trip CTA. */
+  /* While the active-trip check is in flight, render a dashboard-
+     shaped skeleton instead of a spinner. Same vertical rhythm as
+     the loaded view (hero + stats + 2-3 inbox cards) so the page
+     doesn't jump when the data resolves. */
   if (bootstrapping) {
     return (
-      <div className="grid place-items-center px-4 py-16">
-        <div className="flex items-center gap-3 text-sm font-semibold text-muted">
-          <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
-          Loading dashboard…
+      <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+        <HeroSkeleton />
+        <StatsGridSkeleton count={4} />
+        <div className="space-y-3">
+          <Skeleton className="h-5 w-44" rounded="md" />
+          {[0, 1, 2].map((i) => (
+            <RideCardSkeleton key={i} />
+          ))}
         </div>
       </div>
     );
