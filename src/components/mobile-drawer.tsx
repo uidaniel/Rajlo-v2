@@ -7,6 +7,7 @@ import { Logo } from "./logo";
 import { ArcWatermark } from "./arc-pattern";
 import { Icon, type IconName } from "./icons";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { clearSessionPolicy } from "@/lib/session-policy";
 
 type NavLink = {
   label: string;
@@ -47,6 +48,10 @@ export function MobileDrawer({
     role: string | null;
     avatar_url: string | null;
   } | null>(null);
+  // Tracks the initial fetch separately from `profile` so we can show
+  // a real skeleton instead of a misleading "Loading…" string that
+  // sticks around even after the request resolves with empty fields.
+  const [profileLoading, setProfileLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
 
@@ -63,34 +68,66 @@ export function MobileDrawer({
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      if (!user || cancelled) return;
+      if (cancelled) return;
+      if (!user) {
+        setProfileLoading(false);
+        return;
+      }
 
+      // `.maybeSingle()` rather than `.single()` so a missing profile
+      // row (rare — happens if the auth-migration trigger never ran
+      // for this user, or for a Google OAuth user whose row pre-dates
+      // the avatar trigger) doesn't blow up the whole fetch. We
+      // fallback to OAuth metadata in that case.
       const [{ data }, avatarRes] = await Promise.all([
         supabase
           .from("profiles")
           .select("full_name, role, avatar_url")
           .eq("id", user.id)
-          .single(),
+          .maybeSingle(),
         fetch("/api/me/avatar").then((r) =>
           r.ok ? (r.json() as Promise<{ avatarUrl: string | null }>) : null,
         ),
       ]);
       if (cancelled) return;
 
-      // Server's avatar wins (selfie for drivers, OAuth for everyone
-      // else). Local fallbacks are just in case the endpoint fails:
-      // profile row first, then user_metadata.
+      // Resolve the display name through every available source. Google
+      // OAuth puts the user's name under `name` in raw_user_meta_data
+      // (sometimes also `full_name` after Supabase normalisation). If
+      // neither the profiles row nor the metadata yields a name, fall
+      // back to the local-part of the email so the sidebar never shows
+      // a perpetual "Loading…" — that's worse UX than "raj" or similar.
       const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
+      const metaName =
+        (typeof meta.full_name === "string" ? meta.full_name : null) ??
+        (typeof meta.name === "string" ? meta.name : null);
+      const emailLocal = user.email ? user.email.split("@")[0] : null;
+      const resolvedName = data?.full_name ?? metaName ?? emailLocal ?? null;
+
       const metaAvatar =
         (typeof meta.avatar_url === "string" ? meta.avatar_url : null) ??
         (typeof meta.picture === "string" ? meta.picture : null);
+
       setProfile({
-        full_name: data?.full_name ?? null,
+        full_name: resolvedName,
         email: user.email ?? null,
         role: data?.role ?? null,
         avatar_url:
           avatarRes?.avatarUrl ?? data?.avatar_url ?? metaAvatar ?? null,
       });
+      setProfileLoading(false);
+
+      // Backfill: if profiles.full_name was null but we resolved a
+      // name from OAuth metadata, persist it so future loads get the
+      // name without going through the fallback chain. Best-effort —
+      // the UI is already up-to-date either way.
+      if (!data?.full_name && metaName) {
+        void fetch("/api/me/profile", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fullName: metaName }),
+        }).catch(() => null);
+      }
     })();
     return () => {
       cancelled = true;
@@ -101,7 +138,18 @@ export function MobileDrawer({
     const supabase = createSupabaseBrowserClient();
     // Capture role BEFORE signOut so we know which login page to bounce to.
     const role = profile?.role ?? "rider";
+    // Drivers: flip them offline before clearing the session so the
+    // persisted is_online flag matches their actual intent (won't be
+    // taking rides while signed out). Best-effort; no-ops for riders.
+    if (role === "driver") {
+      await fetch("/api/driver/online", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ online: false }),
+      }).catch(() => null);
+    }
     await supabase.auth.signOut();
+    clearSessionPolicy();
     const loginPath =
       role === "admin"
         ? "/auth/admin/login"
@@ -255,7 +303,9 @@ export function MobileDrawer({
         <div className="relative border-t border-white/10 p-4">
           <div className="flex items-center gap-3 rounded-xl bg-white/10 p-3 backdrop-blur">
             <div className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-full bg-white/20 text-sm font-bold uppercase ring-1 ring-white/15">
-              {profile?.avatar_url ? (
+              {profileLoading ? (
+                <span className="h-full w-full animate-pulse bg-white/15" />
+              ) : profile?.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={profile.avatar_url}
@@ -268,12 +318,21 @@ export function MobileDrawer({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">
-                {profile?.full_name ?? "Loading…"}
-              </p>
-              <p className="truncate text-[11px] text-white/70">
-                {profile?.email ?? ""}
-              </p>
+              {profileLoading ? (
+                <>
+                  <span className="block h-3 w-24 animate-pulse rounded bg-white/20" />
+                  <span className="mt-1.5 block h-2.5 w-32 animate-pulse rounded bg-white/15" />
+                </>
+              ) : (
+                <>
+                  <p className="truncate text-sm font-semibold">
+                    {profile?.full_name ?? "Rider"}
+                  </p>
+                  <p className="truncate text-[11px] text-white/70">
+                    {profile?.email ?? ""}
+                  </p>
+                </>
+              )}
             </div>
             <button
               type="button"

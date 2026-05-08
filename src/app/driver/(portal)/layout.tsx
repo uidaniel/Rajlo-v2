@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { PortalLayout } from "@/components/portal-layout";
+import { SessionGuard } from "@/components/session-guard";
 import { driverNav } from "@/lib/mock-data";
 import { getDriverStatus } from "@/lib/driver-status";
 
@@ -34,6 +35,7 @@ export default async function DriverPortalLayout({
       subtitle="Manage verification, trips, seats, and payouts."
       nav={driverNav}
     >
+      <SessionGuard />
       {children}
     </PortalLayout>
   );

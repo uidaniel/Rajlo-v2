@@ -7,6 +7,8 @@ import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { ToggleRowsSkeleton } from "@/components/skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { usePush } from "@/lib/use-push";
+import { clearSessionPolicy } from "@/lib/session-policy";
 
 /**
  * Rider settings — account profile + push preferences + app
@@ -76,6 +78,7 @@ export default function RiderSettingsPage() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const push = usePush();
 
   // Debounced PATCH — coalesces rapid-fire toggle taps into a single
   // request. Held in a ref so changing prefs doesn't reset the timer.
@@ -168,6 +171,7 @@ export default function RiderSettingsPage() {
     try {
       const supabase = createSupabaseBrowserClient();
       await supabase.auth.signOut();
+      clearSessionPolicy();
       window.location.href = "/";
     } finally {
       setSigningOut(false);
@@ -257,39 +261,96 @@ export default function RiderSettingsPage() {
         <Section title="Push notifications" icon="bell">
           {prefs ? (
             <>
+              {/* Status banner — surfaces the browser-side state so the
+                  user understands why the toggle behaves the way it does. */}
+              {push.ready && !push.support && (
+                <div className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
+                  This browser doesn&apos;t support push notifications. On
+                  iPhone, install Rajlo to your home screen first
+                  (Share → Add to Home Screen) and then come back here.
+                </div>
+              )}
+              {push.ready &&
+                push.support &&
+                push.permission === "denied" && (
+                  <div className="mb-3 rounded-xl border border-rajlo-red/30 bg-primary-soft px-3 py-2.5 text-xs leading-relaxed text-rajlo-red">
+                    Notifications are blocked for this site. Open your
+                    browser&apos;s site settings and allow notifications
+                    for Rajlo, then refresh this page.
+                  </div>
+                )}
+              {push.error && (
+                <div className="mb-3 rounded-xl border border-rajlo-red/30 bg-primary-soft px-3 py-2.5 text-xs leading-relaxed text-rajlo-red">
+                  {push.error}
+                </div>
+              )}
               <ToggleRow
                 label="Allow push notifications"
-                description="Master switch — turn off to mute everything below."
-                value={prefs.pushEnabled}
-                onChange={(v) => update("pushEnabled", v)}
+                description={
+                  push.subscribed
+                    ? "On for this device. Other devices stay independent."
+                    : "Master switch — turn off to mute everything below."
+                }
+                value={prefs.pushEnabled && push.subscribed}
+                disabled={
+                  !push.support ||
+                  push.working ||
+                  push.permission === "denied"
+                }
+                onChange={async (v) => {
+                  // Optimistically update prefs row + drive the
+                  // browser-side subscription. If the browser side
+                  // fails (permission denied etc.) the push hook
+                  // surfaces the error and the toggle stays off.
+                  update("pushEnabled", v);
+                  if (v) {
+                    await push.enable();
+                  } else {
+                    await push.disable();
+                  }
+                }}
               />
+              {push.subscribed && (
+                <div className="-mt-2 mb-2 flex items-center gap-2 px-1">
+                  <button
+                    type="button"
+                    onClick={push.sendTest}
+                    className="rounded-full bg-rajlo-black px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white transition-opacity hover:opacity-90"
+                  >
+                    Send test
+                  </button>
+                  <span className="text-[11px] text-muted">
+                    Verify your setup with a sample push.
+                  </span>
+                </div>
+              )}
               <Divider />
               <ToggleRow
                 label="Trip updates"
                 description="Driver accepted, arrived, started, completed."
                 value={prefs.pushTripUpdates}
-                disabled={!prefs.pushEnabled}
+                disabled={!prefs.pushEnabled || !push.subscribed}
                 onChange={(v) => update("pushTripUpdates", v)}
               />
               <ToggleRow
                 label="Driver arrival"
                 description="Loud ping when your driver pulls up."
                 value={prefs.pushDriverArrival}
-                disabled={!prefs.pushEnabled}
+                disabled={!prefs.pushEnabled || !push.subscribed}
                 onChange={(v) => update("pushDriverArrival", v)}
               />
               <ToggleRow
                 label="Promotions & discounts"
                 description="Carpool deals, free-trip rewards, and seasonal promos."
                 value={prefs.pushPromos}
-                disabled={!prefs.pushEnabled}
+                disabled={!prefs.pushEnabled || !push.subscribed}
                 onChange={(v) => update("pushPromos", v)}
               />
               <ToggleRow
                 label="Safety tips"
                 description="Periodic reminders about safety toolkit features."
                 value={prefs.pushSafetyTips}
-                disabled={!prefs.pushEnabled}
+                disabled={!prefs.pushEnabled || !push.subscribed}
                 onChange={(v) => update("pushSafetyTips", v)}
               />
             </>

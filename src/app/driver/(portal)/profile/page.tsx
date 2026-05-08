@@ -6,7 +6,7 @@ import { Icon, type IconName } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { HeroSkeleton, Skeleton } from "@/components/skeleton";
-import { AvatarUploader } from "@/components/avatar-uploader";
+import { usePush } from "@/lib/use-push";
 
 /**
  * Driver self-edit profile page. Drivers update the fields they own:
@@ -43,6 +43,7 @@ export default function DriverProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const push = usePush();
 
   // Editable form state — kept separate from the loaded `driver` so we
   // can detect dirty fields and let the rider revert with a refresh.
@@ -53,23 +54,23 @@ export default function DriverProfilePage() {
   const [vehicleModel, setVehicleModel] = useState("");
   const [vehicleYear, setVehicleYear] = useState<string>("");
   const [vehicleColor, setVehicleColor] = useState("");
-  // Avatar lives in the profiles table, not drivers — fetched
-  // separately. NOTE: this is the driver's everyday avatar (shown
-  // in THEIR sidebar). The verified TA selfie remains the photo
-  // shown to riders on a trip — that's the compliance photo and is
-  // edited via re-verification, not here.
+  // Driver's profile picture IS the verified TA selfie — there's no
+  // separate "everyday avatar". `/api/me/avatar` already prefers the
+  // selfie for drivers and falls back to OAuth picture if the selfie
+  // hasn't been uploaded/approved yet (rare in the portal since the
+  // layout gates on activation, but defensive).
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarSource, setAvatarSource] = useState<"selfie" | "oauth" | null>(
+    null,
+  );
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        // Two parallel fetches — driver-specific record AND the
-        // cross-role profile row (for the avatar). Either failing
-        // shouldn't block the page; we set what we can.
-        const [driverRes, profileRes] = await Promise.all([
+        const [driverRes, avatarRes] = await Promise.all([
           fetch("/api/driver/me"),
-          fetch("/api/me/profile"),
+          fetch("/api/me/avatar"),
         ]);
         if (!driverRes.ok) throw new Error(`HTTP ${driverRes.status}`);
         const json = (await driverRes.json()) as { driver: DriverMe | null };
@@ -89,11 +90,13 @@ export default function DriverProfilePage() {
         setVehicleYear(json.driver.vehicle_year?.toString() ?? "");
         setVehicleColor(json.driver.vehicle_color ?? "");
 
-        if (profileRes.ok) {
-          const pjson = (await profileRes.json()) as {
-            profile: { avatarUrl: string | null };
+        if (avatarRes.ok) {
+          const ajson = (await avatarRes.json()) as {
+            avatarUrl: string | null;
+            source: "selfie" | "oauth";
           };
-          setAvatarUrl(pjson.profile.avatarUrl);
+          setAvatarUrl(ajson.avatarUrl);
+          setAvatarSource(ajson.source);
         }
       } catch (e) {
         if (!cancelled)
@@ -178,8 +181,8 @@ export default function DriverProfilePage() {
   if (error && !driver) {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft text-rajlo-red">
-          <Icon name="alert-triangle" className="h-6 w-6" />
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft">
+          <span aria-hidden className="text-3xl leading-none">😢</span>
         </span>
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
           Profile unavailable
@@ -256,32 +259,52 @@ export default function DriverProfilePage() {
          verification flow. */}
       <FadeUp delay={0.06}>
         <Section title="Profile picture" icon="user">
-          <div className="flex items-start gap-5">
-            <AvatarUploader
-              currentUrl={avatarUrl}
-              fallbackInitials={
-                ([firstName, lastName]
-                  .filter(Boolean)
-                  .map((s) => s[0]?.toUpperCase() ?? "")
-                  .join("") || "D")
-              }
-              size="lg"
-              onUploaded={(url) => setAvatarUrl(url)}
-            />
+          <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-start">
+            <div className="relative shrink-0">
+              <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-primary-soft text-2xl font-extrabold text-rajlo-red ring-2 ring-rajlo-red/20">
+                {avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={avatarUrl}
+                    alt="Your verified TA selfie"
+                    referrerPolicy="no-referrer"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  ([firstName, lastName]
+                    .filter(Boolean)
+                    .map((s) => s[0]?.toUpperCase() ?? "")
+                    .join("") || "D")
+                )}
+              </div>
+              {avatarSource === "selfie" && (
+                <span
+                  aria-label="Verified"
+                  title="Verified TA selfie"
+                  className="absolute bottom-0 right-0 grid h-7 w-7 place-items-center rounded-full border-2 border-white bg-emerald-600 text-white shadow-md"
+                >
+                  <Icon name="shield-check" className="h-3.5 w-3.5" />
+                </span>
+              )}
+            </div>
             <div className="min-w-0 flex-1 space-y-2">
               <p className="text-sm font-bold">
-                Your everyday profile picture
+                {avatarSource === "selfie"
+                  ? "Your verified TA selfie"
+                  : "Profile picture"}
               </p>
               <p className="text-xs text-muted">
-                Shows in your own sidebar + when other drivers see you.
+                {avatarSource === "selfie"
+                  ? "This photo identifies you to riders, fellow drivers, and operations. It's the same selfie the Transport Authority verified during onboarding."
+                  : "Once your verification is approved, your TA selfie will become your profile picture across the app."}
               </p>
               <p className="rounded-xl bg-primary-soft px-3 py-2 text-[11px] leading-relaxed text-rajlo-black">
                 <span className="font-bold text-rajlo-red">
-                  Note:
+                  Need to change it?
                 </span>{" "}
-                Riders see your TA-verified selfie on trips, not this
-                photo. To change the verified one, contact support to
-                re-submit your verification documents.
+                Contact support to re-submit your verification documents — a
+                fresh selfie has to go through TA review before it replaces
+                this one.
               </p>
             </div>
           </div>
@@ -373,25 +396,30 @@ export default function DriverProfilePage() {
             )}
           </div>
 
-          {/* Change request CTA. */}
+          {/* Change request CTA. On mobile we stack the row so the
+             icon + copy get the full width and the button drops to a
+             new full-width line — way less squeezed than packing
+             three columns into 320px. */}
           <div className="rounded-2xl border border-rajlo-red/20 bg-primary-soft/40 p-4">
-            <div className="flex items-start gap-3">
-              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rajlo-red/15 text-rajlo-red">
-                <Icon name="car" className="h-4 w-4" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-extrabold tracking-tight">
-                  Got a different car?
-                </p>
-                <p className="mt-0.5 text-xs text-muted">
-                  Vehicle changes need fresh registration, COF, and insurance
-                  documents. Submit a request and our team will review them
-                  within 1–2 business days.
-                </p>
+            <div className="flex flex-col items-stretch gap-3 sm:flex-row sm:items-center">
+              <div className="flex items-start gap-3 sm:flex-1">
+                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rajlo-red/15 text-rajlo-red">
+                  <Icon name="car" className="h-4 w-4" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-extrabold tracking-tight">
+                    Got a different car?
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    Vehicle changes need fresh registration, COF, and insurance
+                    documents. Submit a request and our team will review them
+                    within 1–2 business days.
+                  </p>
+                </div>
               </div>
               <Link
                 href="/driver/vehicle-change"
-                className="shrink-0 rounded-full bg-rajlo-red px-4 py-2 text-xs font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-primary-hover"
+                className="inline-flex shrink-0 items-center justify-center rounded-full bg-rajlo-red px-4 py-2.5 text-xs font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-primary-hover sm:py-2"
               >
                 Request change
               </Link>
@@ -436,6 +464,92 @@ export default function DriverProfilePage() {
               className="h-3 w-3 transition-transform group-hover:translate-x-0.5"
             />
           </Link>
+        </Section>
+      </FadeUp>
+
+      {/* Push notifications — most important channel for drivers
+         because new ride requests come in real-time. Without push,
+         the only way to see them is to keep the inbox tab open. */}
+      <FadeUp delay={0.18}>
+        <Section title="Push notifications" icon="bell">
+          <p className="text-xs text-muted">
+            Get a buzz on this device the second a new ride request comes
+            in. We&apos;ll also push verification + vehicle decisions and
+            rider cancellations so you can stand down quickly.
+          </p>
+
+          {push.ready && !push.support && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
+              This browser doesn&apos;t support push. On iPhone, install
+              Rajlo to your home screen first (Share → Add to Home Screen)
+              and come back here.
+            </div>
+          )}
+          {push.ready &&
+            push.support &&
+            push.permission === "denied" && (
+              <div className="rounded-xl border border-rajlo-red/30 bg-primary-soft px-3 py-2.5 text-xs leading-relaxed text-rajlo-red">
+                Notifications are blocked. Open your browser&apos;s site
+                settings and allow notifications for Rajlo, then refresh.
+              </div>
+            )}
+          {push.error && (
+            <div className="rounded-xl border border-rajlo-red/30 bg-primary-soft px-3 py-2.5 text-xs leading-relaxed text-rajlo-red">
+              {push.error}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface-soft px-4 py-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold">
+                {push.subscribed
+                  ? "Push is on for this device"
+                  : "Enable push for this device"}
+              </p>
+              <p className="mt-0.5 text-xs text-muted">
+                {push.subscribed
+                  ? "Other devices stay independent — toggle each one separately."
+                  : "Browser will ask for permission. Required to receive ride pings."}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={async () => {
+                if (push.subscribed) {
+                  await push.disable();
+                } else {
+                  await push.enable();
+                }
+              }}
+              disabled={
+                !push.support ||
+                push.working ||
+                push.permission === "denied"
+              }
+              className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
+                push.subscribed
+                  ? "border border-line bg-surface text-foreground hover:bg-surface-soft"
+                  : "bg-rajlo-red text-white shadow-lg shadow-rajlo-red/30 hover:-translate-y-0.5 hover:bg-primary-hover"
+              }`}
+            >
+              {push.working
+                ? "Working…"
+                : push.subscribed
+                  ? "Turn off"
+                  : "Enable push"}
+            </button>
+          </div>
+
+          {push.subscribed && (
+            <button
+              type="button"
+              onClick={push.sendTest}
+              className="inline-flex items-center gap-2 rounded-full bg-rajlo-black px-4 py-2 text-xs font-bold text-white transition-opacity hover:opacity-90"
+            >
+              Send a test push
+              <Icon name="bell" className="h-3.5 w-3.5" />
+            </button>
+          )}
         </Section>
       </FadeUp>
 

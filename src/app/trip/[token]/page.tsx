@@ -2,7 +2,6 @@
 
 import { use, useEffect, useState } from "react";
 import { Logo } from "@/components/logo";
-import { Icon } from "@/components/icons";
 import { MapView } from "@/components/map-view";
 import { DriverVehicleCard } from "@/components/driver-vehicle-card";
 import { useRidePosition } from "@/lib/use-ride-position";
@@ -122,8 +121,8 @@ export default function TripSharePage({
     return (
       <div className="grid min-h-screen place-items-center bg-surface-soft px-6">
         <div className="max-w-sm text-center">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft text-rajlo-red">
-            <Icon name="alert-triangle" className="h-6 w-6" />
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft">
+            <span aria-hidden className="text-3xl leading-none">😢</span>
           </span>
           <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
             Trip not available

@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+import {
+  sendWelcomeRiderEmail,
+  sendWelcomeDriverEmail,
+} from "@/lib/email-templates";
 
 /**
  * Handles redirects from Supabase auth flows:
@@ -76,10 +80,41 @@ export async function GET(request: NextRequest) {
   // Re-fetch role (it may have just changed) to decide where to send them.
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, full_name")
     .eq("id", data.user.id)
     .single();
   const role = profile?.role ?? "rider";
+
+  // First-time welcome email — gated by a flag stored in user_metadata so
+  // every subsequent callback (magic link, password reset, re-login) skips
+  // it. Best-effort: never block the redirect on email delivery.
+  const userMeta = (data.user.user_metadata ?? {}) as Record<string, unknown>;
+  if (!userMeta.welcome_sent_at && data.user.email) {
+    void (async () => {
+      try {
+        if (role === "driver") {
+          await sendWelcomeDriverEmail(data.user!.email!, {
+            fullName: profile?.full_name ?? null,
+          });
+        } else {
+          await sendWelcomeRiderEmail(data.user!.email!, {
+            fullName: profile?.full_name ?? null,
+          });
+        }
+        const admin = getSupabaseServerClient();
+        if (admin) {
+          await admin.auth.admin.updateUserById(data.user!.id, {
+            user_metadata: {
+              ...userMeta,
+              welcome_sent_at: new Date().toISOString(),
+            },
+          });
+        }
+      } catch {
+        /* best-effort */
+      }
+    })();
+  }
 
   // If a `next` was specified, only honor it when it matches the user's role.
   // A rider trying to land on /driver/* should be bounced to /rider instead.

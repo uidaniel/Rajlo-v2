@@ -36,6 +36,12 @@ export const metadata: Metadata = {
   title: "Rajlo — Let's go!",
   description:
     "Rajlo is Jamaica's trusted rideshare platform. Verified red-plate drivers, transparent parish-based pricing, multi-seat bookings, and real-time tracking.",
+  // Next.js auto-detects `app/icon.png` + `app/apple-icon.png` and
+  // attaches them as <link rel="icon"> + <link rel="apple-touch-icon">
+  // so we don't need to declare them here. The manifest link drives
+  // PWA install (which iOS web push needs).
+  manifest: "/manifest.webmanifest",
+  themeColor: "#f10100",
 };
 
 export default function RootLayout({

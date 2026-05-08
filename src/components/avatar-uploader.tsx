@@ -174,7 +174,13 @@ export function AvatarUploader({
         </p>
       )}
       {!error && (
-        <p className="text-[11px] text-muted">
+        // `whitespace-nowrap` prevents the caption from collapsing into
+        // a multi-line stack when the avatar sits in a narrow flex
+        // column (e.g. the driver profile card on mobile, where the
+        // avatar's column was 96px wide and "Tap to change · JPG / PNG
+        // / WEBP · 5 MB max" wrapped to 3+ lines). The single line
+        // overflows the column gracefully — better than the squeeze.
+        <p className="whitespace-nowrap text-[11px] text-muted">
           {uploading ? "Uploading…" : "Tap to change · JPG / PNG / WEBP · 5 MB max"}
         </p>
       )}

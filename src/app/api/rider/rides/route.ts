@@ -3,6 +3,8 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { tryMatchCarpool } from "@/lib/carpool-matcher";
 import { computeRideExpiry } from "@/lib/ride-expiry";
+import { sendRideRequestedEmail } from "@/lib/email-templates";
+import { notifyRider, notifyAllAvailableDrivers } from "@/lib/notify";
 
 /**
  * POST /api/rider/rides
@@ -249,6 +251,56 @@ export async function POST(request: Request) {
         },
       ]);
     }
+  }
+
+  // Best-effort email + in-app inbox + push. We don't push for "ride
+  // requested" itself (the rider IS the actor — they just tapped
+  // "Request") but we DO log an inbox row so the feed has a complete
+  // narrative of every event for that ride.
+  void notifyRider(supabase, {
+    riderId: user.id,
+    kind: "trip",
+    title: "Looking for a driver…",
+    body: `${body.pickup.name} → ${body.dropoff.name}`,
+    href: `/rider/live-trip?id=${ride.id}`,
+    cta: "View live status",
+    inboxOnly: true,
+  }).catch(() => null);
+
+  // Fan-out push to every activated driver — first one to accept wins
+  // via the atomic claim in /api/driver/rides/[id]/accept. Best-effort.
+  // `pushOnly` = true so we don't pollute every driver's inbox with a
+  // permanent "ride available" row. Drivers consult the live claimable
+  // queue via the /driver inbox view, which auto-removes claimed rides.
+  void notifyAllAvailableDrivers(supabase, {
+    kind: "ride_available",
+    title: "New ride request",
+    body: `${body.pickup.name} → ${body.dropoff.name} · ${seats} seat${seats > 1 ? "s" : ""} · JMD ${Math.round(body.fare.fareJMD).toLocaleString("en-JM")}`,
+    href: "/driver",
+    pushTag: `ride-available-${ride.id}`,
+    pushRenotify: true,
+    requireInteraction: true,
+    pushOnly: true,
+  }).catch(() => null);
+
+  if (user.email) {
+    const { data: riderProfile } = await auth
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    void sendRideRequestedEmail(user.email, {
+      riderFirstName: riderProfile?.full_name ?? null,
+      rideId: ride.id,
+      pickup: body.pickup.name,
+      dropoff: body.dropoff.name,
+      fareJMD: matchedFareJMD ?? Math.round(body.fare.fareJMD),
+      seats,
+      etaMinutes: Number.isFinite(body.fare.etaMinutes)
+        ? Math.round(body.fare.etaMinutes)
+        : null,
+      expiresAt: ride ? computeRideExpiry() : null,
+    }).catch(() => null);
   }
 
   return NextResponse.json({

@@ -5,6 +5,7 @@ import {
   sendDriverApprovedEmail,
   sendDriverRejectedEmail,
 } from "@/lib/driver-emails";
+import { notifyDriver } from "@/lib/notify";
 import type { AdminDecisionRequest } from "@/lib/api-types";
 
 export async function POST(request: Request) {
@@ -43,7 +44,7 @@ export async function POST(request: Request) {
 
   const { data: driver, error: driverError } = await supabase
     .from("drivers")
-    .select("id, external_id, first_name, last_name, email")
+    .select("id, external_id, first_name, last_name, email, user_id")
     .eq("external_id", body.driverId)
     .single();
 
@@ -162,6 +163,26 @@ export async function POST(request: Request) {
       emailStatus = "failed";
       emailError = result.error;
     }
+  }
+
+  // Inbox row + web push. Best-effort.
+  if (driver.user_id) {
+    const driverFirst = (driver.first_name ?? "").trim().split(/\s+/)[0] || "Driver";
+    void notifyDriver(supabase, {
+      driverUserId: driver.user_id,
+      kind: "verification",
+      title: allApproved
+        ? `You're approved, ${driverFirst}!`
+        : "Action needed on your application",
+      body: allApproved
+        ? `Driver ID ${driver.external_id} is now active. Tap to start accepting rides.`
+        : (body.adminNote?.slice(0, 140) ??
+          "Open the driver portal to resubmit the flagged documents."),
+      href: allApproved ? "/driver" : "/driver/resubmit",
+      cta: allApproved ? "Open dashboard" : "Resubmit documents",
+      pushTag: `driver-verification-${driver.external_id}`,
+      pushRenotify: true,
+    });
   }
 
   return NextResponse.json({

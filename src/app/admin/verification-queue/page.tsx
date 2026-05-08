@@ -191,7 +191,7 @@ export default function VerificationQueuePage() {
         </div>
       ) : error ? (
         <div className="rounded-2xl border border-rajlo-red/30 bg-primary-soft p-6 text-center">
-          <Icon name="alert-triangle" className="mx-auto h-8 w-8 text-rajlo-red" />
+          <span aria-hidden className="block text-4xl leading-none">😢</span>
           <p className="mt-3 text-sm font-bold text-rajlo-red">{error}</p>
           <p className="mt-1 text-xs text-muted">
             Refresh the page or check your sign-in.

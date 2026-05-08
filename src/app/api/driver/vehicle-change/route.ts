@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { validateVehicleSpec } from "@/lib/vehicle-catalog";
+import { sendVehicleChangeSubmittedEmail } from "@/lib/email-templates";
 
 /**
  * GET /api/driver/vehicle-change
@@ -88,7 +89,7 @@ export async function POST(request: Request) {
 
   const { data: driver } = await supabase
     .from("drivers")
-    .select("id")
+    .select("id, external_id, first_name, last_name, email")
     .eq("user_id", user.id)
     .maybeSingle();
   if (!driver) {
@@ -199,6 +200,20 @@ export async function POST(request: Request) {
     actor_id: user.id,
     event: `Vehicle change requested: ${body.brand} ${body.model} (${yearNum})`,
   });
+
+  // Best-effort confirmation email so the driver has a record of the
+  // submission outside the app.
+  if (driver.email) {
+    const newVehicle = [yearNum, body.color, body.brand, body.model]
+      .filter(Boolean)
+      .join(" ");
+    void sendVehicleChangeSubmittedEmail(driver.email, {
+      driverName: [driver.first_name, driver.last_name].filter(Boolean).join(" ") || "Driver",
+      externalId: driver.external_id,
+      newVehicle,
+      newPlate: plate ?? "(plate pending)",
+    }).catch(() => null);
+  }
 
   return NextResponse.json({ ok: true, requestId: created.id });
 }

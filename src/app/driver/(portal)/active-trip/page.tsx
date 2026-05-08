@@ -6,6 +6,7 @@ import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { MapView } from "@/components/map-view";
+import { ChatSheet } from "@/components/chat-sheet";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRidePosition } from "@/lib/use-ride-position";
 import { formatJMD, type Place } from "@/lib/jamaica";
@@ -85,6 +86,7 @@ export default function DriverActiveTripPage() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [chatOpen, setChatOpen] = useState(false);
   // Snapshot of the just-completed trip so the completion flash can
   // show the rider's name + offer a star rating. We capture this at
   // tap-time because by the time the flash renders, `data.ride` has
@@ -512,33 +514,43 @@ export default function DriverActiveTripPage() {
 
       {rider && (
         <FadeUp delay={0.1}>
-          <div className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-5">
-            <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-soft text-base font-extrabold text-rajlo-red ring-1 ring-rajlo-red/20">
-              {rider.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={rider.avatarUrl}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="h-full w-full object-cover"
-                />
-              ) : (
-                initials
-              )}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
-                {carpool ? "Rider 1 (pickup first)" : "Rider"}
-              </p>
-              <p className="mt-0.5 truncate text-base font-extrabold tracking-tight">
-                {rider.name}
-              </p>
-              <p className="mt-0.5 text-xs text-muted">
-                {ride.seats} seat{ride.seats === 1 ? "" : "s"}
-                {ride.estimatedFareJMD
-                  ? ` · ${formatJMD(ride.estimatedFareJMD)} estimated`
-                  : ""}
-              </p>
+          <div className="space-y-3">
+            <div className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-5">
+              <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full bg-primary-soft text-base font-extrabold text-rajlo-red ring-1 ring-rajlo-red/20">
+                {rider.avatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={rider.avatarUrl}
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  initials
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+                  {carpool ? "Rider 1 (pickup first)" : "Rider"}
+                </p>
+                <p className="mt-0.5 truncate text-base font-extrabold tracking-tight">
+                  {rider.name}
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  {ride.seats} seat{ride.seats === 1 ? "" : "s"}
+                  {ride.estimatedFareJMD
+                    ? ` · ${formatJMD(ride.estimatedFareJMD)} estimated`
+                    : ""}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setChatOpen(true)}
+                aria-label={`Message ${rider.name.split(" ")[0]}`}
+                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-rajlo-red text-white shadow-md transition-transform hover:-translate-y-0.5 active:translate-y-0"
+              >
+                <span aria-hidden className="text-lg leading-none">💬</span>
+              </button>
             </div>
           </div>
         </FadeUp>
@@ -704,6 +716,21 @@ export default function DriverActiveTripPage() {
           )}
         </div>
       </FadeUp>
+
+      {rider && (
+        <ChatSheet
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          rideId={ride.id}
+          myRole="driver"
+          peerName={rider.name}
+          peerAvatarUrl={rider.avatarUrl}
+          // Driver doesn't get a tap-to-call to the rider — privacy
+          // by default. Chat is the channel.
+          peerPhone={null}
+          rideActive
+        />
+      )}
     </div>
   );
 }

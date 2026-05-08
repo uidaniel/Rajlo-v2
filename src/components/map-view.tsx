@@ -112,6 +112,7 @@ export function MapView({
   liveRoute,
   searching = false,
   searchingUntil = null,
+  lockable = true,
   className = "h-72 w-full",
 }: {
   pickup: Place | null;
@@ -135,6 +136,14 @@ export function MapView({
    *  + "X:XX left" label, so the rider knows how long they have
    *  before the request auto-cancels. */
   searchingUntil?: string | null;
+  /** When true (default), the map is "locked" on mount — gestures
+   *  pass through to the page so a finger-swipe past the map scrolls
+   *  the document instead of accidentally panning. The user must tap
+   *  the map once to enable interaction. After ~3 seconds of map
+   *  inactivity it re-locks so a later scroll-past doesn't pan again.
+   *  Set false on screens where the map IS the interaction (rare —
+   *  most Rajlo maps are informational). */
+  lockable?: boolean;
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -176,6 +185,26 @@ export function MapView({
   // instead of an opaque blank rectangle (the most common cause is API key
   // referrer restrictions not allowing the host the browser is on).
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Flips true once `mapRef.current` is constructed. The marker/route
+  // effect lists this in its deps so it re-runs after the async Maps
+  // SDK load completes — without this, on pages where the props never
+  // change again (e.g. /rider/history/[id]), the first effect run
+  // would beat the SDK load and return early, and the markers + route
+  // would never get drawn (only the bare map tiles would render).
+  const [mapReady, setMapReady] = useState(false);
+  // Click-to-activate lock. True (locked) by default — overlay swallows
+  // touches/wheel events so finger-swipes past the map don't pan it on
+  // mobile, and mouse-wheel doesn't accidentally zoom on desktop. Tap
+  // the overlay to unlock. Auto re-locks after `RELOCK_AFTER_MS` of
+  // map inactivity so a later scroll-past behaves the same way.
+  const [locked, setLocked] = useState(lockable);
+  const relockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Pseudo-fullscreen — `position: fixed` over the viewport rather
+  // than the browser Fullscreen API. The native API doesn't work on
+  // iOS Safari for non-<video> elements, and the fixed-position
+  // approach lets us render our own close button + keeps the same
+  // CSS theming as the inline map.
+  const [fullscreen, setFullscreen] = useState(false);
 
   // Init map + DirectionsService once. We retry once on a small delay if
   // the container isn't sized yet — that happens on iOS Safari when the
@@ -208,6 +237,9 @@ export function MapView({
           styles: MAP_STYLE,
         });
         directionsServiceRef.current = new g.maps.DirectionsService();
+        // Wake up any effects waiting for the map to exist (markers,
+        // polyline, fleet dots, live-route).
+        setMapReady(true);
       } catch (err) {
         if (cancelled) return;
         const msg = err instanceof Error ? err.message : "Unknown error";
@@ -381,7 +413,7 @@ export function MapView({
     return () => {
       cancelled = true;
     };
-  }, [pickup, stops, dropoff, liveRoute]);
+  }, [pickup, stops, dropoff, liveRoute, mapReady]);
 
   // Live-route polyline: driver → pickup (or driver → dropoff). Refetches
   // the Directions polyline only when the driver has moved significantly
@@ -464,7 +496,7 @@ export function MapView({
     return () => {
       cancelled = true;
     };
-  }, [liveRoute, driverPosition, pickup, dropoff]);
+  }, [liveRoute, driverPosition, pickup, dropoff, mapReady]);
 
   // Live driver position — rendered as the same car icon used for the
   // fleet view. Marker is reused across updates so the move feels smooth.
@@ -619,12 +651,97 @@ export function MapView({
     }
   }, [riderPosition]);
 
+  // Fullscreen side-effects — Esc to exit, body-scroll lock, and a
+  // Google Maps resize trigger so tiles + bounds re-fit correctly
+  // after the container's dimensions jump. Without the resize trigger,
+  // Maps occasionally shows grey strips along the new edges.
+  useEffect(() => {
+    if (!fullscreen) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setFullscreen(false);
+    };
+    window.addEventListener("keydown", onKey);
+
+    // Two RAFs gives Safari time to lay out the fixed wrapper before
+    // we ask Maps to recompute. Single RAF is sometimes too early.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        const map = mapRef.current;
+        if (!map || typeof window === "undefined" || !window.google) return;
+        google.maps.event.trigger(map, "resize");
+      });
+    });
+
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+      cancelAnimationFrame(raf1);
+      if (raf2) cancelAnimationFrame(raf2);
+      // Trigger another resize when exiting so the inline-map tiles
+      // settle back into the smaller container cleanly.
+      const map = mapRef.current;
+      if (map && typeof window !== "undefined" && window.google) {
+        requestAnimationFrame(() => {
+          google.maps.event.trigger(map, "resize");
+        });
+      }
+    };
+  }, [fullscreen]);
+
+  // Auto re-lock after a window of map inactivity. Listens to gestures
+  // INSIDE the map container so that watching/panning/zooming pushes
+  // the relock further out — once the user is genuinely done, the
+  // map relocks and the next scroll-past doesn't accidentally pan it.
+  // Disabled when not lockable or already locked.
+  useEffect(() => {
+    if (!lockable || locked) return;
+    const el = containerRef.current;
+    if (!el) return;
+
+    const RELOCK_AFTER_MS = 3500;
+    const arm = () => {
+      if (relockTimerRef.current) clearTimeout(relockTimerRef.current);
+      relockTimerRef.current = setTimeout(() => {
+        setLocked(true);
+      }, RELOCK_AFTER_MS);
+    };
+
+    arm();
+    el.addEventListener("touchstart", arm, { passive: true });
+    el.addEventListener("touchmove", arm, { passive: true });
+    el.addEventListener("mousedown", arm);
+    el.addEventListener("mousemove", arm);
+    el.addEventListener("wheel", arm, { passive: true });
+    return () => {
+      if (relockTimerRef.current) {
+        clearTimeout(relockTimerRef.current);
+        relockTimerRef.current = null;
+      }
+      el.removeEventListener("touchstart", arm);
+      el.removeEventListener("touchmove", arm);
+      el.removeEventListener("mousedown", arm);
+      el.removeEventListener("mousemove", arm);
+      el.removeEventListener("wheel", arm);
+    };
+  }, [locked, lockable]);
+
   return (
     // `min-h-[16rem]` is a belt-and-suspenders height floor in case a flex
     // ancestor on mobile collapses our height-class — Google Maps refuses
     // to render in a 0-height div, which would just leave a blank rectangle.
+    // When `fullscreen` is on we swap the layout-flow class (className)
+    // for a fixed-viewport overlay; the inner Google Maps `<div>` and
+    // every overlay child stay the same.
     <div
-      className={`relative min-h-[16rem] overflow-hidden bg-surface-soft ${className}`}
+      className={
+        fullscreen
+          ? "fixed inset-0 z-[60] overflow-hidden bg-rajlo-black"
+          : `relative min-h-[16rem] overflow-hidden bg-surface-soft ${className}`
+      }
     >
       {/* Inner div fills the wrapper. Switched off `absolute inset-0` to
           plain `h-full w-full` because mobile Safari occasionally fails to
@@ -660,6 +777,97 @@ export function MapView({
       {searching && !loadError && (
         <SearchingOverlay searchingUntil={searchingUntil} />
       )}
+      {/* Lock overlay — sits above the map while `locked` is true and
+         catches all gestures so finger-swipes pan the page (not the
+         map) and mouse wheel scrolls the page (not the map). The
+         "Tap to interact" pill makes the affordance discoverable.
+         Skipped when search overlay is active (the matcher's radar
+         already prevents interaction during ride request) or while
+         fullscreen (the user explicitly opened the map for a closer
+         look — locking it would defeat the point). */}
+      {lockable && locked && !loadError && !searching && !fullscreen && (
+        <button
+          type="button"
+          onClick={() => setLocked(false)}
+          className="group absolute inset-0 z-20 flex cursor-pointer items-end justify-center bg-transparent"
+          aria-label="Tap to interact with the map"
+        >
+          <span className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-rajlo-black/80 px-3.5 py-1.5 text-[11px] font-bold text-white shadow-md backdrop-blur transition-opacity group-hover:bg-rajlo-black/90 group-active:bg-rajlo-black">
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-3 w-3"
+            >
+              <path d="M9 11.24V7a3 3 0 0 1 6 0v4.24" />
+              <path d="M5 11h14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2z" />
+            </svg>
+            Tap to interact
+          </span>
+        </button>
+      )}
+
+      {/* Fullscreen control. Top-right "expand" button when inline,
+         top-left "Close" pill when expanded. The expand button is
+         hidden during the matcher search radar (no point opening
+         fullscreen when there's no route to look at yet). */}
+      {!loadError && !searching && !fullscreen && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            setFullscreen(true);
+            // Unlock so the user can pan/zoom immediately on enter.
+            setLocked(false);
+          }}
+          aria-label="Open map in fullscreen"
+          className="absolute right-3 top-3 z-30 grid h-9 w-9 place-items-center rounded-full bg-white/95 text-rajlo-black shadow-md backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-white active:translate-y-0"
+        >
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-4 w-4"
+          >
+            <path d="M15 3h6v6" />
+            <path d="M9 21H3v-6" />
+            <path d="M21 3l-7 7" />
+            <path d="M3 21l7-7" />
+          </svg>
+        </button>
+      )}
+      {fullscreen && (
+        <button
+          type="button"
+          onClick={() => setFullscreen(false)}
+          aria-label="Exit fullscreen"
+          className="absolute left-3 top-[max(0.75rem,env(safe-area-inset-top))] z-30 inline-flex items-center gap-1.5 rounded-full bg-white px-4 py-2 text-xs font-bold text-rajlo-black shadow-lg transition-transform hover:-translate-y-0.5 active:translate-y-0"
+        >
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            className="h-3.5 w-3.5"
+          >
+            <path d="M18 6 6 18" />
+            <path d="M6 6l12 12" />
+          </svg>
+          Cancel
+        </button>
+      )}
+
       {(driverPosition ||
         riderPosition ||
         (nearbyDrivers && nearbyDrivers.length > 0)) && (

@@ -159,8 +159,8 @@ export default function RiderHistoryDetailPage({
   if (error || !data) {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft text-rajlo-red">
-          <Icon name="alert-triangle" className="h-6 w-6" />
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft">
+          <span aria-hidden className="text-3xl leading-none">😢</span>
         </span>
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
           Trip not found
@@ -332,33 +332,44 @@ export default function RiderHistoryDetailPage({
           <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
             Timeline
           </p>
-          <ol className="mt-4 space-y-4">
-            {timelineEntries.map((e, i) => (
-              <li key={e.key} className="flex items-start gap-3">
-                <div className="flex flex-col items-center">
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary-soft text-rajlo-red">
-                    <Icon name={e.icon} className="h-4 w-4" />
-                  </span>
-                  {i < timelineEntries.length - 1 && (
-                    <span className="my-1 h-6 w-px bg-line" />
-                  )}
-                </div>
-                <div className="min-w-0 flex-1 pb-2">
-                  <p className="text-sm font-bold">{e.label}</p>
-                  <p className="text-xs text-muted">
-                    {e.at
-                      ? new Date(e.at).toLocaleString("en-JM", {
-                          day: "numeric",
-                          month: "short",
-                          year: "numeric",
-                          hour: "numeric",
-                          minute: "2-digit",
-                        })
-                      : ""}
-                  </p>
-                </div>
-              </li>
-            ))}
+          {/* No `space-y` between rows — that would punch a gap into
+             the connector. Instead each row keeps its own bottom
+             padding (skipped on the last item) and the connector
+             stretches via `flex-1` to fill the entire column from the
+             current icon's bottom edge down to the next icon's top
+             edge, so the line visibly joins the two circles. */}
+          <ol className="mt-4">
+            {timelineEntries.map((e, i) => {
+              const isLast = i === timelineEntries.length - 1;
+              return (
+                <li key={e.key} className="flex gap-3">
+                  <div className="flex flex-col items-center self-stretch">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary-soft text-rajlo-red">
+                      <Icon name={e.icon} className="h-4 w-4" />
+                    </span>
+                    {!isLast && (
+                      <span className="w-px flex-1 bg-line" />
+                    )}
+                  </div>
+                  <div
+                    className={`min-w-0 flex-1 ${isLast ? "" : "pb-6"}`}
+                  >
+                    <p className="text-sm font-bold">{e.label}</p>
+                    <p className="text-xs text-muted">
+                      {e.at
+                        ? new Date(e.at).toLocaleString("en-JM", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })
+                        : ""}
+                    </p>
+                  </div>
+                </li>
+              );
+            })}
           </ol>
           {ride.cancellationReason && (
             <div className="mt-4 rounded-xl bg-surface-soft px-4 py-3">
@@ -426,7 +437,7 @@ export default function RiderHistoryDetailPage({
           {ride.notes && (
             <div className="mt-5 rounded-xl bg-primary-soft px-4 py-3">
               <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
-                Note from rider
+                Note from you
               </p>
               <p className="mt-1 text-sm text-rajlo-black">{ride.notes}</p>
             </div>

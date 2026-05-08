@@ -10,6 +10,7 @@ export const riderNav: NavItem[] = [
   { label: "Fare breakdown", href: "/rider/fare-breakdown", icon: "calculator" },
   { label: "Payments", href: "/rider/payments", icon: "credit-card" },
   { label: "History", href: "/rider/history", icon: "clock" },
+  { label: "Spending", href: "/rider/analytics", icon: "bar-chart" },
   { label: "Ratings", href: "/rider/ratings", icon: "star" },
   { label: "Notifications", href: "/rider/notifications", icon: "bell" },
   { label: "Settings", href: "/rider/settings", icon: "settings" },

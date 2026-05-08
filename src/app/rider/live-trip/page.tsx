@@ -10,6 +10,7 @@ import { MapView } from "@/components/map-view";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRidePosition } from "@/lib/use-ride-position";
 import { SafetySheet } from "@/components/safety-sheet";
+import { ChatSheet } from "@/components/chat-sheet";
 import { DriverVehicleCard } from "@/components/driver-vehicle-card";
 import {
   DriverVehicleCardSkeleton,
@@ -157,6 +158,7 @@ export default function RiderLiveTripPage() {
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [safetyOpen, setSafetyOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [completed, setCompleted] = useState<CompletedSnapshot | null>(null);
   // Tracks the most recent active-ride snapshot we saw, so when
   // refresh() returns `{ ride: null }` we can detect the active → done
@@ -262,6 +264,45 @@ export default function RiderLiveTripPage() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // Expiry trigger — when a `requested` ride's countdown hits zero, no
+  // postgres_changes row event fires (the row hasn't actually changed
+  // until somebody calls /api/rider/rides/active and the
+  // expire-on-read flips it). So we schedule a refresh ourselves at
+  // the moment of expiry to force the server-side flip + UI update.
+  //
+  // We add a 1.5s buffer to account for client/server clock skew. If
+  // the first refresh comes back still 'requested' (deeper skew, slow
+  // network, etc.), we re-poll every 3s until status changes — the
+  // server will flip on the next read because expires_at is now well
+  // in the past.
+  useEffect(() => {
+    if (!data?.ride) return;
+    if (data.ride.status !== "requested") return;
+    if (!data.ride.expiresAt) return;
+
+    const expiresMs = new Date(data.ride.expiresAt).getTime();
+    const now = Date.now();
+    const initialDelay = Math.max(0, expiresMs - now + 1500);
+
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    const initialTimer = setTimeout(() => {
+      void refresh();
+      // If the server didn't flip on the first call (clock skew, blip),
+      // keep nudging. The interval stops itself when the ride leaves
+      // the 'requested' state via the cleanup below or via the next
+      // useEffect run when `data.ride.status` changes.
+      pollTimer = setInterval(() => {
+        void refresh();
+      }, 3000);
+    }, initialDelay);
+
+    return () => {
+      clearTimeout(initialTimer);
+      if (pollTimer) clearInterval(pollTimer);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.ride?.id, data?.ride?.status, data?.ride?.expiresAt]);
 
   const handleCancel = async () => {
     if (!data?.ride) return;
@@ -530,6 +571,32 @@ export default function RiderLiveTripPage() {
             vehicleYear={driver.vehicleYear}
             vehicleColor={driver.vehicleColor}
           />
+          {/* Chat with driver — opens the in-app chat sheet. The
+             phone icon inside the sheet is a `tel:` link, not an
+             in-app call. */}
+          <button
+            type="button"
+            onClick={() => setChatOpen(true)}
+            className="mt-3 flex w-full items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3 text-left transition-all hover:border-rajlo-red hover:bg-primary-soft/40"
+          >
+            <span className="flex items-center gap-3">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-rajlo-red text-white">
+                <span aria-hidden className="text-lg leading-none">💬</span>
+              </span>
+              <span>
+                <span className="block text-sm font-extrabold tracking-tight">
+                  Message {driver.name.split(" ")[0]}
+                </span>
+                <span className="block text-[11px] text-muted">
+                  Photos · voice notes · tap-to-call. Private to this trip.
+                </span>
+              </span>
+            </span>
+            <Icon
+              name="chevron-right"
+              className="h-4 w-4 shrink-0 text-muted"
+            />
+          </button>
         </FadeUp>
       )}
 
@@ -644,6 +711,28 @@ export default function RiderLiveTripPage() {
               : null
           }
           onClose={() => setSafetyOpen(false)}
+        />
+      )}
+
+      {driver && (
+        <ChatSheet
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          rideId={ride.id}
+          myRole="rider"
+          peerName={driver.name}
+          peerAvatarUrl={driver.avatarUrl}
+          peerPhone={driver.phone}
+          // Chat composer + read access only while ride is in flight.
+          // After completed/cancelled, RLS already shuts off the
+          // server side; we mirror the rule client-side so the UI is
+          // explicit about why messages stop coming through.
+          rideActive={
+            ride.status === "accepted" ||
+            ride.status === "arrived" ||
+            ride.status === "in_progress" ||
+            ride.status === "requested"
+          }
         />
       )}
     </div>
@@ -876,7 +965,7 @@ function NoDriverFoundView({
       <FadeUp>
         <div className="text-center">
           <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-rajlo-red text-white shadow-2xl shadow-rajlo-red/40">
-            <Icon name="alert-triangle" className="h-10 w-10" />
+            <span aria-hidden className="text-4xl leading-none">😢</span>
           </div>
           <p className="mt-6 font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
             No driver found

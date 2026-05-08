@@ -54,7 +54,14 @@ export default function DriverHomePage() {
   const [complianceSummary, setComplianceSummary] = React.useState(
     () => buildMockCompliancePayload("DRV-1031").summary,
   );
-  const [online, setOnline] = React.useState(true);
+  // Online/offline status is persisted in `drivers.is_online`. We
+  // start `null` on mount and resolve to true/false from the API so
+  // the toggle reflects the driver's last intent, not whatever the
+  // last reload happened to default to. Until the resolve completes,
+  // the toggle is disabled (visually grey) so the driver doesn't
+  // accidentally tap and overwrite their persisted state.
+  const [online, setOnlineState] = React.useState<boolean | null>(null);
+  const [onlineSyncing, setOnlineSyncing] = React.useState(false);
   const [inboxRides, setInboxRides] = React.useState<InboxEntry[]>([]);
   const [acceptError, setAcceptError] = React.useState<string | null>(null);
   const [accepting, setAccepting] = React.useState<string | null>(null);
@@ -83,6 +90,54 @@ export default function DriverHomePage() {
       mounted = false;
     };
   }, []);
+
+  // Hydrate the persisted online flag on mount. After this resolves,
+  // the toggle reflects the driver's last intent — so refreshing the
+  // page or returning later doesn't silently flip them back online
+  // (or offline) against their will.
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/driver/online");
+        if (!res.ok) return;
+        const json = (await res.json()) as { online: boolean };
+        if (!cancelled) setOnlineState(json.online);
+      } catch {
+        /* fall back: stay null → toggle stays disabled */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Persist toggle flips to the API. Optimistic update with rollback
+  // on error so the UI stays snappy but doesn't lie when the network
+  // is broken. Disables itself while a previous PATCH is still in
+  // flight to avoid racing flips.
+  const setOnline = React.useCallback(
+    async (next: boolean) => {
+      if (online === next || onlineSyncing) return;
+      const prev = online;
+      setOnlineState(next);
+      setOnlineSyncing(true);
+      try {
+        const res = await fetch("/api/driver/online", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ online: next }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      } catch {
+        // Roll back to whatever the previous server-confirmed value was.
+        setOnlineState(prev);
+      } finally {
+        setOnlineSyncing(false);
+      }
+    },
+    [online, onlineSyncing],
+  );
 
   // On mount and on every Realtime ride change, check if the driver
   // already has a trip in flight. If yes, surface the banner instead of
@@ -134,7 +189,7 @@ export default function DriverHomePage() {
   // double-broadcast.
   const { error: fleetError } = useFleetBroadcaster(
     driverUserId,
-    online && !hasActiveTrip,
+    online === true && !hasActiveTrip,
   );
 
   React.useEffect(() => {
@@ -324,21 +379,28 @@ export default function DriverHomePage() {
                 Driver dashboard
               </p>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-                {online ? "You're online & ready." : "You're offline."}
+                {online === null
+                  ? "Checking your status…"
+                  : online
+                    ? "You're online & ready."
+                    : "You're offline."}
               </h1>
               <p className="mt-1 text-sm text-white/70 md:text-base">
-                {online
-                  ? "Incoming ride requests will appear below."
-                  : "Toggle online to start receiving requests."}
+                {online === null
+                  ? "We're loading your last saved status."
+                  : online
+                    ? "Incoming ride requests will appear below."
+                    : "Toggle online to start receiving requests."}
               </p>
             </div>
 
             <button
               type="button"
-              onClick={() => setOnline((o) => !o)}
-              aria-pressed={online}
+              onClick={() => online !== null && setOnline(!online)}
+              disabled={online === null || onlineSyncing}
+              aria-pressed={online === true}
               aria-label={online ? "Go offline" : "Go online"}
-              className={`relative inline-flex h-11 w-20 items-center rounded-full transition-colors ${
+              className={`relative inline-flex h-11 w-20 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
                 online ? "bg-emerald-500" : "bg-white/15"
               }`}
             >
@@ -347,10 +409,14 @@ export default function DriverHomePage() {
                   online ? "translate-x-10" : "translate-x-1"
                 }`}
               >
-                <Icon
-                  name={online ? "check-circle" : "x"}
-                  className={`h-4 w-4 ${online ? "text-emerald-600" : "text-muted"}`}
-                />
+                {onlineSyncing ? (
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-rajlo-red border-t-transparent" />
+                ) : (
+                  <Icon
+                    name={online ? "check-circle" : "x"}
+                    className={`h-4 w-4 ${online ? "text-emerald-600" : "text-muted"}`}
+                  />
+                )}
               </span>
             </button>
           </div>

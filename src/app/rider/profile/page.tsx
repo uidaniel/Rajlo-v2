@@ -136,8 +136,8 @@ export default function RiderProfilePage() {
   if (error && !email) {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft text-rajlo-red">
-          <Icon name="alert-triangle" className="h-6 w-6" />
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft">
+          <span aria-hidden className="text-3xl leading-none">😢</span>
         </span>
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
           Profile unavailable
@@ -193,7 +193,7 @@ export default function RiderProfilePage() {
       {/* Photo */}
       <FadeUp delay={0.05}>
         <Section title="Profile picture" icon="user">
-          <div className="flex items-center gap-5">
+          <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
             <AvatarUploader
               currentUrl={avatarUrl}
               fallbackInitials={initials}

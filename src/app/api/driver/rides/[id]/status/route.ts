@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import { sendTripCompletedEmail } from "@/lib/email-templates";
+import { notifyRider } from "@/lib/notify";
 
 /**
  * POST /api/driver/rides/[id]/status
@@ -163,6 +165,96 @@ export async function POST(
         .update({ status: "completed" })
         .eq("id", target.carpool_group_id);
     }
+
+    // Best-effort receipt email per affected rider. We pull each
+    // ride's full record + driver name so the receipt has every detail.
+    void (async () => {
+      try {
+        const ids = updated.map((u) => u.id);
+        const [{ data: rideRows }, { data: driverFull }] = await Promise.all([
+          supabase
+            .from("rides")
+            .select(
+              "id, rider_id, pickup_name, dropoff_name, estimated_distance_km, started_at, completed_at, final_fare_jmd",
+            )
+            .in("id", ids),
+          supabase
+            .from("drivers")
+            .select("first_name, last_name")
+            .eq("id", driver.id)
+            .maybeSingle(),
+        ]);
+        if (!rideRows) return;
+
+        const driverName =
+          [driverFull?.first_name, driverFull?.last_name]
+            .filter(Boolean)
+            .join(" ") || "Your driver";
+
+        const riderIds = Array.from(new Set(rideRows.map((r) => r.rider_id)));
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", riderIds);
+        const profileMap = new Map(profiles?.map((p) => [p.id, p]) ?? []);
+        const userLookups = await Promise.all(
+          riderIds.map((id) =>
+            supabase.auth.admin.getUserById(id).then((r) => ({
+              id,
+              email: r.data.user?.email ?? null,
+            })),
+          ),
+        );
+        const emailMap = new Map(userLookups.map((u) => [u.id, u.email]));
+
+        await Promise.all(
+          rideRows.flatMap((row) => {
+            const email = emailMap.get(row.rider_id);
+            const durationMinutes =
+              row.started_at && row.completed_at
+                ? Math.max(
+                    1,
+                    Math.round(
+                      (new Date(row.completed_at).getTime() -
+                        new Date(row.started_at).getTime()) /
+                        60_000,
+                    ),
+                  )
+                : null;
+            const fare = `JMD ${Math.round(row.final_fare_jmd ?? 0).toLocaleString("en-JM")}`;
+            const tasks: Array<Promise<unknown>> = [
+              notifyRider(supabase, {
+                riderId: row.rider_id,
+                kind: "trip",
+                title: "Trip complete · rate your driver",
+                body: `${row.dropoff_name} · ${fare}. Tap to rate ${driverName.split(" ")[0]}.`,
+                href: `/rider/rate?id=${row.id}`,
+                cta: "Rate this trip",
+                pushTag: `ride-${row.id}-status`,
+              }),
+            ];
+            if (email) {
+              tasks.push(
+                sendTripCompletedEmail(email, {
+                  riderFirstName: profileMap.get(row.rider_id)?.full_name ?? null,
+                  rideId: row.id,
+                  pickup: row.pickup_name,
+                  dropoff: row.dropoff_name,
+                  fareJMD: row.final_fare_jmd,
+                  distanceKm: row.estimated_distance_km,
+                  durationMinutes,
+                  driverName,
+                  completedAt: row.completed_at,
+                }).catch(() => null),
+              );
+            }
+            return tasks;
+          }),
+        );
+      } catch {
+        /* best-effort */
+      }
+    })();
   }
 
   // One audit row per ride affected — the per-ride event log stays a
@@ -180,6 +272,44 @@ export async function POST(
       },
     })),
   );
+
+  // In-app inbox + push for arrival / start. Trip completion has its
+  // own bespoke push below alongside the receipt email.
+  if (action === "arrived" || action === "start") {
+    void (async () => {
+      try {
+        const ids = updated.map((u) => u.id);
+        const { data: rideRows } = await supabase
+          .from("rides")
+          .select("id, rider_id, dropoff_name")
+          .in("id", ids);
+        if (!rideRows) return;
+        await Promise.all(
+          rideRows.map((row) =>
+            notifyRider(supabase, {
+              riderId: row.rider_id,
+              kind: "trip",
+              title:
+                action === "arrived"
+                  ? "Your driver is here!"
+                  : "Trip started",
+              body:
+                action === "arrived"
+                  ? "Confirm the plate before you step in. Let's go!"
+                  : `On the way to ${row.dropoff_name}.`,
+              href: `/rider/live-trip?id=${row.id}`,
+              cta:
+                action === "arrived" ? "Open live trip" : "Track on map",
+              pushTag: `ride-${row.id}-status`,
+              pushRenotify: action === "arrived",
+            }),
+          ),
+        );
+      } catch {
+        /* best-effort */
+      }
+    })();
+  }
 
   return NextResponse.json({
     ok: true,

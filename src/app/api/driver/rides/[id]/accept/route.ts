@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import { sendDriverMatchedEmail } from "@/lib/email-templates";
+import { notifyRider } from "@/lib/notify";
 
 /**
  * POST /api/driver/rides/[id]/accept
@@ -180,6 +182,98 @@ export async function POST(
       },
     })),
   );
+
+  // 5. Best-effort "driver matched" email to each affected rider. We
+  // pull the full ride record + driver profile so we can include
+  // pickup/dropoff names, plate, vehicle, and ETA in the email.
+  void (async () => {
+    try {
+      const [{ data: rideRows }, { data: driverFull }] = await Promise.all([
+        supabase
+          .from("rides")
+          .select(
+            "id, rider_id, pickup_name, dropoff_name, estimated_eta_minutes",
+          )
+          .in("id", claimedIds),
+        supabase
+          .from("drivers")
+          .select(
+            "first_name, last_name, plate_number, vehicle_make, vehicle_model, vehicle_year, vehicle_color",
+          )
+          .eq("id", driver.id)
+          .maybeSingle(),
+      ]);
+
+      if (!rideRows || !driverFull) return;
+
+      const driverName =
+        [driverFull.first_name, driverFull.last_name].filter(Boolean).join(" ") ||
+        "Your driver";
+      const vehicle = [
+        driverFull.vehicle_year ? String(driverFull.vehicle_year) : null,
+        driverFull.vehicle_color,
+        driverFull.vehicle_make,
+        driverFull.vehicle_model,
+      ]
+        .filter(Boolean)
+        .join(" ") || null;
+
+      // Rider emails live in auth.users — pull via admin API. Names
+      // live in public.profiles.full_name.
+      const riderIds = Array.from(new Set(rideRows.map((r) => r.rider_id)));
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", riderIds);
+      const profileMap = new Map(profiles?.map((p) => [p.id, p]) ?? []);
+
+      const userLookups = await Promise.all(
+        riderIds.map((id) =>
+          supabase.auth.admin.getUserById(id).then((r) => ({
+            id,
+            email: r.data.user?.email ?? null,
+          })),
+        ),
+      );
+      const emailMap = new Map(userLookups.map((u) => [u.id, u.email]));
+
+      await Promise.all(
+        rideRows.flatMap((row) => {
+          const email = emailMap.get(row.rider_id);
+          const fullName = profileMap.get(row.rider_id)?.full_name ?? null;
+          const tasks: Array<Promise<unknown>> = [
+            // In-app inbox + web push to the rider's devices.
+            notifyRider(supabase, {
+              riderId: row.rider_id,
+              kind: "trip",
+              title: `${driverName.split(" ")[0]} is on the way`,
+              body: `${driverName}${driverFull.plate_number ? ` · plate ${driverFull.plate_number}` : ""}${row.estimated_eta_minutes != null ? ` · ETA ~${row.estimated_eta_minutes} min` : ""}`,
+              href: `/rider/live-trip?id=${row.id}`,
+              cta: "Track on map",
+              pushTag: `ride-${row.id}-status`,
+            }),
+          ];
+          if (email) {
+            tasks.push(
+              sendDriverMatchedEmail(email, {
+                riderFirstName: fullName,
+                rideId: row.id,
+                driverName,
+                vehicle,
+                plate: driverFull.plate_number,
+                etaMinutes: row.estimated_eta_minutes,
+                pickup: row.pickup_name,
+                dropoff: row.dropoff_name,
+              }).catch(() => null),
+            );
+          }
+          return tasks;
+        }),
+      );
+    } catch {
+      /* email is best-effort */
+    }
+  })();
 
   return NextResponse.json({
     ok: true,

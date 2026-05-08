@@ -1199,7 +1199,7 @@ function FilePreviewModal({
           {error ? (
             <div className="grid h-full place-items-center p-8 text-center">
               <div>
-                <Icon name="alert-triangle" className="mx-auto h-8 w-8 text-rajlo-red" />
+                <span aria-hidden className="block text-4xl leading-none">😢</span>
                 <p className="mt-3 text-sm font-semibold">{error}</p>
                 <p className="mt-1 text-xs text-muted">The file may have been deleted or moved.</p>
               </div>

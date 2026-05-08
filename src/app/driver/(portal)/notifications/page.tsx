@@ -1,8 +1,90 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { Icon, type IconName } from "@/components/icons";
+import { ArcWatermark } from "@/components/arc-pattern";
+import { FadeUp } from "@/components/anim";
+import { NotificationSkeleton, Skeleton } from "@/components/skeleton";
+import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { complianceThresholds, type TADocument } from "@/lib/mock-data";
 import { buildMockCompliancePayload } from "@/lib/compliance-utils";
+
+/**
+ * Driver notifications inbox. Two sections:
+ *
+ *   1. Activity feed — backed by `driver_notifications` (live via
+ *      Supabase Realtime). Verification decisions, vehicle-change
+ *      decisions, trip updates, system messages.
+ *
+ *   2. Renewal reminders — TA document countdown surfaced from
+ *      /api/driver/compliance. These are computed from expiry dates,
+ *      not stored notifications, so they sit alongside the feed
+ *      rather than mixing into it.
+ *
+ * Mirrors the rider inbox (/rider/notifications) for the activity
+ * feed half, but keeps the driver-specific compliance card.
+ */
+
+type NotificationKind =
+  | "ride_available"
+  | "trip_update"
+  | "verification"
+  | "vehicle_change"
+  | "system";
+
+type DriverNotification = {
+  id: string;
+  kind: NotificationKind;
+  title: string;
+  body: string;
+  href: string | null;
+  cta: string | null;
+  read: boolean;
+  at: string;
+};
+
+const NOTIFICATION_TYPE: Record<
+  NotificationKind,
+  { label: string; icon: IconName; iconBg: string }
+> = {
+  ride_available: {
+    label: "Ride",
+    icon: "navigation",
+    iconBg: "bg-rajlo-red text-white",
+  },
+  trip_update: {
+    label: "Trip",
+    icon: "navigation",
+    iconBg: "bg-rajlo-black text-white",
+  },
+  verification: {
+    label: "Verification",
+    icon: "shield-check",
+    iconBg: "bg-emerald-600 text-white",
+  },
+  vehicle_change: {
+    label: "Vehicle",
+    icon: "car",
+    iconBg: "bg-amber-500 text-white",
+  },
+  system: {
+    label: "System",
+    icon: "bell",
+    iconBg: "bg-rajlo-black text-white",
+  },
+};
+
+type Tab = "all" | "verification" | "vehicle_change" | "trip_update" | "system";
+const TABS: { key: Tab; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "verification", label: "Verification" },
+  { key: "vehicle_change", label: "Vehicle" },
+  { key: "trip_update", label: "Trips" },
+  { key: "system", label: "System" },
+];
+
+/* ─────────── Compliance reminder types ─────────── */
 
 type ReminderLevel = "info" | "warning" | "urgent" | "expired";
 
@@ -23,175 +105,573 @@ function getLevel(days: number | null): ReminderLevel | null {
 
 function levelStyle(level: ReminderLevel) {
   if (level === "expired") {
-    return { bg: "#fdecea", border: "#c0392b", text: "#c0392b", label: "Expired" };
+    return {
+      bg: "bg-red-50",
+      border: "border-red-300",
+      text: "text-red-700",
+      label: "Expired",
+    };
   }
   if (level === "urgent") {
-    return { bg: "#fff1ec", border: "#d9480f", text: "#d9480f", label: "Urgent (<= 7 days)" };
+    return {
+      bg: "bg-orange-50",
+      border: "border-orange-300",
+      text: "text-orange-700",
+      label: "Urgent · ≤7 days",
+    };
   }
   if (level === "warning") {
-    return { bg: "#fef7e0", border: "#b45309", text: "#b45309", label: "Warning (<= 30 days)" };
+    return {
+      bg: "bg-amber-50",
+      border: "border-amber-300",
+      text: "text-amber-700",
+      label: "Warning · ≤30 days",
+    };
   }
-  return { bg: "#e9f5f1", border: "#1e6f5c", text: "#1e6f5c", label: "Upcoming (<= 60 days)" };
+  return {
+    bg: "bg-emerald-50",
+    border: "border-emerald-300",
+    text: "text-emerald-700",
+    label: "Upcoming · ≤60 days",
+  };
 }
 
+/* ─────────── Page ─────────── */
+
 export default function DriverNotificationsPage() {
-  const [docs, setDocs] = useState<TADocument[]>([]);
+  const [items, setItems] = useState<DriverNotification[]>([]);
+  const [unreadFromServer, setUnreadFromServer] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("all");
 
+  // Compliance reminders (separate fetch — not stored in
+  // driver_notifications because they're computed from expiry dates).
+  const [docs, setDocs] = useState<TADocument[]>([]);
+  const [reminderError, setReminderError] = useState<string | null>(null);
+
+  // Initial fetch + Realtime subscription on driver_notifications.
   useEffect(() => {
-    let mounted = true;
+    let cancelled = false;
 
-    async function loadCompliance() {
-      setLoading(true);
-      setLoadError(null);
+    const refresh = async () => {
       try {
-        const response = await fetch("/api/driver/compliance?driverId=DRV-1031");
-        if (!response.ok) {
-          throw new Error("Failed to load compliance data");
-        }
-        const payload = (await response.json()) as { docs: TADocument[] };
-        if (mounted) setDocs(payload.docs ?? buildMockCompliancePayload("DRV-1031").docs);
-      } catch {
-        if (mounted) {
-          setDocs(buildMockCompliancePayload("DRV-1031").docs);
-          setLoadError("Showing fallback reminder data. Connect Supabase for live renewals.");
-        }
+        const res = await fetch("/api/driver/notifications");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as {
+          notifications: DriverNotification[];
+          unreadCount: number;
+        };
+        if (cancelled) return;
+        setItems(json.notifications);
+        setUnreadFromServer(json.unreadCount);
+        setError(null);
+      } catch (e) {
+        if (!cancelled)
+          setError(
+            e instanceof Error ? e.message : "Couldn't load notifications.",
+          );
       } finally {
-        if (mounted) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    }
+    };
+    refresh();
 
-    loadCompliance();
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel("driver-notifications")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "driver_notifications" },
+        () => {
+          if (!cancelled) refresh();
+        },
+      )
+      .subscribe();
 
     return () => {
-      mounted = false;
+      cancelled = true;
+      supabase.removeChannel(channel);
     };
   }, []);
 
-  const reminders = docs
-    .map((doc) => {
-      const days = daysUntil(doc.expiryDate);
-      const level = getLevel(days);
-      return { doc, days, level };
-    })
-    .filter((entry) => entry.level !== null)
-    .sort((a, b) => {
-      const ad = a.days ?? 99999;
-      const bd = b.days ?? 99999;
-      return ad - bd;
-    });
+  // Compliance reminders (fire-and-forget — non-blocking on the page).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/driver/compliance?driverId=DRV-1031");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as { docs: TADocument[] };
+        if (cancelled) return;
+        setDocs(json.docs ?? []);
+      } catch {
+        if (!cancelled) {
+          // Fall back to mock so the section still has something to
+          // render in dev — same pattern the old page used.
+          setDocs(buildMockCompliancePayload("DRV-1031").docs);
+          setReminderError(
+            "Showing fallback compliance reminders. Live data needs Supabase + an active driver record.",
+          );
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const unread = useMemo(
+    () =>
+      items.length > 0 ? items.filter((n) => !n.read).length : unreadFromServer,
+    [items, unreadFromServer],
+  );
+
+  const filtered = useMemo(
+    () => (tab === "all" ? items : items.filter((n) => n.kind === tab)),
+    [items, tab],
+  );
+
+  const grouped = useMemo(() => groupByDay(filtered), [filtered]);
+
+  const reminders = useMemo(
+    () =>
+      docs
+        .map((doc) => {
+          const days = daysUntil(doc.expiryDate);
+          const level = getLevel(days);
+          return { doc, days, level };
+        })
+        .filter((entry) => entry.level !== null)
+        .sort((a, b) => (a.days ?? 99999) - (b.days ?? 99999)),
+    [docs],
+  );
 
   const expiredCount = reminders.filter((r) => r.level === "expired").length;
   const urgentCount = reminders.filter((r) => r.level === "urgent").length;
 
+  const markAllRead = async () => {
+    setItems((prev) => prev.map((n) => ({ ...n, read: true })));
+    try {
+      await fetch("/api/driver/notifications", { method: "POST" });
+    } catch {
+      /* re-fetch will reconcile */
+    }
+  };
+
+  const markRead = async (id: string) => {
+    setItems((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, read: true } : n)),
+    );
+    try {
+      await fetch(`/api/driver/notifications/${id}`, { method: "PATCH" });
+    } catch {
+      /* re-fetch will reconcile */
+    }
+  };
+
   return (
-    <div className="min-h-screen pb-12" style={{ background: "var(--background)" }}>
-      <div
-        className="sticky top-0 z-10 px-4 py-4 border-b"
-        style={{ background: "var(--surface)", borderColor: "var(--line)" }}
-      >
-        <div className="max-w-2xl mx-auto">
-          <h1 className="text-lg font-bold" style={{ color: "var(--foreground)" }}>Renewal Reminders</h1>
-          <p className="text-sm" style={{ color: "var(--muted)" }}>
-            TA document countdown alerts: {complianceThresholds.warningDays}/{complianceThresholds.urgentDays}/{complianceThresholds.criticalDays}/expired
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
+      {/* Hero */}
+      <FadeUp>
+        <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">
+          <ArcWatermark
+            size={360}
+            variant="red"
+            className="absolute -right-20 -bottom-24 opacity-[0.18]"
+          />
+          <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                Inbox
+              </p>
+              <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
+                Notifications
+              </h1>
+              <p className="mt-1 text-sm text-white/75">
+                Verification updates, vehicle changes, trip events, and
+                document renewal reminders.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-white/10 px-4 py-2 text-center backdrop-blur">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">
+                  Unread
+                </p>
+                <p className="mt-0.5 text-2xl font-extrabold tracking-tight">
+                  {unread}
+                </p>
+              </div>
+              {unread > 0 && (
+                <button
+                  type="button"
+                  onClick={markAllRead}
+                  className="rounded-full bg-white px-4 py-2 text-xs font-bold text-rajlo-black transition-all hover:-translate-y-0.5"
+                >
+                  Mark all read
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </FadeUp>
+
+      {/* Renewal reminders — pinned above the activity feed because
+          a driver with an expired doc auto-suspends, so it's the most
+          time-sensitive thing on the page. */}
+      {(expiredCount > 0 || urgentCount > 0 || reminders.length > 0) && (
+        <FadeUp delay={0.04}>
+          <section className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-soft text-rajlo-red">
+                  <Icon name="shield-check" className="h-3.5 w-3.5" />
+                </span>
+                <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                  Renewal reminders
+                </p>
+              </div>
+              <Link
+                href="/driver/verification"
+                className="text-[11px] font-bold text-muted hover:text-rajlo-red"
+              >
+                Open compliance →
+              </Link>
+            </div>
+
+            {reminderError && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                {reminderError}
+              </div>
+            )}
+
+            {(expiredCount > 0 || urgentCount > 0) && (
+              <div
+                className={`rounded-2xl border px-4 py-3 ${
+                  expiredCount > 0
+                    ? "border-red-300 bg-red-50"
+                    : "border-orange-300 bg-orange-50"
+                }`}
+              >
+                <p
+                  className={`text-sm font-bold ${
+                    expiredCount > 0 ? "text-red-700" : "text-orange-700"
+                  }`}
+                >
+                  {expiredCount > 0
+                    ? `${expiredCount} document${expiredCount === 1 ? "" : "s"} expired — your account may auto-suspend until updated.`
+                    : `${urgentCount} document${urgentCount === 1 ? "" : "s"} expiring within 7 days.`}
+                </p>
+              </div>
+            )}
+
+            <div className="space-y-2">
+              {reminders.map(({ doc, days, level }) => {
+                const style = levelStyle(level as ReminderLevel);
+                return (
+                  <div
+                    key={doc.id}
+                    className={`rounded-2xl border p-4 ${style.bg} ${style.border}`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-extrabold tracking-tight">
+                          {doc.label}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted">
+                          {doc.description}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full bg-white px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider ${style.text} border ${style.border}`}
+                      >
+                        {style.label}
+                      </span>
+                    </div>
+                    <div
+                      className={`mt-3 flex items-center justify-between text-xs ${style.text}`}
+                    >
+                      <span className="font-semibold">
+                        {days !== null && days >= 0
+                          ? `${days} day${days === 1 ? "" : "s"} remaining`
+                          : "Already expired"}
+                      </span>
+                      <span>
+                        {doc.expiryDate ? `Expires ${doc.expiryDate}` : "No expiry"}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <Link
+                        href="/driver/verification"
+                        className="rounded-full bg-rajlo-red px-3 py-1.5 text-xs font-bold text-white"
+                      >
+                        Upload renewal
+                      </Link>
+                      <Link
+                        href="/driver/verification"
+                        className="rounded-full border border-line bg-white px-3 py-1.5 text-xs font-bold"
+                      >
+                        Open compliance
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </FadeUp>
+      )}
+
+      {/* Activity feed header + tabs */}
+      <FadeUp delay={0.06}>
+        <div className="flex items-center gap-2">
+          <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-soft text-rajlo-red">
+            <Icon name="bell" className="h-3.5 w-3.5" />
+          </span>
+          <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+            Activity
           </p>
         </div>
-      </div>
+      </FadeUp>
 
-      <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
-        {loadError && (
-          <div className="rounded-xl border px-4 py-2 text-xs" style={{ borderColor: "#b45309", color: "#92660c", background: "#fef7e0" }}>
-            {loadError}
-          </div>
-        )}
-
-        {loading && (
-          <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--line)", background: "var(--surface)", color: "var(--muted)" }}>
-            Loading renewal reminders...
-          </div>
-        )}
-
-        {(expiredCount > 0 || urgentCount > 0) && (
-          <div
-            className="rounded-2xl border px-4 py-3"
-            style={{
-              background: expiredCount > 0 ? "#fdecea" : "#fff1ec",
-              borderColor: expiredCount > 0 ? "#c0392b" : "#d9480f",
-            }}
-          >
-            <p
-              className="text-sm font-semibold"
-              style={{ color: expiredCount > 0 ? "#c0392b" : "#d9480f" }}
-            >
-              {expiredCount > 0
-                ? `${expiredCount} document(s) expired. Driver account may be suspended until updated.`
-                : `${urgentCount} document(s) expiring within 7 days.`}
-            </p>
-          </div>
-        )}
-
-        {reminders.length === 0 && (
-          <div
-            className="rounded-2xl border px-4 py-3"
-            style={{ background: "var(--primary-soft)", borderColor: "var(--primary)" }}
-          >
-            <p className="text-sm font-semibold" style={{ color: "var(--primary)" }}>
-              No renewals due in the next {complianceThresholds.warningDays} days.
-            </p>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          {reminders.map(({ doc, days, level }) => {
-            const style = levelStyle(level as ReminderLevel);
-            return (
-              <div
-                key={doc.id}
-                className="rounded-2xl border p-4"
-                style={{ background: style.bg, borderColor: style.border }}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold" style={{ color: "var(--foreground)" }}>{doc.label}</p>
-                    <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>{doc.description}</p>
-                  </div>
+      <FadeUp delay={0.08}>
+        <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="inline-flex gap-1 rounded-full border border-line bg-surface-soft p-1">
+            {TABS.map((t) => {
+              const active = tab === t.key;
+              const count =
+                t.key === "all"
+                  ? items.length
+                  : items.filter((n) => n.kind === t.key).length;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className={`relative rounded-full px-4 py-2 text-xs font-bold transition-all md:text-sm md:px-5 ${
+                    active
+                      ? "bg-rajlo-red text-white shadow-md shadow-rajlo-red/30"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  {t.label}
                   <span
-                    className="rounded-full px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap"
-                    style={{ color: style.text, border: `1px solid ${style.border}` }}
+                    className={`ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-extrabold ${
+                      active
+                        ? "bg-white/20 text-white"
+                        : "bg-rajlo-red/10 text-rajlo-red"
+                    }`}
                   >
-                    {style.label}
+                    {count}
                   </span>
-                </div>
-                <div className="mt-3 flex items-center justify-between text-xs" style={{ color: style.text }}>
-                  <span>
-                    {days !== null && days >= 0
-                      ? `${days} day(s) remaining`
-                      : "Already expired"}
-                  </span>
-                  <span>{doc.expiryDate ? `Expiry: ${doc.expiryDate}` : "No expiry"}</span>
-                </div>
-                <div className="mt-3 flex gap-2">
-                  <a
-                    href="/driver/documents"
-                    className="rounded-full px-3 py-1.5 text-xs font-semibold text-white"
-                    style={{ background: "var(--primary)" }}
-                  >
-                    Upload Renewal
-                  </a>
-                  <a
-                    href="/driver/verification"
-                    className="rounded-full px-3 py-1.5 text-xs font-semibold"
-                    style={{ background: "var(--surface)", border: "1px solid var(--line)", color: "var(--foreground)" }}
-                  >
-                    Open Compliance
-                  </a>
-                </div>
-              </div>
-            );
-          })}
+                </button>
+              );
+            })}
+          </div>
         </div>
+      </FadeUp>
+
+      {loading && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <Skeleton className="h-2.5 w-12" rounded="md" />
+            <span className="h-px flex-1 bg-line" />
+            <Skeleton className="h-2.5 w-12" rounded="md" />
+          </div>
+          {[0, 1, 2, 3].map((i) => (
+            <NotificationSkeleton key={i} />
+          ))}
+        </div>
+      )}
+
+      {error && !loading && (
+        <div className="rounded-xl border border-rajlo-red/30 bg-primary-soft px-4 py-3 text-sm font-semibold text-rajlo-red">
+          {error}
+        </div>
+      )}
+
+      {!loading && filtered.length === 0 && (
+        <FadeUp delay={0.1}>
+          <div className="rounded-3xl border border-line bg-surface p-10 text-center">
+            <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-surface-soft text-muted">
+              <Icon name="bell" className="h-6 w-6" />
+            </span>
+            <h2 className="mt-5 text-xl font-extrabold tracking-tight">
+              {items.length === 0 ? "No activity yet" : "You're all caught up"}
+            </h2>
+            <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
+              {items.length === 0
+                ? "Verification updates, vehicle decisions, and trip events land here."
+                : "No notifications in this filter. Switch tabs above."}
+            </p>
+          </div>
+        </FadeUp>
+      )}
+
+      {grouped.map((group, groupIndex) => (
+        <FadeUp key={group.label} delay={0.1 + groupIndex * 0.04}>
+          <section>
+            <div className="mb-3 flex items-center gap-3">
+              <p className="text-xs font-extrabold uppercase tracking-wider text-muted">
+                {group.label}
+              </p>
+              <span className="h-px flex-1 bg-line" />
+              <span className="text-[11px] font-semibold text-muted">
+                {group.items.length} item{group.items.length === 1 ? "" : "s"}
+              </span>
+            </div>
+            <div className="space-y-2">
+              {group.items.map((n) => (
+                <NotificationCard
+                  key={n.id}
+                  n={n}
+                  onMarkRead={() => markRead(n.id)}
+                />
+              ))}
+            </div>
+          </section>
+        </FadeUp>
+      ))}
+
+      {/* Settings hint — drives drivers to the profile page where the
+          push toggle lives. */}
+      <FadeUp delay={0.22}>
+        <Link
+          href="/driver/profile"
+          className="group flex items-center justify-between rounded-2xl border border-dashed border-line bg-surface-soft px-5 py-4 transition-colors hover:border-rajlo-red hover:bg-primary-soft/40"
+        >
+          <div className="flex items-center gap-3">
+            <span className="grid h-9 w-9 place-items-center rounded-xl bg-white text-rajlo-red shadow-sm">
+              <Icon name="bell" className="h-4 w-4" />
+            </span>
+            <div>
+              <p className="text-sm font-bold">Push notification settings</p>
+              <p className="mt-0.5 text-xs text-muted">
+                Get a buzz the second a new ride request comes in.
+              </p>
+            </div>
+          </div>
+          <Icon
+            name="chevron-right"
+            className="h-5 w-5 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-rajlo-red"
+          />
+        </Link>
+      </FadeUp>
+    </div>
+  );
+}
+
+/* ─────────── Notification card ─────────── */
+
+function NotificationCard({
+  n,
+  onMarkRead,
+}: {
+  n: DriverNotification;
+  onMarkRead: () => void;
+}) {
+  const type = NOTIFICATION_TYPE[n.kind];
+
+  const body = (
+    <div
+      className={`group relative flex items-start gap-3 rounded-2xl border p-4 transition-all hover:-translate-y-0.5 hover:shadow-md ${
+        n.read
+          ? "border-line bg-surface"
+          : "border-rajlo-red/30 bg-primary-soft/40 shadow-sm"
+      }`}
+    >
+      {!n.read && (
+        <span className="absolute left-0 top-1/2 -ml-1 h-3 w-3 -translate-y-1/2 rounded-full border-2 border-surface bg-rajlo-red" />
+      )}
+
+      <span
+        className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${type.iconBg}`}
+      >
+        <Icon name={type.icon} className="h-5 w-5" />
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p
+              className={`text-sm font-extrabold tracking-tight ${
+                n.read ? "text-foreground" : "text-rajlo-black"
+              }`}
+            >
+              {n.title}
+            </p>
+            <p className="mt-1 text-sm text-muted">{n.body}</p>
+          </div>
+          <span className="shrink-0 text-[11px] font-semibold text-muted">
+            {timeAgo(n.at)}
+          </span>
+        </div>
+        {n.cta && (
+          <p className="mt-2 inline-flex items-center gap-1 text-[11px] font-bold text-rajlo-red transition-transform group-hover:translate-x-0.5">
+            {n.cta}
+            <Icon name="arrow-right" className="h-3 w-3" />
+          </p>
+        )}
       </div>
     </div>
   );
+
+  return n.href ? (
+    <Link href={n.href} onClick={onMarkRead} className="block">
+      {body}
+    </Link>
+  ) : (
+    <button
+      type="button"
+      onClick={onMarkRead}
+      className="block w-full text-left"
+    >
+      {body}
+    </button>
+  );
+}
+
+/* ─────────── Helpers ─────────── */
+
+function groupByDay(
+  items: DriverNotification[],
+): { label: string; items: DriverNotification[] }[] {
+  const today: DriverNotification[] = [];
+  const yesterday: DriverNotification[] = [];
+  const earlier: DriverNotification[] = [];
+  const now = new Date();
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  ).getTime();
+  const startOfYesterday = startOfToday - 1000 * 60 * 60 * 24;
+
+  for (const n of items) {
+    const ts = new Date(n.at).getTime();
+    if (ts >= startOfToday) today.push(n);
+    else if (ts >= startOfYesterday) yesterday.push(n);
+    else earlier.push(n);
+  }
+
+  const groups: { label: string; items: DriverNotification[] }[] = [];
+  if (today.length) groups.push({ label: "Today", items: today });
+  if (yesterday.length) groups.push({ label: "Yesterday", items: yesterday });
+  if (earlier.length) groups.push({ label: "Earlier", items: earlier });
+  return groups;
+}
+
+function timeAgo(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.round(diffMs / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m`;
+  const hours = Math.round(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.round(hours / 24);
+  if (days < 7) return `${days}d`;
+  return new Date(iso).toLocaleDateString("en-JM", {
+    day: "numeric",
+    month: "short",
+  });
 }

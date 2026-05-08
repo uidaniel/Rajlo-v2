@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import { sendTripCancelledEmail } from "@/lib/email-templates";
+import { notifyDriver } from "@/lib/notify";
 
 /**
  * POST /api/rider/rides/[id]/cancel
@@ -50,7 +52,7 @@ export async function POST(
     .eq("id", id)
     .eq("rider_id", user.id)
     .in("status", CANCELLABLE_BY_RIDER)
-    .select("id")
+    .select("id, pickup_name, dropoff_name, driver_id")
     .maybeSingle();
 
   if (error) {
@@ -73,6 +75,51 @@ export async function POST(
     actor_id: user.id,
     metadata: reason ? { reason } : null,
   });
+
+  // Best-effort confirmation email — rider just cancelled their own
+  // ride, so we already have their auth user object in scope.
+  if (user.email) {
+    const { data: profile } = await auth
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .maybeSingle();
+    void sendTripCancelledEmail(user.email, {
+      riderFirstName: profile?.full_name ?? null,
+      rideId: cancelled.id,
+      pickup: cancelled.pickup_name,
+      dropoff: cancelled.dropoff_name,
+      cancelledBy: "rider",
+      reason,
+    }).catch(() => null);
+  }
+
+  // If the trip had been accepted, push the assigned driver so they
+  // know to free up and stop heading to the pickup.
+  if (cancelled.driver_id) {
+    void (async () => {
+      try {
+        const { data: d } = await supabase
+          .from("drivers")
+          .select("user_id")
+          .eq("id", cancelled.driver_id)
+          .maybeSingle();
+        if (!d?.user_id) return;
+        await notifyDriver(supabase, {
+          driverUserId: d.user_id,
+          kind: "trip_update",
+          title: "Rider cancelled the trip",
+          body: `${cancelled.pickup_name} → ${cancelled.dropoff_name}. You can stand down — request is closed.`,
+          href: "/driver",
+          cta: "Back to inbox",
+          pushTag: `ride-${cancelled.id}-status`,
+          pushRenotify: true,
+        });
+      } catch {
+        /* best-effort */
+      }
+    })();
+  }
 
   return NextResponse.json({ ok: true });
 }

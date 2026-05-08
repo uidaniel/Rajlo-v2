@@ -3,6 +3,7 @@ import { requiredTADocuments } from "@/lib/mock-data";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import type { OnboardingSubmitRequest } from "@/lib/api-types";
+import { sendDriverOnboardingSubmittedEmail } from "@/lib/email-templates";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as OnboardingSubmitRequest;
@@ -219,6 +220,16 @@ export async function POST(request: Request) {
       ? "Driver resubmitted documents after rejection"
       : "Onboarding submitted for TA verification",
   });
+
+  // Send a confirmation email so the driver knows the submission landed
+  // and roughly when to expect a decision. Best-effort — never fail the
+  // submission on email delivery.
+  if (body.form.email) {
+    void sendDriverOnboardingSubmittedEmail(body.form.email, {
+      driverName: `${body.form.firstName} ${body.form.lastName}`.trim(),
+      externalId,
+    }).catch(() => null);
+  }
 
   return NextResponse.json({ ok: true, source: "supabase", externalId });
 }

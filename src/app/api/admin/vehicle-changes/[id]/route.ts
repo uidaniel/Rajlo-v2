@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { validateVehicleSpec } from "@/lib/vehicle-catalog";
+import {
+  sendVehicleChangeApprovedEmail,
+  sendVehicleChangeRejectedEmail,
+} from "@/lib/email-templates";
+import { notifyDriver } from "@/lib/notify";
 
 /**
  * POST /api/admin/vehicle-changes/[id]
@@ -120,6 +125,36 @@ export async function POST(
       actor_id: user.id,
       event: `Vehicle change rejected: ${adminNote.slice(0, 200)}`,
     });
+
+    // Best-effort rejection email + push so the driver knows what to fix.
+    void (async () => {
+      const { data: d } = await supabase
+        .from("drivers")
+        .select("first_name, last_name, external_id, email, user_id")
+        .eq("id", req.driver_id)
+        .maybeSingle();
+      if (!d) return;
+      if (d.user_id) {
+        await notifyDriver(supabase, {
+          driverUserId: d.user_id,
+          kind: "vehicle_change",
+          title: "Vehicle change needs changes",
+          body: adminNote.slice(0, 140) || "Resubmit with the requested corrections.",
+          href: "/driver/vehicle-change",
+          cta: "Resubmit change",
+          pushTag: `driver-vehicle-change-${d.external_id}`,
+          pushRenotify: true,
+        });
+      }
+      if (!d.email) return;
+      await sendVehicleChangeRejectedEmail(d.email, {
+        driverName: [d.first_name, d.last_name].filter(Boolean).join(" ") || "Driver",
+        externalId: d.external_id,
+        newPlate: req.requested_plate ?? "(plate pending)",
+        adminNote,
+      }).catch(() => null);
+    })();
+
     return NextResponse.json({ ok: true, decision: "rejected" });
   }
 
@@ -228,6 +263,43 @@ export async function POST(
     actor_id: user.id,
     event: `Vehicle changed to ${req.requested_year} ${req.requested_brand} ${req.requested_model}`,
   });
+
+  // Best-effort approval email + push.
+  void (async () => {
+    const { data: d } = await supabase
+      .from("drivers")
+      .select("first_name, last_name, external_id, email, user_id")
+      .eq("id", req.driver_id)
+      .maybeSingle();
+    if (!d) return;
+    const newVehicle = [
+      req.requested_year,
+      req.requested_color,
+      req.requested_brand,
+      req.requested_model,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    if (d.user_id) {
+      await notifyDriver(supabase, {
+        driverUserId: d.user_id,
+        kind: "vehicle_change",
+        title: "Vehicle change approved",
+        body: `${newVehicle}${req.requested_plate ? ` · plate ${req.requested_plate}` : ""} is live.`,
+        href: "/driver",
+        cta: "Start accepting rides",
+        pushTag: `driver-vehicle-change-${d.external_id}`,
+        pushRenotify: true,
+      });
+    }
+    if (!d.email) return;
+    await sendVehicleChangeApprovedEmail(d.email, {
+      driverName: [d.first_name, d.last_name].filter(Boolean).join(" ") || "Driver",
+      externalId: d.external_id,
+      newVehicle,
+      newPlate: req.requested_plate ?? "(unchanged)",
+    }).catch(() => null);
+  })();
 
   return NextResponse.json({ ok: true, decision: "approved" });
 }

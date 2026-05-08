@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { sendDriverDeactivatedEmail } from "@/lib/driver-emails";
+import { notifyDriver } from "@/lib/notify";
 
 /**
  * POST /api/admin/verification/deactivate
@@ -65,7 +66,7 @@ export async function POST(request: Request) {
   const { data: driver, error: driverError } = await supabase
     .from("drivers")
     .select(
-      "id, external_id, first_name, last_name, email, activated, onboarding_status",
+      "id, external_id, first_name, last_name, email, activated, onboarding_status, user_id",
     )
     .eq("external_id", body.driverId)
     .maybeSingle();
@@ -160,6 +161,22 @@ export async function POST(request: Request) {
       emailStatus = "failed";
       emailError = result.error;
     }
+  }
+
+  // Inbox row + web push.
+  if (driver.user_id) {
+    void notifyDriver(supabase, {
+      driverUserId: driver.user_id,
+      kind: "verification",
+      title: "Account deactivated",
+      body: reason
+        ? `Reason: ${reason.slice(0, 140)}`
+        : "Your driver account is back under review. Open the portal for details.",
+      href: "/driver/pending",
+      cta: "Open driver portal",
+      pushTag: `driver-deactivated-${driver.external_id}`,
+      pushRenotify: true,
+    });
   }
 
   return NextResponse.json({

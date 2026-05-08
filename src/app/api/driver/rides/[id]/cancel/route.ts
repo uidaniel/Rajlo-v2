@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import { sendTripCancelledEmail } from "@/lib/email-templates";
+import { notifyRider } from "@/lib/notify";
 
 /**
  * POST /api/driver/rides/[id]/cancel
@@ -60,7 +62,7 @@ export async function POST(
     .eq("id", id)
     .eq("driver_id", driver.id)
     .in("status", CANCELLABLE_BY_DRIVER)
-    .select("id")
+    .select("id, rider_id, pickup_name, dropoff_name")
     .maybeSingle();
 
   if (error) {
@@ -83,6 +85,44 @@ export async function POST(
     actor_id: driver.external_id,
     metadata: reason ? { reason } : null,
   });
+
+  // Best-effort email + push to the affected rider — driver-initiated
+  // cancels are the worst-feeling cancel for the rider, so we want
+  // them to hear about it cleanly with a clear "request again" CTA.
+  void (async () => {
+    try {
+      const [{ data: profile }, { data: authUser }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("full_name")
+          .eq("id", cancelled.rider_id)
+          .maybeSingle(),
+        supabase.auth.admin.getUserById(cancelled.rider_id),
+      ]);
+      await notifyRider(supabase, {
+        riderId: cancelled.rider_id,
+        kind: "trip",
+        title: "Your driver had to cancel",
+        body: `${cancelled.pickup_name} → ${cancelled.dropoff_name}. No charge — re-request whenever you're ready.`,
+        href: `/rider`,
+        cta: "Request another ride",
+        pushTag: `ride-${cancelled.id}-status`,
+        pushRenotify: true,
+      });
+      const email = authUser.user?.email;
+      if (!email) return;
+      await sendTripCancelledEmail(email, {
+        riderFirstName: profile?.full_name ?? null,
+        rideId: cancelled.id,
+        pickup: cancelled.pickup_name,
+        dropoff: cancelled.dropoff_name,
+        cancelledBy: "driver",
+        reason,
+      });
+    } catch {
+      /* best-effort */
+    }
+  })();
 
   return NextResponse.json({ ok: true });
 }

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { clearSessionPolicy } from "@/lib/session-policy";
 import { Icon } from "./icons";
 
 /**
@@ -21,8 +22,18 @@ export function SignOutButton({
     <button
       type="button"
       onClick={async () => {
+        // Best-effort: flip the driver offline before signing out so
+        // their last-known intent is "off" if they don't sign back in.
+        // The endpoint silently 403s for non-driver users — safe to
+        // call unconditionally.
+        await fetch("/api/driver/online", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ online: false }),
+        }).catch(() => null);
         const supabase = createSupabaseBrowserClient();
         await supabase.auth.signOut();
+        clearSessionPolicy();
         router.push(redirectTo);
         router.refresh();
       }}

@@ -12,6 +12,7 @@ import {
 } from "@/components/auth-shell";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { friendlyError } from "@/lib/auth-errors";
+import { setSessionPolicy } from "@/lib/session-policy";
 
 export default function DriverLoginPage() {
   // Suspense required by Next.js 16 for useSearchParams — without it, the
@@ -31,6 +32,7 @@ function DriverLoginInner() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [remember, setRemember] = useState(true);
   const [error, setError] = useState<string | null>(friendlyError(urlError));
   const [isLoading, setIsLoading] = useState(false);
 
@@ -69,6 +71,11 @@ function DriverLoginInner() {
       setIsLoading(false);
       return;
     }
+
+    // Stamp the client-side session expiry. <SessionGuard> in the
+    // driver portal layout reads this on every navigation and signs
+    // the user out once it elapses.
+    setSessionPolicy(remember ? "remember" : "session-only");
 
     router.push(next);
     router.refresh();
@@ -110,7 +117,16 @@ function DriverLoginInner() {
           icon="password"
           required
         />
-        <div className="-mt-2 flex justify-end">
+        <div className="-mt-2 flex flex-wrap items-center justify-between gap-2">
+          <label className="inline-flex cursor-pointer items-center gap-2 text-xs font-semibold text-foreground">
+            <input
+              type="checkbox"
+              checked={remember}
+              onChange={(e) => setRemember(e.target.checked)}
+              className="h-4 w-4 cursor-pointer rounded border border-line bg-surface accent-rajlo-red"
+            />
+            Stay signed in for 7 days
+          </label>
           <Link
             href="/auth/forgot-password"
             className="text-xs font-semibold text-rajlo-red hover:underline"
