@@ -56,6 +56,14 @@ export async function GET(request: Request) {
   // Pending requests — RLS already filters to "open" rides, but we add the
   // explicit `eq` for clarity + to allow the same code path through
   // service_role (which bypasses RLS).
+  //
+  // `expires_at > now()` keeps rides past their timeout out of the
+  // driver's view. The expire-on-read in /api/rider/rides/active
+  // does the actual status flip, but this filter ensures a driver
+  // never sees a ride that's effectively dead — even if the rider
+  // hasn't refreshed their page recently. We also accept null
+  // expires_at to play nice with rows from before the migration.
+  const nowIso = new Date().toISOString();
   const { data: rides, error } = await supabase
     .from("rides")
     .select(
@@ -63,6 +71,7 @@ export async function GET(request: Request) {
     )
     .eq("status", "requested")
     .is("driver_id", null)
+    .or(`expires_at.gt.${nowIso},expires_at.is.null`)
     .order("requested_at", { ascending: true })
     .limit(40);
 

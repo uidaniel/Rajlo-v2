@@ -8,6 +8,7 @@ import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon, type IconName } from "@/components/icons";
 import { FadeUp } from "@/components/anim";
 import { FileUpload, type FileState } from "@/components/file-upload";
+import { VehiclePicker } from "@/components/vehicle-picker";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { uploadDriverDocument, removeDriverDocument } from "@/lib/storage";
 
@@ -226,9 +227,11 @@ const EMPTY_FORM = {
   licenceExpiry: "",
   badgeNumber: "",
   plateNumber: "",
+  vehicleType: "",
   vehicleMake: "",
   vehicleModel: "",
   vehicleYear: "",
+  vehicleColor: "",
   franchiseNumber: "",
   franchiseExpiry: "",
 };
@@ -292,7 +295,14 @@ function isStepComplete(
       );
     case 3:
       return (
-        hasText("plateNumber", "vehicleMake", "vehicleModel", "vehicleYear") &&
+        hasText(
+          "plateNumber",
+          "vehicleType",
+          "vehicleMake",
+          "vehicleModel",
+          "vehicleYear",
+          "vehicleColor",
+        ) &&
         hasFile("red_plate_reg") &&
         hasFile("cof")
       );
@@ -332,9 +342,11 @@ type ServerDriver = {
   licence_expiry: string | null;
   badge_number: string | null;
   plate_number: string | null;
+  vehicle_type: string | null;
   vehicle_make: string | null;
   vehicle_model: string | null;
   vehicle_year: number | null;
+  vehicle_color: string | null;
   franchise_number: string | null;
   franchise_expiry: string | null;
   admin_note: string | null;
@@ -475,9 +487,11 @@ function DriverOnboardingWizard() {
           licenceExpiry: pick(d.licence_expiry, prev.licenceExpiry),
           badgeNumber: pick(d.badge_number, prev.badgeNumber),
           plateNumber: pick(d.plate_number, prev.plateNumber),
+          vehicleType: pick(d.vehicle_type, prev.vehicleType),
           vehicleMake: pick(d.vehicle_make, prev.vehicleMake),
           vehicleModel: pick(d.vehicle_model, prev.vehicleModel),
           vehicleYear: d.vehicle_year ? String(d.vehicle_year) : prev.vehicleYear,
+          vehicleColor: pick(d.vehicle_color, prev.vehicleColor),
           franchiseNumber: pick(d.franchise_number, prev.franchiseNumber),
           franchiseExpiry: pick(d.franchise_expiry, prev.franchiseExpiry),
         };
@@ -765,7 +779,7 @@ function DriverOnboardingWizard() {
     <div className="flex min-h-screen flex-col bg-surface-soft">
       {/* ────── Top bar ────── */}
       <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 md:px-6 md:py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-2 py-3 md:px-3 md:py-4">
           <Logo size="sm" tagline />
           <div className="flex items-center gap-2">
             {hasDraft && (
@@ -799,7 +813,7 @@ function DriverOnboardingWizard() {
       </header>
 
       {/* ────── Wizard body ────── */}
-      <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 md:px-6 md:py-12">
+      <div className="mx-auto w-full max-w-5xl flex-1 px-2 py-8 md:px-3 md:py-12">
         {/* Draft restored banner */}
         {restored && (
           <FadeUp>
@@ -1006,10 +1020,37 @@ function DriverOnboardingWizard() {
                 </div>
                 <TextInput label="Red plate number" placeholder="5812 GK" value={form.plateNumber} onChange={setField("plateNumber")} hint="Must be a registered PPV red plate as shown on your TA docs" required />
                 <FileUpload field={{ id: "red_plate_reg", label: "Vehicle registration (PPV red plate)", hint: "Official registration document confirming red plate status", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
-                <div className="grid gap-5 md:grid-cols-3">
-                  <TextInput label="Make" placeholder="Toyota" value={form.vehicleMake} onChange={setField("vehicleMake")} required />
-                  <TextInput label="Model" placeholder="Axio" value={form.vehicleModel} onChange={setField("vehicleModel")} required />
-                  <TextInput label="Year" placeholder="2019" value={form.vehicleYear} onChange={setField("vehicleYear")} required />
+                {/* Vehicle spec — pulled from a controlled catalog so
+                   make/model can't be misspelt or mismatched. Once
+                   the driver is verified, this can only change via
+                   a vehicle-change request (which re-collects docs). */}
+                <div>
+                  <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                    Vehicle details
+                  </p>
+                  <p className="mt-1 mb-3 text-xs text-muted">
+                    Pick from the list — these get verified against your
+                    registration document above.
+                  </p>
+                  <VehiclePicker
+                    value={{
+                      type: form.vehicleType,
+                      brand: form.vehicleMake,
+                      model: form.vehicleModel,
+                      year: form.vehicleYear,
+                      color: form.vehicleColor,
+                    }}
+                    onChange={(spec) =>
+                      setForm((f) => ({
+                        ...f,
+                        vehicleType: spec.type,
+                        vehicleMake: spec.brand,
+                        vehicleModel: spec.model,
+                        vehicleYear: spec.year,
+                        vehicleColor: spec.color,
+                      }))
+                    }
+                  />
                 </div>
                 <FileUpload field={{ id: "cof", label: "Certificate of Fitness (COF)", hint: "Annual vehicle fitness inspection. Book at transportauthority.gov.jm or 876-926-9937.", required: true }} files={files} onPick={handlePickFile} onRemove={handleRemoveFile} />
               </div>
@@ -1117,7 +1158,7 @@ function DriverOnboardingWizard() {
 
       {/* ────── Sticky action bar ────── */}
       <footer className="sticky bottom-0 z-20 border-t border-line bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-2 py-3 md:px-3 md:py-4">
           <button
             type="button"
             onClick={back}

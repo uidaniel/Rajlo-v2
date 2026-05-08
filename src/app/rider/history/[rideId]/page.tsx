@@ -135,7 +135,7 @@ export default function RiderHistoryDetailPage({
     // + map + timeline + driver card. Same vertical rhythm as the
     // loaded version so the page doesn't jump when data lands.
     return (
-      <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
         <Skeleton className="h-5 w-40" rounded="full" />
         <HeroSkeleton />
         <MapSkeleton className="h-[42vh] min-h-72 w-full md:h-[50vh] md:max-h-130" />
@@ -183,7 +183,12 @@ export default function RiderHistoryDetailPage({
   const hero = STATUS_HERO[ride.status];
 
   // Map waypoints in canonical Place shape.
-  const placeFrom = (p: { name: string; address: string; lat: number; lng: number }): Place => ({
+  const placeFrom = (p: {
+    name: string;
+    address: string;
+    lat: number;
+    lng: number;
+  }): Place => ({
     placeId: "",
     name: p.name,
     address: p.address,
@@ -199,10 +204,30 @@ export default function RiderHistoryDetailPage({
   // have a timestamp — this is a real audit trail, not a "fake all
   // five steps" UI element.
   const timelineEntries = [
-    { key: "requestedAt", label: "Trip requested", at: ride.timeline.requestedAt, icon: "plus-circle" as const },
-    { key: "acceptedAt", label: "Driver accepted", at: ride.timeline.acceptedAt, icon: "check-circle" as const },
-    { key: "arrivedAt", label: "Driver arrived at pickup", at: ride.timeline.arrivedAt, icon: "map-pin" as const },
-    { key: "startedAt", label: "Trip started", at: ride.timeline.startedAt, icon: "navigation" as const },
+    {
+      key: "requestedAt",
+      label: "Trip requested",
+      at: ride.timeline.requestedAt,
+      icon: "plus-circle" as const,
+    },
+    {
+      key: "acceptedAt",
+      label: "Driver accepted",
+      at: ride.timeline.acceptedAt,
+      icon: "check-circle" as const,
+    },
+    {
+      key: "arrivedAt",
+      label: "Driver arrived at pickup",
+      at: ride.timeline.arrivedAt,
+      icon: "map-pin" as const,
+    },
+    {
+      key: "startedAt",
+      label: "Trip started",
+      at: ride.timeline.startedAt,
+      icon: "navigation" as const,
+    },
     {
       key: "endedAt",
       label: ride.status === "cancelled" ? "Trip cancelled" : "Trip completed",
@@ -227,11 +252,10 @@ export default function RiderHistoryDetailPage({
       : null;
 
   const isTerminal = ride.status === "completed" || ride.status === "cancelled";
-  const canRate =
-    ride.status === "completed" && !!driver && myRating === null;
+  const canRate = ride.status === "completed" && !!driver && myRating === null;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
       <FadeUp>
         <div className="flex items-center gap-2 text-xs font-semibold text-muted">
           <Link
@@ -278,9 +302,7 @@ export default function RiderHistoryDetailPage({
                 {formatJMD(ride.estimatedFareJMD)}
               </p>
               {tripMinutes !== null && (
-                <p className="text-sm text-white/80">
-                  {tripMinutes} min trip
-                </p>
+                <p className="text-sm text-white/80">{tripMinutes} min trip</p>
               )}
               {ride.estimatedDistanceKm !== null && (
                 <p className="text-sm text-white/80">

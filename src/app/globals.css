@@ -170,6 +170,29 @@ body {
   }
 }
 
+/*
+ * Radar pulse — used as the "searching for a driver" overlay on the
+ * rider's map while their ride is in `requested` state. Each pulse
+ * starts small + opaque and expands outward while fading. Stack
+ * three rings with staggered delays for a continuous sweep effect.
+ */
+@keyframes rajlo-radar-pulse {
+  0%   { transform: scale(0.25); opacity: 0.85; }
+  80%  { opacity: 0.05; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+.radar-pulse {
+  animation: rajlo-radar-pulse 2.4s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .radar-pulse {
+    animation: none;
+    opacity: 0.4;
+  }
+}
+
 /* Brand watermark — used as low-opacity decorative bg in corners */
 .rajlo-watermark {
   position: absolute;

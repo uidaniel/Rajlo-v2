@@ -33,7 +33,7 @@ const STATUS_STYLES: Record<ReviewState, { bg: string; text: string; ring: strin
 
 function VerificationDetailLoading() {
   return (
-    <div className="mx-auto max-w-6xl px-4 py-10 md:px-6 md:py-16">
+    <div className="mx-auto max-w-6xl px-2 py-10 md:px-3 md:py-16">
       <div className="rounded-3xl border border-line bg-surface p-10 text-center">
         <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-primary-soft">
           <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
@@ -338,7 +338,7 @@ function VerificationDetailInner() {
   // ─── Empty state (no driver to review) ───
   if (empty) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-10 md:px-6 md:py-16">
+      <div className="mx-auto max-w-3xl px-2 py-10 md:px-3 md:py-16">
         <div className="rounded-3xl border border-line bg-surface p-10 text-center">
           <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-50 text-emerald-600">
             <Icon name="check-circle" className="h-7 w-7" />
@@ -358,7 +358,7 @@ function VerificationDetailInner() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-6xl space-y-5 px-2 py-6 md:px-3 md:py-8">
       {/* ─── Back to queue ─── */}
       <Link
         href="/admin/verification-queue"
@@ -876,7 +876,7 @@ function DecisionActionBar({
     <div className="fixed inset-x-0 bottom-0 z-40">
       {/* Optional expandable note */}
       {noteOpen && (
-        <div className="border-t border-line bg-surface px-4 py-4 shadow-lg md:px-6">
+        <div className="border-t border-line bg-surface px-2 py-4 shadow-lg md:px-3">
           <div className="mx-auto max-w-6xl">
             <div className="flex items-center justify-between">
               <label
@@ -908,7 +908,7 @@ function DecisionActionBar({
       )}
 
       {/* Main bar */}
-      <div className="border-t border-line bg-surface/95 px-4 py-3 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.15)] backdrop-blur md:px-6 md:py-4">
+      <div className="border-t border-line bg-surface/95 px-2 py-3 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.15)] backdrop-blur md:px-3 md:py-4">
         <div className="mx-auto flex max-w-6xl flex-col items-stretch gap-3 md:flex-row md:items-center md:justify-between">
           {/* Left: counters */}
           <div className="flex flex-wrap items-center gap-2">

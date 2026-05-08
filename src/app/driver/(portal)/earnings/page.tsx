@@ -172,7 +172,7 @@ export default function DriverEarningsPage() {
     // Earnings layout skeleton: hero + range tabs + KPI strip +
     // chart + payout card + recent-trips list.
     return (
-      <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
         <HeroSkeleton />
         <Skeleton className="h-10 w-72" rounded="full" />
         <StatsGridSkeleton count={3} />
@@ -221,7 +221,7 @@ export default function DriverEarningsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
       {/* Hero — wallet card */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">

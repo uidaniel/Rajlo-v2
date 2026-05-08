@@ -47,7 +47,7 @@ export default function AdminHomePage() {
     .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime())[0];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-6xl space-y-5 px-2 py-6 md:px-3 md:py-8">
       {/* ─── Hero ─── */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-7 text-white shadow-xl md:p-10">

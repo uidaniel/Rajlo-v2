@@ -51,14 +51,14 @@ export default async function DriverPendingPage() {
     <div className="flex min-h-screen flex-col bg-surface-soft">
       {/* ────── Top bar ────── */}
       <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-3 md:px-6 md:py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-2 py-3 md:px-3 md:py-4">
           <Logo size="sm" tagline />
           <SignOutButton />
         </div>
       </header>
 
       {/* ────── Body ────── */}
-      <div className="relative mx-auto w-full max-w-3xl flex-1 px-4 py-10 md:px-6 md:py-16">
+      <div className="relative mx-auto w-full max-w-3xl flex-1 px-2 py-10 md:px-3 md:py-16">
         <ArcWatermark
           size={520}
           variant="red"

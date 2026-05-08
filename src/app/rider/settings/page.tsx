@@ -175,7 +175,7 @@ export default function RiderSettingsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">
@@ -243,7 +243,7 @@ export default function RiderSettingsPage() {
               </p>
             </div>
             <Link
-              href="/rider/support"
+              href="/rider/profile"
               className="shrink-0 rounded-full border border-line bg-surface px-4 py-2 text-xs font-bold transition-colors hover:bg-surface-soft"
             >
               Edit
@@ -367,9 +367,7 @@ export default function RiderSettingsPage() {
               <Icon name="log-out" className="h-4 w-4" />
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-extrabold tracking-tight">
-                Sign out
-              </p>
+              <p className="text-sm font-extrabold tracking-tight">Sign out</p>
               <p className="mt-0.5 text-xs text-muted">
                 You&apos;ll need to sign in again on this device.
               </p>
@@ -540,4 +538,3 @@ function LinkRow({
     </Link>
   );
 }
-

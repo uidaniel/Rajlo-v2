@@ -96,8 +96,7 @@ export default function RiderSafetyPage() {
           fetch("/api/rider/trusted-contacts"),
           fetch("/api/rider/preferences"),
         ]);
-        if (!cRes.ok || !pRes.ok)
-          throw new Error("Couldn't load safety data.");
+        if (!cRes.ok || !pRes.ok) throw new Error("Couldn't load safety data.");
         const cJson = (await cRes.json()) as { contacts: Contact[] };
         const pJson = (await pRes.json()) as { preferences: ServerPrefs };
         if (cancelled) return;
@@ -207,7 +206,7 @@ export default function RiderSafetyPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-red p-6 text-white shadow-xl shadow-rajlo-red/30 md:p-8">
@@ -279,8 +278,8 @@ export default function RiderSafetyPage() {
       <FadeUp delay={0.08}>
         <Section title="Trusted contacts" icon="users">
           <p className="text-xs text-muted">
-            Add up to 5 people who get an SMS with your live trip link when
-            you tap &ldquo;Share trip&rdquo;.
+            Add up to 5 people who get an SMS with your live trip link when you
+            tap &ldquo;Share trip&rdquo;.
           </p>
 
           {loading ? (
@@ -600,4 +599,3 @@ function ToggleRow({
     </div>
   );
 }
-

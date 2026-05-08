@@ -36,10 +36,26 @@ const NOTIFICATION_TYPE: Record<
   NotificationKind,
   { label: string; icon: IconName; iconBg: string }
 > = {
-  trip: { label: "Trip", icon: "navigation", iconBg: "bg-rajlo-red text-white" },
-  promo: { label: "Promo", icon: "trending-up", iconBg: "bg-amber-500 text-white" },
-  system: { label: "System", icon: "bell", iconBg: "bg-rajlo-black text-white" },
-  safety: { label: "Safety", icon: "shield", iconBg: "bg-rajlo-red text-white" },
+  trip: {
+    label: "Trip",
+    icon: "navigation",
+    iconBg: "bg-rajlo-red text-white",
+  },
+  promo: {
+    label: "Promo",
+    icon: "trending-up",
+    iconBg: "bg-amber-500 text-white",
+  },
+  system: {
+    label: "System",
+    icon: "bell",
+    iconBg: "bg-rajlo-black text-white",
+  },
+  safety: {
+    label: "Safety",
+    icon: "shield",
+    iconBg: "bg-rajlo-red text-white",
+  },
 };
 
 type Tab = "all" | "trip" | "promo" | "system";
@@ -110,9 +126,7 @@ export default function RiderNotificationsPage() {
   // is the initial seed.
   const unread = useMemo(
     () =>
-      items.length > 0
-        ? items.filter((n) => !n.read).length
-        : unreadFromServer,
+      items.length > 0 ? items.filter((n) => !n.read).length : unreadFromServer,
     [items, unreadFromServer],
   );
 
@@ -146,7 +160,7 @@ export default function RiderNotificationsPage() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">

@@ -99,7 +99,10 @@ export default function RiderHistoryPage() {
         };
         if (cancelled) return;
         setRowsByTab((prev) => ({ ...prev, [tab]: json.rides }));
-        setHasMoreByTab((prev) => ({ ...prev, [tab]: json.pagination.hasMore }));
+        setHasMoreByTab((prev) => ({
+          ...prev,
+          [tab]: json.pagination.hasMore,
+        }));
       } catch (e) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : "Couldn't load history");
@@ -126,7 +129,10 @@ export default function RiderHistoryPage() {
         rides: HistoryRow[];
         pagination: { hasMore: boolean };
       };
-      setRowsByTab((prev) => ({ ...prev, [tab]: [...prev[tab], ...json.rides] }));
+      setRowsByTab((prev) => ({
+        ...prev,
+        [tab]: [...prev[tab], ...json.rides],
+      }));
       setHasMoreByTab((prev) => ({ ...prev, [tab]: json.pagination.hasMore }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load more");
@@ -147,7 +153,7 @@ export default function RiderHistoryPage() {
   }, [rowsByTab.all, rows]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-6 py-2 md:px-3 md:py-8">
       <FadeUp>
         <div>
           <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
@@ -267,11 +273,7 @@ export default function RiderHistoryPage() {
       {loadingTab !== tab && rows.length > 0 && (
         <div className="space-y-3">
           {rows.map((r) => (
-            <HistoryCard
-              key={r.id}
-              row={r}
-              onRate={() => setRateTarget(r)}
-            />
+            <HistoryCard key={r.id} row={r} onRate={() => setRateTarget(r)} />
           ))}
 
           {hasMore && (
@@ -352,13 +354,7 @@ function StatCard({
 
 /* ─────────── History card ─────────── */
 
-function HistoryCard({
-  row,
-  onRate,
-}: {
-  row: HistoryRow;
-  onRate: () => void;
-}) {
+function HistoryCard({ row, onRate }: { row: HistoryRow; onRate: () => void }) {
   const dateLabel = row.endedAt
     ? new Date(row.endedAt).toLocaleString("en-JM", {
         day: "numeric",
@@ -376,9 +372,12 @@ function HistoryCard({
       });
 
   const statusBadge = STATUS_BADGE[row.status];
-  const isOngoing = ["requested", "accepted", "arrived", "in_progress"].includes(
-    row.status,
-  );
+  const isOngoing = [
+    "requested",
+    "accepted",
+    "arrived",
+    "in_progress",
+  ].includes(row.status);
 
   return (
     <Link

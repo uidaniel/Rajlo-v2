@@ -109,7 +109,7 @@ export default function DriverHistoryPage() {
   const completedCount = rows.filter((r) => r.status === "completed").length;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
       <FadeUp>
         <div>
           <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">

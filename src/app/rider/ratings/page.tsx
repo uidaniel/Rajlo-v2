@@ -71,7 +71,7 @@ export default function RiderRatingsPage() {
     // Hero + distribution chart placeholder + recent-ratings list
     // skeleton, all in the same vertical rhythm as the loaded view.
     return (
-      <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
         <HeroSkeleton />
         <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
           <div className="flex items-center gap-2">
@@ -88,7 +88,10 @@ export default function RiderRatingsPage() {
         </div>
         <div className="space-y-3">
           {[0, 1, 2].map((i) => (
-            <div key={i} className="space-y-3 rounded-2xl border border-line bg-surface p-5">
+            <div
+              key={i}
+              className="space-y-3 rounded-2xl border border-line bg-surface p-5"
+            >
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-2">
                   <Skeleton className="h-2.5 w-12" rounded="md" />
@@ -128,7 +131,7 @@ export default function RiderRatingsPage() {
   const maxBar = Math.max(1, ...distribution);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">
@@ -191,15 +194,14 @@ export default function RiderRatingsPage() {
                   <div key={star} className="flex items-center gap-3">
                     <span className="inline-flex w-12 shrink-0 items-center gap-1 text-xs font-bold text-foreground">
                       {star}
-                      <Icon
-                        name="star"
-                        className="h-3 w-3 text-rajlo-red"
-                      />
+                      <Icon name="star" className="h-3 w-3 text-rajlo-red" />
                     </span>
                     <div className="relative h-7 flex-1 overflow-hidden rounded-full bg-surface-soft">
                       <div
                         className="h-full rounded-full bg-rajlo-red transition-all"
-                        style={{ width: `${Math.max(widthPct, count > 0 ? 6 : 0)}%` }}
+                        style={{
+                          width: `${Math.max(widthPct, count > 0 ? 6 : 0)}%`,
+                        }}
                       />
                     </div>
                     <span className="w-16 shrink-0 text-right text-xs font-bold text-muted">
@@ -327,9 +329,7 @@ function StarRow({ stars }: { stars: number }) {
         <Icon
           key={n}
           name="star"
-          className={`h-4 w-4 ${
-            n <= stars ? "text-rajlo-red" : "text-line"
-          }`}
+          className={`h-4 w-4 ${n <= stars ? "text-rajlo-red" : "text-line"}`}
         />
       ))}
     </span>

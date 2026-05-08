@@ -244,7 +244,7 @@ export default function DriverHomePage() {
      doesn't jump when the data resolves. */
   if (bootstrapping) {
     return (
-      <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto max-w-5xl space-y-5 px-2 py-6 md:px-3 md:py-8">
         <HeroSkeleton />
         <StatsGridSkeleton count={4} />
         <div className="space-y-3">
@@ -266,7 +266,7 @@ export default function DriverHomePage() {
      accepted!" inline view. */
   if (hasActiveTrip) {
     return (
-      <div className="mx-auto max-w-3xl space-y-6 px-4 py-10 md:px-6 md:py-12">
+      <div className="mx-auto max-w-3xl space-y-6 px-2 py-10 md:px-3 md:py-12">
         <FadeUp>
           <div className="relative overflow-hidden rounded-3xl bg-rajlo-red p-7 text-white shadow-xl shadow-rajlo-red/25 md:p-10">
             <ArcWatermark
@@ -313,7 +313,7 @@ export default function DriverHomePage() {
           : null;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-5xl space-y-5 px-2 py-6 md:px-3 md:py-8">
       {/* ─────── Welcome / status hero ─────── */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl md:p-8">

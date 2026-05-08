@@ -51,14 +51,25 @@ export async function POST(
 
   // 2. Look up the ride to find out if it's part of a carpool group.
   // Carpool rides have to be accepted together — the driver is
-  // committing to TWO riders, not one.
+  // committing to TWO riders, not one. Also pull `expires_at` so
+  // we can reject claims past the timeout window before we even
+  // attempt the conditional update.
   const { data: target } = await supabase
     .from("rides")
-    .select("id, carpool_group_id")
+    .select("id, carpool_group_id, expires_at")
     .eq("id", id)
     .maybeSingle();
   if (!target) {
     return NextResponse.json({ error: "Ride not found" }, { status: 404 });
+  }
+  if (
+    target.expires_at &&
+    new Date(target.expires_at).getTime() <= Date.now()
+  ) {
+    return NextResponse.json(
+      { error: "This request has expired and is no longer available." },
+      { status: 410 },
+    );
   }
 
   // 3. Atomic claim. For solo rides we update the single row. For

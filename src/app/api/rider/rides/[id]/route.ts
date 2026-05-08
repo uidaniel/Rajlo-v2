@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { getAverageRating } from "@/lib/ratings";
+import { getDriverSelfieUrl } from "@/lib/driver-selfie";
 
 /**
  * GET /api/rider/rides/[id]
@@ -86,13 +87,15 @@ export async function GET(
       .maybeSingle();
 
     if (d) {
-      const [{ data: profile }, ratingSummary] = await Promise.all([
+      // OAuth pic + rating + verified TA selfie, parallel.
+      const [{ data: profile }, ratingSummary, selfieUrl] = await Promise.all([
         supabase
           .from("profiles")
           .select("avatar_url")
           .eq("id", d.user_id)
           .maybeSingle(),
         getAverageRating(supabase, d.user_id, "driver"),
+        getDriverSelfieUrl(supabase, ride.driver_id),
       ]);
 
       const vehicleParts = [
@@ -114,7 +117,8 @@ export async function GET(
         vehicleColor: d.vehicle_color,
         rating: ratingSummary.average,
         ratingCount: ratingSummary.count,
-        avatarUrl: profile?.avatar_url ?? null,
+        // Verified TA selfie wins over the OAuth picture.
+        avatarUrl: selfieUrl ?? profile?.avatar_url ?? null,
       };
     }
   }

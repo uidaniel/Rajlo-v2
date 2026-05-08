@@ -10,9 +10,11 @@ export type OnboardingSubmitRequest = {
     licenceExpiry: string;
     badgeNumber: string;
     plateNumber: string;
+    vehicleType: string;
     vehicleMake: string;
     vehicleModel: string;
     vehicleYear: string;
+    vehicleColor: string;
     franchiseNumber: string;
     franchiseExpiry: string;
   };

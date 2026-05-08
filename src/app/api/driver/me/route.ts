@@ -30,7 +30,7 @@ export async function GET() {
   const { data: driver } = await admin
     .from("drivers")
     .select(
-      "id, external_id, user_id, first_name, last_name, phone, email, trn, nis, licence_number, licence_expiry, badge_number, plate_number, vehicle_make, vehicle_model, vehicle_year, vehicle_color, franchise_number, franchise_expiry, onboarding_status, activated, admin_note, created_at",
+      "id, external_id, user_id, first_name, last_name, phone, email, trn, nis, licence_number, licence_expiry, badge_number, plate_number, vehicle_type, vehicle_make, vehicle_model, vehicle_year, vehicle_color, franchise_number, franchise_expiry, onboarding_status, activated, admin_note, created_at",
     )
     .eq("user_id", user.id)
     .maybeSingle();
@@ -53,14 +53,18 @@ export async function GET() {
 /**
  * PATCH /api/driver/me
  *
- * Self-edit handler for the driver profile page. Lets a verified driver
- * update the fields they own:
+ * Self-edit handler for the driver profile page. Drivers can update:
  *
  *   - first_name, last_name
  *   - phone
- *   - vehicle_make, vehicle_model, vehicle_year, vehicle_color
  *
  * Deliberately does NOT accept:
+ *   - vehicle_type, vehicle_make, vehicle_model, vehicle_year,
+ *     vehicle_color — vehicle is tied to verified compliance docs
+ *     (registration, COF, insurance). Changes go through
+ *     /api/driver/vehicle-change which collects new docs for admin
+ *     review. Silent self-edit would let a driver register one car
+ *     and operate a different one.
  *   - plate_number     — TA-tied identifier; changing it should
  *                        re-trigger compliance review, not a silent edit
  *   - licence_number, badge_number, franchise_number — same reason
@@ -74,10 +78,6 @@ type EditableBody = {
   firstName?: unknown;
   lastName?: unknown;
   phone?: unknown;
-  vehicleMake?: unknown;
-  vehicleModel?: unknown;
-  vehicleYear?: unknown;
-  vehicleColor?: unknown;
 };
 
 export async function PATCH(request: Request) {
@@ -117,28 +117,6 @@ export async function PATCH(request: Request) {
   if (lastName !== undefined) update.last_name = lastName;
   const phone = trimString(body.phone, 30);
   if (phone !== undefined) update.phone = phone;
-  const vehicleMake = trimString(body.vehicleMake, 60);
-  if (vehicleMake !== undefined) update.vehicle_make = vehicleMake;
-  const vehicleModel = trimString(body.vehicleModel, 60);
-  if (vehicleModel !== undefined) update.vehicle_model = vehicleModel;
-  const vehicleColor = trimString(body.vehicleColor, 30);
-  if (vehicleColor !== undefined) update.vehicle_color = vehicleColor;
-
-  if (body.vehicleYear !== undefined) {
-    if (body.vehicleYear === null || body.vehicleYear === "") {
-      update.vehicle_year = null;
-    } else {
-      const yr = Number(body.vehicleYear);
-      const currentYear = new Date().getFullYear();
-      if (!Number.isInteger(yr) || yr < 1980 || yr > currentYear + 1) {
-        return NextResponse.json(
-          { error: "Vehicle year must be between 1980 and now." },
-          { status: 400 },
-        );
-      }
-      update.vehicle_year = yr;
-    }
-  }
 
   if (Object.keys(update).length === 0) {
     return NextResponse.json({ ok: true, noop: true });

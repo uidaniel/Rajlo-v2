@@ -42,22 +42,31 @@ type ActiveRide = {
     | "cancelled";
   pickup: { name: string; address: string; lat: number; lng: number };
   dropoff: { name: string; address: string; lat: number; lng: number };
-  stops: { position: number; name: string; address: string; lat: number; lng: number }[];
+  stops: {
+    position: number;
+    name: string;
+    address: string;
+    lat: number;
+    lng: number;
+  }[];
   seats: number;
   notes: string | null;
   estimatedFareJMD: number;
   estimatedDistanceKm: number | null;
   estimatedEtaMinutes: number | null;
+  /** ISO timestamp at which the request auto-cancels if no driver
+   *  has accepted. Null for non-`requested` statuses. */
+  expiresAt: string | null;
+  /** Set when status='cancelled'; 'expired_no_driver' triggers the
+   *  "no driver found" UI on this page. */
+  cancellationReason: string | null;
   timeline: {
     requestedAt: string | null;
     acceptedAt: string | null;
     arrivedAt: string | null;
     startedAt: string | null;
+    cancelledAt: string | null;
   };
-  /** Phase 2A.3 — non-null when this trip was matched as a carpool.
-   *  Partner's first name is included so the rider knows who they're
-   *  sharing with; we deliberately don't expose the partner's
-   *  pickup/dropoff. */
   carpool: { groupId: string; partnerFirstName: string | null } | null;
 };
 
@@ -83,7 +92,12 @@ type ActiveResponse = {
 
 const STATUS_HERO: Record<
   ActiveRide["status"],
-  { eyebrow: string; title: string; description: string; tone: "red" | "amber" | "emerald" }
+  {
+    eyebrow: string;
+    title: string;
+    description: string;
+    tone: "red" | "amber" | "emerald";
+  }
 > = {
   requested: {
     eyebrow: "Looking for a driver",
@@ -285,7 +299,7 @@ export default function RiderLiveTripPage() {
        loaded view so it doesn't jump when data arrives. ── */
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto max-w-3xl space-y-4 py-2 md:px-3 md:py-8">
         <HeroSkeleton />
         <MapSkeleton />
         <DriverVehicleCardSkeleton />
@@ -342,6 +356,24 @@ export default function RiderLiveTripPage() {
   }
 
   const { ride, driver } = data;
+
+  // Special case: the matcher's timeout fired without anyone
+  // accepting → render a dedicated "no driver found" view
+  // (instead of the generic cancelled hero) with a one-tap retry.
+  if (
+    ride.status === "cancelled" &&
+    ride.cancellationReason === "expired_no_driver"
+  ) {
+    return (
+      <NoDriverFoundView
+        rideId={ride.id}
+        pickupName={ride.pickup.name}
+        dropoffName={ride.dropoff.name}
+        fareJMD={ride.estimatedFareJMD}
+      />
+    );
+  }
+
   const hero = STATUS_HERO[ride.status];
 
   // Map: while waiting/en-route show the full route (rider sees pickup +
@@ -375,7 +407,7 @@ export default function RiderLiveTripPage() {
   const canCancel = ["requested", "accepted", "arrived"].includes(ride.status);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-4 px-2 py-6 md:px-3 md:py-8">
       <FadeUp>
         <div
           className={`relative overflow-hidden rounded-3xl p-6 text-white shadow-xl md:p-8 ${
@@ -449,7 +481,7 @@ export default function RiderLiveTripPage() {
       )}
 
       <FadeUp delay={0.05}>
-        <div className="overflow-hidden rounded-3xl border border-line bg-surface shadow-lg shadow-rajlo-red/[0.04]">
+        <div className="overflow-hidden rounded-3xl border border-line bg-surface shadow-lg shadow-rajlo-red/4">
           {/* Live-tracking is the primary task on this page, so let the
              map dominate. `h-[55vh]` scales with the device — about half
              the viewport on phones, comfortable on desktop.
@@ -473,7 +505,13 @@ export default function RiderLiveTripPage() {
                   ? { target: "dropoff" }
                   : null
             }
-            className="h-[55vh] min-h-[20rem] w-full md:h-[60vh] md:max-h-[640px]"
+            // Radar overlay while the matcher is still scanning —
+            // turns off the moment a driver accepts and the
+            // status flips to "accepted". `searchingUntil` drives
+            // the countdown ring inside the overlay.
+            searching={ride.status === "requested"}
+            searchingUntil={ride.status === "requested" ? ride.expiresAt : null}
+            className="h-[55vh] min-h-80 w-full md:h-[60vh] md:max-h-160"
           />
         </div>
       </FadeUp>
@@ -666,7 +704,9 @@ function CompletionDialog({
         setSubmitted(true);
       }
     } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : "Couldn't save rating");
+      setSubmitError(
+        err instanceof Error ? err.message : "Couldn't save rating",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -775,6 +815,156 @@ function CompletionDialog({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Dedicated "no driver found" view, shown when a request hits its
+ * 5-minute timeout without an accept. Two paths forward:
+ *
+ *   - Try again → POST /api/rider/rides/[id]/retry, which clones
+ *     the original ride into a fresh `requested` row. The page
+ *     then refetches /api/rider/rides/active and lands on the
+ *     normal live-trip view with a brand-new countdown.
+ *   - Cancel → just route to /rider/request. The expired ride is
+ *     already in their history.
+ *
+ * Designed to feel reassuring rather than alarming — high demand
+ * happens, this isn't the rider's fault, retry is one tap.
+ */
+function NoDriverFoundView({
+  rideId,
+  pickupName,
+  dropoffName,
+  fareJMD,
+}: {
+  rideId: string;
+  pickupName: string;
+  dropoffName: string;
+  fareJMD: number;
+}) {
+  const router = useRouter();
+  const [retrying, setRetrying] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRetry = async () => {
+    setRetrying(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/rider/rides/${rideId}/retry`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? `Server returned ${res.status}`);
+      }
+      // The new ride lands as the rider's active record on the next
+      // /api/rider/rides/active fetch — refresh to pick it up.
+      router.refresh();
+      // Belt-and-suspenders: also force a hard reload so the page's
+      // useEffect re-runs and the radar starts fresh.
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't re-request ride.");
+      setRetrying(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-md space-y-5 px-4 py-10 md:py-16">
+      <FadeUp>
+        <div className="text-center">
+          <div className="mx-auto grid h-20 w-20 place-items-center rounded-full bg-rajlo-red text-white shadow-2xl shadow-rajlo-red/40">
+            <Icon name="alert-triangle" className="h-10 w-10" />
+          </div>
+          <p className="mt-6 font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+            No driver found
+          </p>
+          <h1 className="mt-2 text-3xl font-extrabold tracking-tight md:text-4xl">
+            We couldn&apos;t match you in time
+          </h1>
+          <p className="mx-auto mt-3 max-w-sm text-sm text-muted">
+            Demand is high in your area right now. No nearby red-plate driver
+            picked up your request within the 5-minute window — try again and
+            we&apos;ll keep looking.
+          </p>
+        </div>
+      </FadeUp>
+
+      <FadeUp delay={0.1}>
+        <div className="rounded-2xl border border-line bg-surface p-5">
+          <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+            Your request
+          </p>
+          <div className="mt-3 space-y-2.5">
+            <div className="flex items-start gap-3">
+              <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-emerald-500 text-[10px] font-extrabold text-white">
+                A
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold">{pickupName}</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <span className="mt-1 grid h-7 w-7 shrink-0 place-items-center rounded-full bg-rajlo-red text-[10px] font-extrabold text-white">
+                B
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-bold">{dropoffName}</p>
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center justify-between border-t border-line pt-3">
+            <p className="text-xs font-semibold text-muted">Estimated fare</p>
+            <p className="text-base font-extrabold tracking-tight text-rajlo-red">
+              {formatJMD(fareJMD)}
+            </p>
+          </div>
+        </div>
+      </FadeUp>
+
+      {error && (
+        <div className="rounded-xl border border-rajlo-red/30 bg-primary-soft px-4 py-3 text-sm font-semibold text-rajlo-red">
+          {error}
+        </div>
+      )}
+
+      <FadeUp delay={0.15}>
+        <div className="flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={handleRetry}
+            disabled={retrying}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-rajlo-red px-6 py-3.5 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 transition-all hover:-translate-y-0.5 hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {retrying ? (
+              <>
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                Re-requesting…
+              </>
+            ) : (
+              <>
+                Try again
+                <Icon name="arrow-right" className="h-4 w-4" />
+              </>
+            )}
+          </button>
+          <Link
+            href="/rider/request"
+            className="inline-flex items-center justify-center rounded-full border border-line bg-surface px-5 py-3 text-xs font-bold text-muted transition-colors hover:bg-surface-soft hover:text-foreground"
+          >
+            Change pickup or dropoff
+          </Link>
+        </div>
+      </FadeUp>
+
+      <FadeUp delay={0.2}>
+        <p className="text-center text-[11px] text-muted">
+          You weren&apos;t charged. Most retries find a driver within 2-3
+          minutes.
+        </p>
+      </FadeUp>
     </div>
   );
 }

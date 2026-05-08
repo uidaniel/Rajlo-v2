@@ -158,7 +158,7 @@ export default function TripSharePage({
   return (
     <div className="min-h-screen bg-surface-soft pb-12">
       {/* Top bar */}
-      <header className="sticky top-0 z-10 border-b border-line bg-surface/95 px-4 py-3 backdrop-blur md:px-6">
+      <header className="sticky top-0 z-10 border-b border-line bg-surface/95 px-2 py-3 backdrop-blur md:px-3">
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
           <Logo size="sm" tagline />
           <span className="rounded-full bg-primary-soft px-3 py-1 text-[11px] font-bold text-rajlo-red">
@@ -167,7 +167,7 @@ export default function TripSharePage({
         </div>
       </header>
 
-      <div className="mx-auto max-w-3xl space-y-4 px-4 pt-6 md:px-6">
+      <div className="mx-auto max-w-3xl space-y-4 px-2 pt-6 md:px-3">
         {/* Status hero */}
         <div
           className={`relative overflow-hidden rounded-3xl p-6 text-white shadow-xl md:p-8 ${

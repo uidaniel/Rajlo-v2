@@ -53,7 +53,7 @@ export default function RiderFareBreakdownPage() {
   const carpoolSavings = fare.fareJMD - carpoolFare;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-red p-6 text-white shadow-xl shadow-rajlo-red/30 md:p-8">
@@ -70,8 +70,8 @@ export default function RiderFareBreakdownPage() {
               How fares work
             </h1>
             <p className="mt-2 max-w-lg text-sm text-white/85">
-              Transparent, predictable, and the same maths every time.
-              Slide the controls to see what your next trip would cost.
+              Transparent, predictable, and the same maths every time. Slide the
+              controls to see what your next trip would cost.
             </p>
           </div>
         </div>

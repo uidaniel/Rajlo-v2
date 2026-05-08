@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { getAverageRating } from "@/lib/ratings";
+import { getDriverSelfieUrl } from "@/lib/driver-selfie";
 
 /**
  * GET /api/rider/rides/active
@@ -31,16 +32,55 @@ export async function GET() {
     );
   }
 
-  const { data: ride } = await supabase
+  // Pull the rider's most recent active ride. We INCLUDE
+  // 'cancelled' here so the just-expired case can be surfaced to
+  // the frontend (with cancellation_reason='expired_no_driver').
+  // Filtered down below if the cancellation is anything other than
+  // an expiry. Limited to rides cancelled in the last 60s so old
+  // cancellations don't keep showing up as the "active" trip.
+  const cancelledCutoff = new Date(Date.now() - 60_000).toISOString();
+  let { data: ride } = await supabase
     .from("rides")
     .select(
-      "id, status, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, accepted_at, arrived_at, started_at, carpool_group_id",
+      "id, status, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, expires_at, accepted_at, arrived_at, started_at, cancelled_at, cancellation_reason, carpool_group_id",
     )
     .eq("rider_id", user.id)
-    .in("status", ["requested", "accepted", "arrived", "in_progress"])
+    .or(
+      `status.in.(requested,accepted,arrived,in_progress),and(status.eq.cancelled,cancellation_reason.eq.expired_no_driver,cancelled_at.gt.${cancelledCutoff})`,
+    )
     .order("requested_at", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  // Expire-on-read: if the most recent active ride has timed out
+  // without a match, flip it to cancelled atomically. We re-fetch
+  // afterwards so the response reflects the new state.
+  if (
+    ride &&
+    ride.status === "requested" &&
+    ride.expires_at &&
+    new Date(ride.expires_at).getTime() <= Date.now()
+  ) {
+    await supabase.rpc("expire_stale_ride", { p_ride_id: ride.id });
+    const { data: refreshed } = await supabase
+      .from("rides")
+      .select(
+        "id, status, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, expires_at, accepted_at, arrived_at, started_at, cancelled_at, cancellation_reason, carpool_group_id",
+      )
+      .eq("id", ride.id)
+      .maybeSingle();
+    if (refreshed) ride = refreshed;
+    // Audit: a system-driven cancellation. Keeps the events log
+    // honest about why this ride ended.
+    if (ride?.status === "cancelled") {
+      await supabase.from("ride_events").insert({
+        ride_id: ride.id,
+        event: "expired_no_driver",
+        actor_role: "system",
+        metadata: { reason: "no driver accepted within timeout window" },
+      });
+    }
+  }
 
   if (!ride) {
     return NextResponse.json({ ride: null });
@@ -103,13 +143,18 @@ export async function GET() {
       .eq("id", ride.driver_id)
       .maybeSingle();
     if (d) {
-      const [{ data: profile }, ratingSummary] = await Promise.all([
+      // Three parallel lookups: OAuth profile pic, lifetime rating
+      // average, and the driver's TA selfie (signed storage URL).
+      // Selfie takes priority over the OAuth pic when shown to the
+      // rider — that's the photo the TA verified.
+      const [{ data: profile }, ratingSummary, selfieUrl] = await Promise.all([
         supabase
           .from("profiles")
           .select("avatar_url")
           .eq("id", d.user_id)
           .maybeSingle(),
         getAverageRating(supabase, d.user_id, "driver"),
+        getDriverSelfieUrl(supabase, ride.driver_id),
       ]);
       const vehicleParts = [
         d.vehicle_year ? String(d.vehicle_year) : null,
@@ -129,7 +174,9 @@ export async function GET() {
         vehicleColor: d.vehicle_color,
         rating: ratingSummary.average,
         ratingCount: ratingSummary.count,
-        avatarUrl: profile?.avatar_url ?? null,
+        // Prefer the verified TA selfie. Falls through to the
+        // Google OAuth picture, then null (UI renders initials).
+        avatarUrl: selfieUrl ?? profile?.avatar_url ?? null,
       };
     }
   }
@@ -156,11 +203,19 @@ export async function GET() {
       estimatedFareJMD: ride.estimated_fare_jmd,
       estimatedDistanceKm: ride.estimated_distance_km,
       estimatedEtaMinutes: ride.estimated_eta_minutes,
+      // Drives the "searching for drivers" countdown ring on the
+      // rider's live-trip page. Frontend computes
+      // `expiresAt - now` each tick and shows a "no driver found"
+      // state when it hits zero (the next refresh picks up the
+      // server-side auto-cancel).
+      expiresAt: ride.expires_at,
+      cancellationReason: ride.cancellation_reason,
       timeline: {
         requestedAt: ride.requested_at,
         acceptedAt: ride.accepted_at,
         arrivedAt: ride.arrived_at,
         startedAt: ride.started_at,
+        cancelledAt: ride.cancelled_at,
       },
       carpool: ride.carpool_group_id
         ? {

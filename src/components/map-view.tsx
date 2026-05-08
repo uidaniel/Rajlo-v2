@@ -110,6 +110,8 @@ export function MapView({
   riderPosition,
   nearbyDrivers,
   liveRoute,
+  searching = false,
+  searchingUntil = null,
   className = "h-72 w-full",
 }: {
   pickup: Place | null;
@@ -124,6 +126,15 @@ export function MapView({
   /** When set, the polyline goes driver→pickup or driver→dropoff
    *  depending on `target`, and the driver marker is the car icon. */
   liveRoute?: LiveRoute | null;
+  /** Renders a radar-pulse overlay over the map. Used by the
+   *  rider's live-trip view while the ride is `requested` and the
+   *  matcher is still scanning for a driver. */
+  searching?: boolean;
+  /** When `searching` is on, optional ISO timestamp for the
+   *  request's expiry. The radar overlay renders a countdown ring
+   *  + "X:XX left" label, so the rider knows how long they have
+   *  before the request auto-cancels. */
+  searchingUntil?: string | null;
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -639,6 +650,16 @@ export function MapView({
           </div>
         </div>
       )}
+
+      {/* Searching overlay — radar pulse + countdown, shown while
+         the matcher is scanning for a driver. Three concentric
+         rings with staggered animation delays produce a continuous
+         radar-sweep feel. The `<SearchingOverlay />` component
+         drives the countdown ticker so the time-remaining stays
+         live without forcing a full MapView re-render every second. */}
+      {searching && !loadError && (
+        <SearchingOverlay searchingUntil={searchingUntil} />
+      )}
       {(driverPosition ||
         riderPosition ||
         (nearbyDrivers && nearbyDrivers.length > 0)) && (
@@ -698,4 +719,155 @@ function buildCarIcon(heading: number | null | undefined): google.maps.Icon {
   };
   carIconCache.set(bucket, icon);
   return icon;
+}
+
+/**
+ * Searching-for-drivers overlay. Three radar rings + a countdown
+ * timer + a progress arc that drains as the request approaches its
+ * timeout. Lifted out of MapView so its 1Hz ticker doesn't
+ * re-render the heavy parent on every tick.
+ *
+ * `searchingUntil` is the ISO timestamp when the request expires.
+ * If null, we just show the radar without a timer (the ride is
+ * still being matched but no hard deadline was provided).
+ */
+function SearchingOverlay({
+  searchingUntil,
+}: {
+  searchingUntil: string | null;
+}) {
+  // `tick` just increments every second to force a re-render. We
+  // derive `secondsLeft` from `searchingUntil` + Date.now() in the
+  // render body — that way the effect doesn't have to call
+  // setState synchronously at mount, which would cascade-render.
+  // Once the timer hits zero we stop the interval to avoid burning
+  // CPU on a static "0:00".
+  const [, setTick] = useState(0);
+
+  useEffect(() => {
+    if (!searchingUntil) return;
+    const id = setInterval(() => {
+      setTick((t) => t + 1);
+      const remaining = secondsUntil(searchingUntil);
+      if (remaining !== null && remaining <= 0) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [searchingUntil]);
+
+  const secondsLeft = secondsUntil(searchingUntil);
+
+  // Progress arc — total window assumed to be 5 minutes (300s); if
+  // the ISO comes from a different timeout the arc still drains
+  // proportionally. We compute the original window from the
+  // remaining-vs-elapsed split server-side, but client-side just
+  // hard-default to 300s. Drift is cosmetic only.
+  const totalWindow = 300;
+  const remainingPct =
+    secondsLeft === null
+      ? null
+      : Math.max(0, Math.min(1, secondsLeft / totalWindow));
+
+  return (
+    <div className="pointer-events-none absolute inset-0 grid place-items-center">
+      {/* Tinted veil — subtle red wash signals "system is actively
+         working" without obscuring the route. */}
+      <div className="absolute inset-0 bg-rajlo-red/[0.04]" />
+      <div className="relative grid place-items-center">
+        <div className="relative h-44 w-44 md:h-56 md:w-56">
+          {/* Three pulsing rings, staggered. */}
+          <span
+            aria-hidden
+            className="radar-pulse absolute inset-0 rounded-full border-2 border-rajlo-red"
+          />
+          <span
+            aria-hidden
+            className="radar-pulse absolute inset-0 rounded-full border-2 border-rajlo-red"
+            style={{ animationDelay: "0.8s" }}
+          />
+          <span
+            aria-hidden
+            className="radar-pulse absolute inset-0 rounded-full border-2 border-rajlo-red"
+            style={{ animationDelay: "1.6s" }}
+          />
+
+          {/* Countdown ring + numeric label. SVG circle with
+             stroke-dashoffset that drains as the timer counts down.
+             The static back-ring gives the missing-progress a
+             visible track. */}
+          {remainingPct !== null && (
+            <svg
+              aria-hidden
+              viewBox="0 0 100 100"
+              className="absolute inset-1/2 h-28 w-28 -translate-x-1/2 -translate-y-1/2 -rotate-90 md:h-32 md:w-32"
+            >
+              <circle
+                cx="50"
+                cy="50"
+                r="46"
+                fill="none"
+                stroke="rgba(241,1,0,0.15)"
+                strokeWidth="6"
+              />
+              <circle
+                cx="50"
+                cy="50"
+                r="46"
+                fill="none"
+                stroke="#f10100"
+                strokeWidth="6"
+                strokeLinecap="round"
+                strokeDasharray={2 * Math.PI * 46}
+                strokeDashoffset={2 * Math.PI * 46 * (1 - remainingPct)}
+                style={{
+                  transition: "stroke-dashoffset 1s linear",
+                }}
+              />
+            </svg>
+          )}
+
+          {/* Centre block — solid red puck with the time-remaining
+             text on top. Falls back to a small pulsing dot when no
+             timer is provided. */}
+          <span className="absolute inset-1/2 grid h-20 w-20 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white shadow-lg ring-4 ring-rajlo-red/20 md:h-24 md:w-24">
+            {secondsLeft !== null ? (
+              <span className="text-center">
+                <span className="block font-mono text-2xl font-extrabold tracking-tight text-rajlo-red md:text-3xl">
+                  {formatMmSs(Math.max(0, secondsLeft))}
+                </span>
+                <span className="block text-[9px] font-bold uppercase tracking-wider text-muted">
+                  {secondsLeft > 0 ? "remaining" : "expired"}
+                </span>
+              </span>
+            ) : (
+              <span className="grid h-10 w-10 place-items-center rounded-full bg-rajlo-red text-white shadow-md shadow-rajlo-red/40">
+                <span className="h-2 w-2 rounded-full bg-white" />
+              </span>
+            )}
+          </span>
+        </div>
+        <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-rajlo-red px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-white shadow-lg shadow-rajlo-red/40">
+          <span className="relative flex h-2 w-2">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white opacity-70" />
+            <span className="relative inline-flex h-2 w-2 rounded-full bg-white" />
+          </span>
+          Searching for drivers
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Seconds between now and an ISO timestamp. Null/invalid → null. */
+function secondsUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return null;
+  return Math.round((t - Date.now()) / 1000);
+}
+
+/** "M:SS" string for a non-negative seconds count. */
+function formatMmSs(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, "0")}`;
 }

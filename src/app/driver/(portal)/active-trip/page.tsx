@@ -220,7 +220,7 @@ export default function DriverActiveTripPage() {
      + map + rider card + trip details. */
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto max-w-3xl space-y-4 px-2 py-6 md:px-3 md:py-8">
         <HeroSkeleton />
         <MapSkeleton />
         <div className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-5">
@@ -421,7 +421,7 @@ export default function DriverActiveTripPage() {
       }));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-4 px-2 py-6 md:px-3 md:py-8">
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">
           <ArcWatermark

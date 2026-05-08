@@ -6,6 +6,7 @@ import { Icon, type IconName } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { HeroSkeleton, Skeleton } from "@/components/skeleton";
+import { AvatarUploader } from "@/components/avatar-uploader";
 
 /**
  * Driver self-edit profile page. Drivers update the fields they own:
@@ -52,14 +53,26 @@ export default function DriverProfilePage() {
   const [vehicleModel, setVehicleModel] = useState("");
   const [vehicleYear, setVehicleYear] = useState<string>("");
   const [vehicleColor, setVehicleColor] = useState("");
+  // Avatar lives in the profiles table, not drivers — fetched
+  // separately. NOTE: this is the driver's everyday avatar (shown
+  // in THEIR sidebar). The verified TA selfie remains the photo
+  // shown to riders on a trip — that's the compliance photo and is
+  // edited via re-verification, not here.
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/driver/me");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = (await res.json()) as { driver: DriverMe | null };
+        // Two parallel fetches — driver-specific record AND the
+        // cross-role profile row (for the avatar). Either failing
+        // shouldn't block the page; we set what we can.
+        const [driverRes, profileRes] = await Promise.all([
+          fetch("/api/driver/me"),
+          fetch("/api/me/profile"),
+        ]);
+        if (!driverRes.ok) throw new Error(`HTTP ${driverRes.status}`);
+        const json = (await driverRes.json()) as { driver: DriverMe | null };
         if (cancelled) return;
         if (!json.driver) {
           setError(
@@ -75,6 +88,13 @@ export default function DriverProfilePage() {
         setVehicleModel(json.driver.vehicle_model ?? "");
         setVehicleYear(json.driver.vehicle_year?.toString() ?? "");
         setVehicleColor(json.driver.vehicle_color ?? "");
+
+        if (profileRes.ok) {
+          const pjson = (await profileRes.json()) as {
+            profile: { avatarUrl: string | null };
+          };
+          setAvatarUrl(pjson.profile.avatarUrl);
+        }
       } catch (e) {
         if (!cancelled)
           setError(
@@ -94,6 +114,9 @@ export default function DriverProfilePage() {
     setSaving(true);
     setError(null);
     try {
+      // Vehicle fields are NOT sent — they're read-only on this page
+      // and only changeable via the vehicle-change request flow which
+      // re-collects compliance documents.
       const res = await fetch("/api/driver/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
@@ -101,10 +124,6 @@ export default function DriverProfilePage() {
           firstName,
           lastName,
           phone,
-          vehicleMake,
-          vehicleModel,
-          vehicleYear: vehicleYear === "" ? null : Number(vehicleYear),
-          vehicleColor,
         }),
       });
       if (!res.ok) {
@@ -125,7 +144,7 @@ export default function DriverProfilePage() {
     // Profile layout skeleton: hero + info banner + 3 sections
     // (personal, vehicle, compliance), each with field placeholders.
     return (
-      <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+      <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
         <HeroSkeleton />
         <div className="rounded-2xl border border-rajlo-red/20 bg-primary-soft/40 p-4">
           <div className="flex items-start gap-3">
@@ -185,7 +204,7 @@ export default function DriverProfilePage() {
   return (
     <form
       onSubmit={handleSave}
-      className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8"
+      className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8"
     >
       {/* Hero */}
       <FadeUp>
@@ -231,6 +250,44 @@ export default function DriverProfilePage() {
         </div>
       </FadeUp>
 
+      {/* Avatar — driver's everyday profile picture (sidebar etc.).
+         Different from the verified TA selfie that riders see on
+         trips: that one stays compliance-managed via the
+         verification flow. */}
+      <FadeUp delay={0.06}>
+        <Section title="Profile picture" icon="user">
+          <div className="flex items-start gap-5">
+            <AvatarUploader
+              currentUrl={avatarUrl}
+              fallbackInitials={
+                ([firstName, lastName]
+                  .filter(Boolean)
+                  .map((s) => s[0]?.toUpperCase() ?? "")
+                  .join("") || "D")
+              }
+              size="lg"
+              onUploaded={(url) => setAvatarUrl(url)}
+            />
+            <div className="min-w-0 flex-1 space-y-2">
+              <p className="text-sm font-bold">
+                Your everyday profile picture
+              </p>
+              <p className="text-xs text-muted">
+                Shows in your own sidebar + when other drivers see you.
+              </p>
+              <p className="rounded-xl bg-primary-soft px-3 py-2 text-[11px] leading-relaxed text-rajlo-black">
+                <span className="font-bold text-rajlo-red">
+                  Note:
+                </span>{" "}
+                Riders see your TA-verified selfie on trips, not this
+                photo. To change the verified one, contact support to
+                re-submit your verification documents.
+              </p>
+            </div>
+          </div>
+        </Section>
+      </FadeUp>
+
       {/* Personal */}
       <FadeUp delay={0.08}>
         <Section title="Personal" icon="user">
@@ -266,38 +323,38 @@ export default function DriverProfilePage() {
         </Section>
       </FadeUp>
 
-      {/* Vehicle */}
+      {/* Vehicle — read-only.
+         Vehicle data ties to verified compliance documents
+         (registration, COF, insurance), so silent self-edit isn't
+         allowed — a driver registering a Probox can't quietly start
+         operating a Hilux. Changes go through the vehicle-change
+         request flow (collects new docs, admin reviews). */}
       <FadeUp delay={0.12}>
         <Section title="Vehicle" icon="car">
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field
-              label="Make"
-              value={vehicleMake}
-              onChange={setVehicleMake}
-              placeholder="Toyota"
-              required
+            <ReadOnlyField
+              label="Type"
+              value={(driver as DriverMe & { vehicle_type?: string | null }).vehicle_type ?? "—"}
             />
-            <Field
+            <ReadOnlyField
+              label="Brand"
+              value={driver.vehicle_make ?? "—"}
+            />
+            <ReadOnlyField
               label="Model"
-              value={vehicleModel}
-              onChange={setVehicleModel}
-              placeholder="Probox"
-              required
+              value={driver.vehicle_model ?? "—"}
             />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field
+            <ReadOnlyField
               label="Year"
-              type="number"
-              value={vehicleYear}
-              onChange={setVehicleYear}
-              placeholder="2020"
-              help={`Between 1980 and ${new Date().getFullYear() + 1}`}
+              value={driver.vehicle_year ? String(driver.vehicle_year) : "—"}
             />
-            <ColourField
+            <ReadOnlyField
               label="Colour"
-              value={vehicleColor}
-              onChange={setVehicleColor}
+              value={driver.vehicle_color ?? "—"}
+            />
+            <ReadOnlyField
+              label="Plate"
+              value={driver.plate_number ?? "—"}
             />
           </div>
 
@@ -307,13 +364,38 @@ export default function DriverProfilePage() {
               Rider preview
             </p>
             <p className="mt-1 text-sm font-bold">
-              {vehicleLine || "Add your vehicle details above"}
+              {vehicleLine || "Vehicle not registered yet"}
             </p>
             {driver.plate_number && (
               <p className="mt-0.5 text-xs text-muted">
                 Red plate · {driver.plate_number}
               </p>
             )}
+          </div>
+
+          {/* Change request CTA. */}
+          <div className="rounded-2xl border border-rajlo-red/20 bg-primary-soft/40 p-4">
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rajlo-red/15 text-rajlo-red">
+                <Icon name="car" className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-extrabold tracking-tight">
+                  Got a different car?
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  Vehicle changes need fresh registration, COF, and insurance
+                  documents. Submit a request and our team will review them
+                  within 1–2 business days.
+                </p>
+              </div>
+              <Link
+                href="/driver/vehicle-change"
+                className="shrink-0 rounded-full bg-rajlo-red px-4 py-2 text-xs font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-primary-hover"
+              >
+                Request change
+              </Link>
+            </div>
           </div>
         </Section>
       </FadeUp>

@@ -50,7 +50,12 @@ export function MobileDrawer({
   const pathname = usePathname();
   const router = useRouter();
 
-  // Fetch the signed-in user's profile for the footer block.
+  // Fetch the signed-in user's profile for the footer block. We do
+  // two parallel fetches: one for name/email/role from the profiles
+  // table, and one for the avatar URL via /api/me/avatar — the
+  // server endpoint resolves the verified TA selfie for drivers
+  // (signed storage URL) and falls through to the OAuth picture for
+  // riders. This keeps the storage signing on the server.
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     let cancelled = false;
@@ -59,15 +64,22 @@ export function MobileDrawer({
         data: { user },
       } = await supabase.auth.getUser();
       if (!user || cancelled) return;
-      const { data } = await supabase
-        .from("profiles")
-        .select("full_name, role, avatar_url")
-        .eq("id", user.id)
-        .single();
+
+      const [{ data }, avatarRes] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("full_name, role, avatar_url")
+          .eq("id", user.id)
+          .single(),
+        fetch("/api/me/avatar").then((r) =>
+          r.ok ? (r.json() as Promise<{ avatarUrl: string | null }>) : null,
+        ),
+      ]);
       if (cancelled) return;
-      // Prefer the profile's avatar_url (synced by trigger), but fall back to
-      // user_metadata.avatar_url so the picture appears immediately on the
-      // very first OAuth sign-in (before the next page load picks up the row).
+
+      // Server's avatar wins (selfie for drivers, OAuth for everyone
+      // else). Local fallbacks are just in case the endpoint fails:
+      // profile row first, then user_metadata.
       const meta = (user.user_metadata ?? {}) as Record<string, unknown>;
       const metaAvatar =
         (typeof meta.avatar_url === "string" ? meta.avatar_url : null) ??
@@ -76,7 +88,8 @@ export function MobileDrawer({
         full_name: data?.full_name ?? null,
         email: user.email ?? null,
         role: data?.role ?? null,
-        avatar_url: data?.avatar_url ?? metaAvatar ?? null,
+        avatar_url:
+          avatarRes?.avatarUrl ?? data?.avatar_url ?? metaAvatar ?? null,
       });
     })();
     return () => {

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { tryMatchCarpool } from "@/lib/carpool-matcher";
+import { computeRideExpiry } from "@/lib/ride-expiry";
 
 /**
  * POST /api/rider/rides
@@ -151,6 +152,11 @@ export async function POST(request: Request) {
         ? Math.round(body.fare.etaMinutes)
         : null,
       allow_carpool: allowCarpool,
+      // Hard timeout — if no driver accepts before this, the
+      // expire-on-read logic in /api/rider/rides/active will flip
+      // status to 'cancelled' with reason 'expired_no_driver' and
+      // the rider sees a "no driver found" UI with retry.
+      expires_at: computeRideExpiry(),
     })
     .select(
       "id, rider_id, pickup_lat, pickup_lng, dropoff_lat, dropoff_lng, seats, estimated_fare_jmd",

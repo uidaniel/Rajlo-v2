@@ -87,10 +87,7 @@ const FAQS: FAQ[] = [
   },
 ];
 
-const CATEGORY: Record<
-  FAQ["category"],
-  { label: string; icon: IconName }
-> = {
+const CATEGORY: Record<FAQ["category"], { label: string; icon: IconName }> = {
   trips: { label: "Trips", icon: "navigation" },
   payments: { label: "Payments", icon: "credit-card" },
   safety: { label: "Safety", icon: "shield" },
@@ -105,13 +102,15 @@ const QUICK_ACTIONS: {
 }[] = [
   {
     label: "Issue with a recent trip",
-    description: "Driver, fare, route, or anything else — open the trip and tap report.",
+    description:
+      "Driver, fare, route, or anything else — open the trip and tap report.",
     icon: "history",
     href: "/rider/history",
   },
   {
     label: "Lost something in a vehicle?",
-    description: "Contact your driver via the trip's detail page within 24 hours.",
+    description:
+      "Contact your driver via the trip's detail page within 24 hours.",
     icon: "search",
     href: "/rider/history",
   },
@@ -137,8 +136,7 @@ export default function RiderSupportPage() {
     const q = query.trim().toLowerCase();
     if (!q) return FAQS;
     return FAQS.filter(
-      (f) =>
-        f.q.toLowerCase().includes(q) || f.a.toLowerCase().includes(q),
+      (f) => f.q.toLowerCase().includes(q) || f.a.toLowerCase().includes(q),
     );
   }, [query]);
 
@@ -154,7 +152,7 @@ export default function RiderSupportPage() {
   }, [filtered]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-4 py-6 md:px-6 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero with search */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">
@@ -258,7 +256,10 @@ export default function RiderSupportPage() {
                   const id = `${cat}-${f.q}`;
                   const open = openId === id;
                   return (
-                    <li key={id} className="border-b border-line last:border-b-0">
+                    <li
+                      key={id}
+                      className="border-b border-line last:border-b-0"
+                    >
                       <button
                         type="button"
                         onClick={() => setOpenId(open ? null : id)}
@@ -299,8 +300,8 @@ export default function RiderSupportPage() {
               Talk to our support team
             </h2>
             <p className="mt-2 max-w-md text-sm text-white/85">
-              Real people based in Kingston, replying within a few hours
-              during business days.
+              Real people based in Kingston, replying within a few hours during
+              business days.
             </p>
           </div>
           <div className="grid gap-3 p-5 md:grid-cols-3 md:p-6">
@@ -347,9 +348,7 @@ export default function RiderSupportPage() {
                 <p className="text-xs font-bold uppercase tracking-wider text-rajlo-red">
                   Emergency
                 </p>
-                <p className="truncate text-sm font-extrabold">
-                  Police · 119
-                </p>
+                <p className="truncate text-sm font-extrabold">Police · 119</p>
               </div>
             </a>
           </div>
