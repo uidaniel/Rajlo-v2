@@ -52,11 +52,11 @@ export const riderScreens: Record<string, ScreenConfig> = {
     ],
   },
   payments: {
-    title: "Payment Methods",
-    description: "Manage cards, wallet balances, and cash payment preferences.",
+    title: "Wallet & Payments",
+    description: "Top up your Rajlo wallet — every trip auto-debits, no cash.",
     items: [
-      { title: "Visa ending 2204", meta: "Primary method", status: "good" },
-      { title: "Cash", meta: "Enabled", status: "info" },
+      { title: "Visa ending 2204", meta: "Saved for top-ups", status: "good" },
+      { title: "Wallet balance", meta: "Auto-debited per trip", status: "info" },
     ],
   },
   confirmation: {

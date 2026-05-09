@@ -48,8 +48,8 @@ const FAQS: FAQ[] = [
   },
   {
     category: "payments",
-    q: "Can I pay in cash?",
-    a: "Yes. At the end of the trip you choose: cash to the driver, or charge your saved card. Drivers are required to accept cash.",
+    q: "Do you take cash?",
+    a: "Rajlo is 100% cashless. Top up your wallet from a card or bank transfer, then every trip — Private Ride or Route Taxi — is auto-debited from your balance. Drivers don't carry cash, which keeps both of you safer.",
   },
   {
     category: "payments",
@@ -133,10 +133,10 @@ const QUICK_ACTIONS: QuickAction[] = [
     href: "mailto:support@rajlo.com?subject=Lost%20item%20in%20Rajlo%20trip&body=Trip%20ID%3A%20%0A%0AItem%20description%3A%20%0A%0AAny%20other%20details%3A%20",
   },
   {
-    label: "Update payment method",
-    description: "Add or change your card, mobile money, or default to cash.",
+    label: "Top up your wallet",
+    description: "Add money via card or bank transfer — every trip pays from here.",
     icon: "credit-card",
-    href: "/rider/payments",
+    href: "/rider/wallet",
   },
   {
     label: "Safety concern",

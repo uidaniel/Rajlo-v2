@@ -227,8 +227,9 @@ export default function RiderFareBreakdownPage() {
             </li>
           </ul>
           <p className="mt-4 rounded-xl bg-surface-soft px-3 py-2 text-[11px] leading-relaxed text-muted">
-            Final fare is locked when your driver accepts. Pay in cash on
-            arrival or via your saved payment method — the choice is yours.
+            Final fare is locked when your driver accepts and auto-debits from
+            your Rajlo wallet at the end of the trip. Top up anytime — Rajlo is
+            cashless end-to-end.
           </p>
         </div>
       </FadeUp>

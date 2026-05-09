@@ -84,6 +84,25 @@ export const FARE_CONFIG = {
   avgKmh: 32,
 } as const;
 
+/**
+ * True when the coord is plausibly inside Jamaica's bounding box.
+ * Used to reject obviously-bogus GPS coords (stuck-on-zero fixes,
+ * test addresses from elsewhere) before they reach the matcher.
+ */
+export function isWithinJamaica(coord: {
+  lat: number;
+  lng: number;
+}): boolean {
+  return (
+    Number.isFinite(coord.lat) &&
+    Number.isFinite(coord.lng) &&
+    coord.lat >= JAMAICA_BOUNDS.south &&
+    coord.lat <= JAMAICA_BOUNDS.north &&
+    coord.lng >= JAMAICA_BOUNDS.west &&
+    coord.lng <= JAMAICA_BOUNDS.east
+  );
+}
+
 /** Great-circle distance between two coords in km (haversine). */
 export function haversineKm(
   a: { lat: number; lng: number },

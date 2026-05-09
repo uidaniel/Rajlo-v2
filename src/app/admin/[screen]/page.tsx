@@ -48,7 +48,7 @@ const ROADMAP: Record<
   payouts: {
     title: "Driver payouts",
     description:
-      "Direct deposit settlement, banking ledger, and instant cash-out controls. Lands once the payment processor integration is live.",
+      "Driver wallet settlement to bank, withdrawal queue, and ledger reconciliation. Lands once the payment processor integration is live.",
     live: "/admin/users?role=driver",
     liveLabel: "Open driver list",
   },

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArcWatermark } from "@/components/arc-pattern";
@@ -134,6 +135,13 @@ export default function RiderWalletPage() {
                 <Icon name="arrow-right" className="h-4 w-4" />
                 Send money
               </button>
+              <Link
+                href="/rider/qr-pay"
+                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-2.5 text-sm font-bold text-white backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-white/20"
+              >
+                <Icon name="credit-card" className="h-4 w-4" />
+                Pay driver QR
+              </Link>
             </div>
           </div>
         </div>

@@ -499,8 +499,8 @@ export default function RiderRequestPage() {
               ))}
             </ul>
             <p className="border-t border-line/60 bg-white px-5 py-2.5 text-[11px] leading-relaxed text-muted">
-              Final fare confirmed when your driver accepts. Pay in cash or via
-              the app — your choice on arrival.
+              Final fare confirmed when your driver accepts. Auto-debited from
+              your Rajlo wallet — keep it topped up.
             </p>
           </div>
         </FadeUp>

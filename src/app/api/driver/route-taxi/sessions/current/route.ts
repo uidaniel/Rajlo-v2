@@ -1,0 +1,224 @@
+import { NextResponse } from "next/server";
+import { getSupabaseServerClient } from "@/lib/supabase-server";
+import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import { haversineKm } from "@/lib/jamaica";
+
+/**
+ * GET /api/driver/route-taxi/sessions/current
+ *
+ * Returns the driver's currently-active Route Taxi session (if any),
+ * the route metadata, the seats counter, and three hail buckets that
+ * the driver UI renders:
+ *
+ *   - pending: hails on this route waiting for a driver to accept
+ *               (session_id IS NULL, status = 'requested')
+ *   - accepted: hails this driver has accepted but not yet picked up
+ *   - onboard:  hails currently riding with this driver
+ *
+ * `null` session means "show the start-session picker" — clean
+ * single-shape contract for the page.
+ */
+export async function GET() {
+  const auth = await createSupabaseAuthServerClient();
+  const {
+    data: { user },
+  } = await auth.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) {
+    return NextResponse.json(
+      { error: "Supabase is not configured" },
+      { status: 503 },
+    );
+  }
+
+  const { data: driver } = await supabase
+    .from("drivers")
+    .select("id, activated, onboarding_status")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!driver) {
+    return NextResponse.json({ session: null, driver: null });
+  }
+
+  const { data: session } = await supabase
+    .from("driver_sessions")
+    .select(
+      "id, route_id, direction, vehicle_capacity, seats_taken, status, started_at, current_lat, current_lng, last_position_at",
+    )
+    .eq("driver_id", driver.id)
+    .eq("status", "active")
+    .maybeSingle();
+
+  if (!session) {
+    return NextResponse.json({
+      session: null,
+      driver: {
+        activated: driver.activated,
+        onboardingStatus: driver.onboarding_status,
+      },
+    });
+  }
+
+  // Route metadata for the header.
+  const { data: route } = await supabase
+    .from("routes")
+    .select(
+      "id, origin_name, destination_name, origin_parish, destination_parish, distance_km, ta_fare_jmd",
+    )
+    .eq("id", session.route_id)
+    .maybeSingle();
+
+  // Pending hails (still unattached) on the same route. We pull the
+  // pickup coords too so we can compute proximity to the driver's
+  // current GPS and sort closest-first. Riders who declined location
+  // share have pickup at (0, 0) and fall to the end of the list.
+  const { data: pending } = await supabase
+    .from("route_hails")
+    .select(
+      "id, rider_id, pickup_name, pickup_lat, pickup_lng, dropoff_name, distance_km, fare_jmd, concession, requested_at",
+    )
+    .eq("route_id", session.route_id)
+    .eq("status", "requested")
+    .is("session_id", null)
+    .order("requested_at", { ascending: true })
+    .limit(20);
+
+  // Hails this driver has accepted but not yet picked up.
+  const { data: accepted } = await supabase
+    .from("route_hails")
+    .select(
+      "id, rider_id, pickup_name, dropoff_name, distance_km, fare_jmd, accepted_at",
+    )
+    .eq("session_id", session.id)
+    .eq("status", "accepted")
+    .order("accepted_at", { ascending: true });
+
+  // Hails currently onboard.
+  const { data: onboard } = await supabase
+    .from("route_hails")
+    .select(
+      "id, rider_id, pickup_name, dropoff_name, distance_km, fare_jmd, picked_up_at",
+    )
+    .eq("session_id", session.id)
+    .eq("status", "picked_up")
+    .order("picked_up_at", { ascending: true });
+
+  return NextResponse.json({
+    session: {
+      id: session.id,
+      routeId: session.route_id,
+      direction: session.direction,
+      vehicleCapacity: session.vehicle_capacity,
+      seatsTaken: session.seats_taken,
+      seatsRemaining: Math.max(0, session.vehicle_capacity - session.seats_taken),
+      status: session.status,
+      startedAt: session.started_at,
+      currentLat: session.current_lat,
+      currentLng: session.current_lng,
+      lastPositionAt: session.last_position_at,
+      route: route
+        ? {
+            id: route.id,
+            origin: route.origin_name,
+            destination: route.destination_name,
+            parish: route.origin_parish,
+            distanceKm: Number(route.distance_km),
+            taFareJmd: route.ta_fare_jmd,
+          }
+        : null,
+    },
+    pending: enrichAndSortPending(pending, session),
+    accepted:
+      (accepted ?? []).map((h) => ({
+        id: h.id,
+        riderId: h.rider_id,
+        pickup: h.pickup_name,
+        dropoff: h.dropoff_name,
+        distanceKm: Number(h.distance_km),
+        fareJmd: h.fare_jmd,
+        acceptedAt: h.accepted_at,
+      })) ?? [],
+    onboard:
+      (onboard ?? []).map((h) => ({
+        id: h.id,
+        riderId: h.rider_id,
+        pickup: h.pickup_name,
+        dropoff: h.dropoff_name,
+        distanceKm: Number(h.distance_km),
+        fareJmd: h.fare_jmd,
+        pickedUpAt: h.picked_up_at,
+      })) ?? [],
+    driver: {
+      activated: driver.activated,
+      onboardingStatus: driver.onboarding_status,
+    },
+  });
+}
+
+/**
+ * Compute proximity for each pending hail (when both the driver's
+ * current GPS AND the hail's pickup GPS are available) and sort
+ * closest-first. Hails without coords sink to the bottom in
+ * requested-at order — drivers can still see them, just less
+ * prominently than the ones we can place on the map.
+ */
+function enrichAndSortPending(
+  rows: Array<{
+    id: string;
+    rider_id: string;
+    pickup_name: string;
+    pickup_lat: number;
+    pickup_lng: number;
+    dropoff_name: string;
+    distance_km: number;
+    fare_jmd: number;
+    concession: boolean;
+    requested_at: string;
+  }> | null,
+  session: {
+    current_lat: number | null;
+    current_lng: number | null;
+  },
+) {
+  if (!rows) return [];
+  const driverPos =
+    session.current_lat != null && session.current_lng != null
+      ? { lat: session.current_lat, lng: session.current_lng }
+      : null;
+
+  const enriched = rows.map((h) => {
+    const hasPickupCoords = h.pickup_lat !== 0 || h.pickup_lng !== 0;
+    const proximityKm =
+      driverPos && hasPickupCoords
+        ? haversineKm(driverPos, { lat: h.pickup_lat, lng: h.pickup_lng })
+        : null;
+    return {
+      id: h.id,
+      riderId: h.rider_id,
+      pickup: h.pickup_name,
+      pickupLat: hasPickupCoords ? h.pickup_lat : null,
+      pickupLng: hasPickupCoords ? h.pickup_lng : null,
+      dropoff: h.dropoff_name,
+      distanceKm: Number(h.distance_km),
+      fareJmd: h.fare_jmd,
+      concession: h.concession,
+      requestedAt: h.requested_at,
+      proximityKm,
+    };
+  });
+
+  // Sort: hails with proximity ascending, then unscored hails by
+  // requested-at (which is already the SQL order).
+  enriched.sort((a, b) => {
+    if (a.proximityKm == null && b.proximityKm == null) return 0;
+    if (a.proximityKm == null) return 1;
+    if (b.proximityKm == null) return -1;
+    return a.proximityKm - b.proximityKm;
+  });
+
+  return enriched;
+}

@@ -215,9 +215,9 @@ const PATOIS: Dict = {
   "settings.app.theme.dark": "Dark",
 
   // Connected section
-  "settings.connected.payments": "Payment method",
+  "settings.connected.payments": "Wallet & top-ups",
   "settings.connected.payments.desc":
-    "Card, mobile money, an cash setting.",
+    "Balance, deposit history, an save card.",
   "settings.connected.safety": "Safety toolkit",
   "settings.connected.safety.desc":
     "Trusted contact, SOS, share-trip default.",

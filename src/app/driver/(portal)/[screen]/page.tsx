@@ -30,7 +30,7 @@ const COMING_SOON: Record<
     bullets: [
       "Weekly direct deposits",
       "NCB, Scotiabank, JN, JMMB, NCB Capital — and mobile money",
-      "Instant cash-out (small fee) for verified drivers",
+      "Instant withdraw to bank (small fee) for verified drivers",
     ],
     fallback: { label: "Open earnings dashboard", href: "/driver/earnings" },
   },

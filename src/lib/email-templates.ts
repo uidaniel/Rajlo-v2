@@ -59,7 +59,7 @@ export function welcomeRiderTemplate(args: {
         { label: "Request a ride", value: "Anywhere across the island" },
         { label: "Share live trip", value: "WhatsApp · iMessage · Slack" },
         { label: "Add trusted contacts", value: "For instant SOS alerts" },
-        { label: "Pay how you like", value: "Cash · Card · Wallet" },
+        { label: "Pay from your wallet", value: "Top up · Auto-debit · Zero cash" },
       ],
     },
     {

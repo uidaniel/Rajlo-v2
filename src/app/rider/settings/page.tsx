@@ -527,10 +527,10 @@ export default function RiderSettingsPage() {
       <FadeUp delay={0.2}>
         <Section title="Connected" icon="grid">
           <LinkRow
-            label="Payment methods"
-            description="Cards, mobile money, and cash settings."
-            href="/rider/payments"
-            icon="credit-card"
+            label="Wallet & top-ups"
+            description="Balance, deposit history, and saved cards."
+            href="/rider/wallet"
+            icon="wallet"
           />
           <LinkRow
             label="Safety toolkit"

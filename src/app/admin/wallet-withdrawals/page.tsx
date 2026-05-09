@@ -93,8 +93,8 @@ export default function AdminWithdrawalsPage() {
               Withdrawal queue
             </h1>
             <p className="mt-1 text-sm text-white/70 md:text-base">
-              Drivers cashing out to their bank. Mark as paid once you&apos;ve
-              sent the transfer.
+              Drivers withdrawing wallet earnings to their bank. Mark as paid
+              once you&apos;ve sent the transfer.
             </p>
           </div>
         </div>
