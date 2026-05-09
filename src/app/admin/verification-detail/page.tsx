@@ -4,6 +4,7 @@ import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Icon } from "@/components/icons";
+import { HeroSkeleton, Skeleton } from "@/components/skeleton";
 import { requiredTADocuments } from "@/lib/mock-data";
 
 // Doc keys that are NOT actual file uploads — they're plain form fields stored
@@ -33,13 +34,15 @@ const STATUS_STYLES: Record<ReviewState, { bg: string; text: string; ring: strin
 
 function VerificationDetailLoading() {
   return (
-    <div className="mx-auto max-w-6xl px-2 py-10 md:px-3 md:py-16">
-      <div className="rounded-3xl border border-line bg-surface p-10 text-center">
-        <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-primary-soft">
-          <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
-        </span>
-        <p className="mt-4 text-sm font-semibold text-muted">Loading verification details…</p>
+    <div className="mx-auto max-w-6xl space-y-5 px-2 py-6 md:px-3 md:py-10">
+      <HeroSkeleton />
+      <div className="grid gap-4 md:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-28 w-full" rounded="xl" />
+        ))}
       </div>
+      <Skeleton className="h-64 w-full" rounded="xl" />
+      <Skeleton className="h-72 w-full" rounded="xl" />
     </div>
   );
 }
@@ -1205,7 +1208,9 @@ function FilePreviewModal({
               </div>
             </div>
           ) : !url ? (
-            <div className="grid h-full place-items-center text-sm text-muted">Loading…</div>
+            <div className="grid h-full place-items-center p-8">
+              <Skeleton className="h-full max-h-[480px] w-full max-w-2xl" rounded="2xl" />
+            </div>
           ) : isImage ? (
             <img
               src={url}

@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon } from "@/components/icons";
 import { FadeUp } from "@/components/anim";
 import { Skeleton } from "@/components/skeleton";
+import { LiveIndicator } from "@/components/live-indicator";
 import {
   AreaChart,
   DonutChart,
@@ -14,6 +15,7 @@ import {
   ProgressRow,
   type DonutSlice,
 } from "@/components/charts";
+import { useLiveQuery } from "@/lib/use-live-query";
 import { formatJMD } from "@/lib/jamaica";
 
 /**
@@ -77,29 +79,16 @@ const VEHICLE_PALETTE = [
 ];
 
 export default function AdminAnalyticsPage() {
-  const [data, setData] = useState<Overview | null>(null);
-  const [loading, setLoading] = useState(true);
   const [days, setDays] = useState(30);
 
-  useEffect(() => {
-    let mounted = true;
-    setLoading(true);
-    (async () => {
-      try {
-        const res = await fetch(`/api/admin/analytics/overview?days=${days}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = (await res.json()) as Overview;
-        if (mounted) setData(json);
-      } catch {
-        if (mounted) setData(null);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, [days]);
+  // Live-poll the analytics overview every 45s. The query is heavy
+  // (joins against rides + ratings + drivers + docs) so we don't
+  // hammer it harder than that — the operations dashboard already
+  // surfaces faster-changing counts via /api/admin/stats every 15s.
+  const { data, loading, refreshing, lastUpdated, refresh } =
+    useLiveQuery<Overview>(`/api/admin/analytics/overview?days=${days}`, {
+      interval: 45_000,
+    });
 
   const totals = useMemo(() => {
     if (!data) return null;
@@ -154,9 +143,17 @@ export default function AdminAnalyticsPage() {
           />
           <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                Analytics
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                  Analytics
+                </p>
+                <LiveIndicator
+                  variant="dark"
+                  lastUpdated={lastUpdated}
+                  refreshing={refreshing}
+                  onRefresh={refresh}
+                />
+              </div>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
                 {loading
                   ? "Crunching numbers…"
@@ -165,7 +162,7 @@ export default function AdminAnalyticsPage() {
                     : "No data"}
               </h1>
               <p className="mt-1 text-sm text-white/70 md:text-base">
-                Last {days} days · refreshed {data ? ago(data.generatedAt) : "now"}
+                Last {days} days · auto-refreshes every 45 seconds
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -598,12 +595,3 @@ function Leaderboard({
   );
 }
 
-function ago(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(ms / 60_000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}

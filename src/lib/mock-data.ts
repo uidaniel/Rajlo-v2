@@ -71,6 +71,7 @@ export const adminNav: NavItem[] = [
   { label: "Analytics", labelKey: "nav.admin.analytics", href: "/admin/analytics", icon: "bar-chart" },
   { label: "Ride monitoring", labelKey: "nav.admin.monitoring", href: "/admin/ride-monitoring", icon: "activity" },
   { label: "Users", labelKey: "nav.admin.users", href: "/admin/users", icon: "users" },
+  { label: "Messaging", labelKey: "nav.admin.messages", href: "/admin/messages", icon: "mail" },
   { label: "Verification queue", labelKey: "nav.admin.verification", href: "/admin/verification-queue", icon: "clipboard-check" },
   { label: "Vehicle changes", labelKey: "nav.admin.vehicle", href: "/admin/vehicle-changes", icon: "car" },
   { label: "Audit logs", labelKey: "nav.admin.audit", href: "/admin/audit-logs", icon: "history" },

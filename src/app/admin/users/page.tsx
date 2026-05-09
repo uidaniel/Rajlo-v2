@@ -6,6 +6,8 @@ import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon } from "@/components/icons";
 import { FadeUp } from "@/components/anim";
 import { Skeleton } from "@/components/skeleton";
+import { LiveIndicator } from "@/components/live-indicator";
+import { useLiveQuery } from "@/lib/use-live-query";
 
 /**
  * /admin/users — single search-and-act table for every account on
@@ -47,11 +49,6 @@ type RoleFilter = "all" | "rider" | "driver" | "admin";
 type StatusFilter = "all" | "active" | "deactivated";
 
 export default function AdminUsersPage() {
-  const [users, setUsers] = useState<UserRow[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
@@ -66,33 +63,31 @@ export default function AdminUsersPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const reload = useMemo(
-    () => async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        if (roleFilter !== "all") params.set("role", roleFilter);
-        if (statusFilter !== "all") params.set("status", statusFilter);
-        if (debouncedSearch) params.set("q", debouncedSearch);
-        params.set("limit", "100");
-        const res = await fetch(`/api/admin/users?${params.toString()}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = (await res.json()) as { users: UserRow[]; total: number };
-        setUsers(json.users ?? []);
-        setTotal(json.total ?? json.users?.length ?? 0);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [roleFilter, statusFilter, debouncedSearch],
-  );
+  const usersUrl = (() => {
+    const params = new URLSearchParams();
+    if (roleFilter !== "all") params.set("role", roleFilter);
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (debouncedSearch) params.set("q", debouncedSearch);
+    params.set("limit", "100");
+    return `/api/admin/users?${params.toString()}`;
+  })();
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  // Live-poll every 30s. New signups + sign-ins surface within one
+  // polling cycle without the admin needing to reload.
+  const usersQuery = useLiveQuery<{ users: UserRow[]; total: number }>(
+    usersUrl,
+    { interval: 30_000 },
+  );
+  // Memoise the derived array so downstream useMemo (counts) gets a
+  // stable reference and only recomputes when the query data flips.
+  const users = useMemo(
+    () => usersQuery.data?.users ?? [],
+    [usersQuery.data?.users],
+  );
+  const total = usersQuery.data?.total ?? users.length;
+  const loading = usersQuery.loading;
+  const error = usersQuery.error;
+  const reload = usersQuery.refresh;
 
   const counts = useMemo(() => {
     return {
@@ -196,9 +191,17 @@ export default function AdminUsersPage() {
           />
           <div className="relative flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div>
-              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                People
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                  People
+                </p>
+                <LiveIndicator
+                  variant="dark"
+                  lastUpdated={usersQuery.lastUpdated}
+                  refreshing={usersQuery.refreshing}
+                  onRefresh={reload}
+                />
+              </div>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
                 Users on the platform
               </h1>

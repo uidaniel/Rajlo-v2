@@ -295,3 +295,170 @@ export function TabsSkeleton({ tabs = 3 }: { tabs?: number }) {
     </div>
   );
 }
+
+/* ──────────────── Composed: admin KPI tile ──────────────── */
+
+/**
+ * Mirrors the KPI tiles on the operations dashboard + analytics page —
+ * eyebrow label, big number, caption row, and a small inline sparkline
+ * placeholder so the layout doesn't shift when the real number arrives.
+ */
+export function KpiTileSkeleton() {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-2">
+          <Skeleton className="h-2.5 w-20" rounded="full" />
+          <Skeleton className="h-7 w-28" rounded="lg" />
+        </div>
+        <Skeleton className="h-10 w-10" rounded="xl" />
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <Skeleton className="h-3 w-32" rounded="md" />
+        <Skeleton className="h-8 w-20" rounded="md" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Compact strip of N KPI tiles — one call replaces a whole top-of-page
+ * scoreboard. Defaults to 4 tiles to match the operations dashboard.
+ */
+export function KpiStripSkeleton({ tiles = 4 }: { tiles?: number }) {
+  return (
+    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+      {Array.from({ length: tiles }).map((_, i) => (
+        <KpiTileSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
+/* ──────────────── Composed: chart card ──────────────── */
+
+/**
+ * Card frame with eyebrow + title + a tall body block, sized to look
+ * like an area / bar / donut chart panel. The body block inherits its
+ * height so callers can override for taller donuts vs short sparklines.
+ */
+export function ChartCardSkeleton({
+  bodyHeight = "h-44",
+}: {
+  bodyHeight?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-5">
+      <div className="space-y-2">
+        <Skeleton className="h-2.5 w-24" rounded="full" />
+        <Skeleton className="h-4 w-40" rounded="md" />
+      </div>
+      <Skeleton className={`mt-4 w-full ${bodyHeight}`} rounded="xl" />
+    </div>
+  );
+}
+
+/* ──────────────── Composed: table row ──────────────── */
+
+/**
+ * Used by every table-style admin list (users, rides, audit logs).
+ * Renders one row that mimics avatar / two-line label / metadata /
+ * action chips so the table doesn't reflow when the rows arrive.
+ */
+export function TableRowSkeleton() {
+  return (
+    <div className="grid grid-cols-1 items-center gap-3 px-3 py-3 md:grid-cols-[2fr,1fr,1fr,auto] md:px-5 md:py-4">
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-10 w-10" rounded="xl" />
+        <div className="min-w-0 flex-1 space-y-2">
+          <Skeleton className="h-3.5 w-3/4 max-w-48" rounded="md" />
+          <Skeleton className="h-2.5 w-1/2 max-w-32" rounded="md" />
+        </div>
+      </div>
+      <div className="space-y-1.5">
+        <Skeleton className="h-3 w-20" rounded="md" />
+        <Skeleton className="h-2.5 w-16" rounded="md" />
+      </div>
+      <div className="space-y-1.5">
+        <Skeleton className="h-3 w-24" rounded="md" />
+        <Skeleton className="h-2.5 w-16" rounded="md" />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Skeleton className="h-7 w-16" rounded="full" />
+        <Skeleton className="h-7 w-20" rounded="full" />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Convenience wrapper — N rows inside a card frame. Good for the body
+ * of any admin list view while the data is in-flight.
+ */
+export function TableSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+      <div className="divide-y divide-line">
+        {Array.from({ length: rows }).map((_, i) => (
+          <TableRowSkeleton key={i} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ──────────────── Composed: activity feed ──────────────── */
+
+/**
+ * Feed-style row: small icon tile, two text lines, trailing timestamp.
+ * Matches the live-activity panel + audit-log row shape.
+ */
+export function ActivityRowSkeleton() {
+  return (
+    <div className="flex items-start gap-3 rounded-xl px-2 py-2">
+      <Skeleton className="h-8 w-8" rounded="lg" />
+      <div className="min-w-0 flex-1 space-y-2">
+        <Skeleton className="h-3 w-2/3 max-w-56" rounded="md" />
+        <Skeleton className="h-2.5 w-3/4 max-w-72" rounded="md" />
+      </div>
+      <Skeleton className="h-2.5 w-8" rounded="md" />
+    </div>
+  );
+}
+
+export function ActivityFeedSkeleton({ rows = 6 }: { rows?: number }) {
+  return (
+    <ul className="space-y-1">
+      {Array.from({ length: rows }).map((_, i) => (
+        <li key={i}>
+          <ActivityRowSkeleton />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/* ──────────────── Composed: leaderboard / rank list ──────────────── */
+
+/**
+ * Numbered ranked list — top drivers, top riders, top parishes.
+ */
+export function LeaderboardSkeleton({ rows = 5 }: { rows?: number }) {
+  return (
+    <ul className="space-y-3">
+      {Array.from({ length: rows }).map((_, i) => (
+        <li
+          key={i}
+          className="flex items-center gap-3 rounded-xl border border-line bg-surface-soft px-3 py-2.5"
+        >
+          <Skeleton className="h-7 w-7" rounded="full" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <Skeleton className="h-3.5 w-3/4 max-w-48" rounded="md" />
+            <Skeleton className="h-2.5 w-1/2 max-w-32" rounded="md" />
+          </div>
+          <Skeleton className="h-3 w-16" rounded="md" />
+        </li>
+      ))}
+    </ul>
+  );
+}

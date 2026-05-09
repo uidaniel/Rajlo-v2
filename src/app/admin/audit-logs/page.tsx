@@ -6,6 +6,8 @@ import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon } from "@/components/icons";
 import { FadeUp } from "@/components/anim";
 import { Skeleton } from "@/components/skeleton";
+import { LiveIndicator } from "@/components/live-indicator";
+import { useLiveQuery } from "@/lib/use-live-query";
 
 /**
  * /admin/audit-logs — combined audit feed.
@@ -33,10 +35,6 @@ type SourceFilter = "all" | "admin" | "driver";
 type TargetFilter = "all" | "rider" | "driver" | "admin" | "ride" | "system";
 
 export default function AdminAuditLogsPage() {
-  const [entries, setEntries] = useState<Entry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
   const [source, setSource] = useState<SourceFilter>("all");
   const [target, setTarget] = useState<TargetFilter>("all");
   const [days, setDays] = useState(30);
@@ -48,33 +46,29 @@ export default function AdminAuditLogsPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  const reload = useMemo(
-    () => async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const params = new URLSearchParams();
-        if (source !== "all") params.set("source", source);
-        if (target !== "all") params.set("targetType", target);
-        if (debouncedSearch) params.set("q", debouncedSearch);
-        params.set("days", String(days));
-        params.set("limit", "200");
-        const res = await fetch(`/api/admin/audit-logs?${params.toString()}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = (await res.json()) as { entries: Entry[] };
-        setEntries(json.entries ?? []);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Couldn't load audit logs");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [source, target, days, debouncedSearch],
-  );
+  const url = (() => {
+    const params = new URLSearchParams();
+    if (source !== "all") params.set("source", source);
+    if (target !== "all") params.set("targetType", target);
+    if (debouncedSearch) params.set("q", debouncedSearch);
+    params.set("days", String(days));
+    params.set("limit", "200");
+    return `/api/admin/audit-logs?${params.toString()}`;
+  })();
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  // Audit log changes whenever an admin acts or a driver event lands —
+  // a 15s cadence keeps the feed visibly current.
+  const auditQuery = useLiveQuery<{ entries: Entry[] }>(url, {
+    interval: 15_000,
+  });
+  // Stable derived value — wrap in useMemo so the `entries.forEach`
+  // grouping doesn't churn `grouped` on every render.
+  const entries = useMemo(
+    () => auditQuery.data?.entries ?? [],
+    [auditQuery.data?.entries],
+  );
+  const loading = auditQuery.loading;
+  const error = auditQuery.error;
 
   // Group entries by date for visual scanning
   const grouped = useMemo(() => {
@@ -103,15 +97,23 @@ export default function AdminAuditLogsPage() {
             className="absolute -right-20 -bottom-20 opacity-[0.10]"
           />
           <div className="relative">
-            <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-              Compliance trail
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                Compliance trail
+              </p>
+              <LiveIndicator
+                variant="dark"
+                lastUpdated={auditQuery.lastUpdated}
+                refreshing={auditQuery.refreshing}
+                onRefresh={auditQuery.refresh}
+              />
+            </div>
             <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
               Audit logs
             </h1>
             <p className="mt-1 text-sm text-white/70 md:text-base">
               Every admin decision and every driver verification event,
-              searchable across {days} day{days === 1 ? "" : "s"}.
+              searchable across {days} day{days === 1 ? "" : "s"} · refreshes every 15s.
             </p>
           </div>
         </div>

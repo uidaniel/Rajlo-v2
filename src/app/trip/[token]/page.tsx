@@ -240,48 +240,81 @@ export default function TripSharePage({
 
         {/* Pickup → stops → dropoff. Letter labels match the map
            markers: A = pickup, B/C/... = each stop, final letter =
-           dropoff. Same convention as the rider history detail page. */}
-        <div className="rounded-2xl border border-line bg-surface p-5">
-          <div className="flex items-start gap-3">
-            <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-emerald-500 text-[11px] font-extrabold text-white">
-              A
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
-                Pickup
-              </p>
-              <p className="mt-0.5 truncate text-sm font-bold">
-                {data.pickup.name}
-              </p>
-            </div>
-          </div>
-          {data.stops.map((s, i) => (
-            <div key={s.position} className="mt-4 flex items-start gap-3">
-              <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rajlo-black text-[11px] font-extrabold text-white">
-                {String.fromCharCode(66 + i)}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
-                  Stop {i + 1}
+           dropoff. Same convention as the rider history detail page.
+           When there are intermediate stops we surface the count in the
+           section header so the recipient can't miss that this is a
+           multi-stop trip — that was missing before and people thought
+           shared multi-stop rides only had pickup + dropoff. */}
+        {(() => {
+          const tripStops = data.stops ?? [];
+          const stopCount = tripStops.length;
+          const rows = [
+            {
+              key: "pickup",
+              kind: "Pickup" as const,
+              label: "A",
+              name: data.pickup.name,
+              dotClass: "bg-emerald-500",
+            },
+            ...tripStops.map((s, i) => ({
+              key: `stop-${s.position}`,
+              kind: `Stop ${i + 1} of ${stopCount}` as const,
+              label: String.fromCharCode(66 + i),
+              name: s.name,
+              dotClass: "bg-rajlo-black",
+            })),
+            {
+              key: "dropoff",
+              kind: "Dropoff" as const,
+              label: String.fromCharCode(66 + stopCount),
+              name: data.dropoff.name,
+              dotClass: "bg-rajlo-red",
+            },
+          ];
+          return (
+            <div className="rounded-2xl border border-line bg-surface p-5">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                  Route
                 </p>
-                <p className="mt-0.5 truncate text-sm font-bold">{s.name}</p>
+                {stopCount > 0 && (
+                  <span className="rounded-full bg-primary-soft px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-rajlo-red">
+                    {stopCount} stop{stopCount === 1 ? "" : "s"} along the way
+                  </span>
+                )}
               </div>
+              <ol className="relative space-y-4">
+                {/* Vertical thread connecting the markers — purely decorative,
+                   makes the multi-stop list read as a single route rather than
+                   a stack of separate rows. */}
+                <span
+                  className="absolute left-[15px] top-3 bottom-3 w-px bg-line"
+                  aria-hidden
+                />
+                {rows.map((r) => (
+                  <li
+                    key={r.key}
+                    className="relative flex items-start gap-3"
+                  >
+                    <span
+                      className={`relative z-10 mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full text-[11px] font-extrabold text-white ${r.dotClass}`}
+                    >
+                      {r.label}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+                        {r.kind}
+                      </p>
+                      <p className="mt-0.5 truncate text-sm font-bold">
+                        {r.name}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
             </div>
-          ))}
-          <div className="mt-4 flex items-start gap-3">
-            <span className="mt-1 grid h-8 w-8 shrink-0 place-items-center rounded-full bg-rajlo-red text-[11px] font-extrabold text-white">
-              {String.fromCharCode(66 + data.stops.length)}
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
-                Dropoff
-              </p>
-              <p className="mt-0.5 truncate text-sm font-bold">
-                {data.dropoff.name}
-              </p>
-            </div>
-          </div>
-        </div>
+          );
+        })()}
 
         <p className="text-center text-[11px] text-muted">
           You&apos;re viewing a Rajlo trip share. The link stops working when

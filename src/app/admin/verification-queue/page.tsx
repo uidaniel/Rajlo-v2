@@ -1,10 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp, Stagger, StaggerItem } from "@/components/anim";
+import { TableSkeleton } from "@/components/skeleton";
+import { LiveIndicator } from "@/components/live-indicator";
+import { useLiveQuery } from "@/lib/use-live-query";
 
 type Driver = {
   id: string;
@@ -26,47 +29,43 @@ type Filter = "all" | "pending" | "rejected" | "active";
 const TOTAL_REQUIRED_DOCS = 9;
 
 export default function VerificationQueuePage() {
-  const [drivers, setDrivers] = useState<Driver[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        // Fetch both cohorts in parallel: in-pipeline (pending/rejected) and
-        // activated drivers. Combined into a single list and filtered
-        // client-side via the chip row.
-        const [pipelineRes, activeRes] = await Promise.all([
-          fetch("/api/admin/verification-queue"),
-          fetch("/api/admin/verification-queue?scope=active"),
-        ]);
-        if (!pipelineRes.ok) throw new Error(`HTTP ${pipelineRes.status}`);
-        const pipelineJson = (await pipelineRes.json()) as {
-          drivers: Driver[];
-        };
-        const activeJson = activeRes.ok
-          ? ((await activeRes.json()) as { drivers: Driver[] })
-          : { drivers: [] };
-        if (mounted) {
-          setDrivers([
-            ...(pipelineJson.drivers ?? []),
-            ...(activeJson.drivers ?? []),
-          ]);
-        }
-      } catch (e) {
-        if (mounted)
-          setError(e instanceof Error ? e.message : "Failed to load queue");
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  // Two parallel live queries — pipeline (pending/rejected) and active.
+  // Both refresh every 20s so newly-submitted onboardings + admin-side
+  // status changes appear without a manual reload.
+  const pipelineQuery = useLiveQuery<{ drivers: Driver[] }>(
+    "/api/admin/verification-queue",
+    { interval: 20_000 },
+  );
+  const activeQuery = useLiveQuery<{ drivers: Driver[] }>(
+    "/api/admin/verification-queue?scope=active",
+    { interval: 20_000 },
+  );
+  // Stable derived array — without useMemo, every render produces a
+  // fresh `drivers` reference, which churns the `filtered` + `counts`
+  // memos downstream and trips the exhaustive-deps lint rule.
+  const drivers = useMemo(
+    () => [
+      ...(pipelineQuery.data?.drivers ?? []),
+      ...(activeQuery.data?.drivers ?? []),
+    ],
+    [pipelineQuery.data?.drivers, activeQuery.data?.drivers],
+  );
+  const loading = pipelineQuery.loading || activeQuery.loading;
+  const error = pipelineQuery.error;
+  const newestUpdate = [
+    pipelineQuery.lastUpdated,
+    activeQuery.lastUpdated,
+  ].reduce<Date | null>(
+    (acc, d) => (d && (!acc || d > acc) ? d : acc),
+    null,
+  );
+  const refreshAll = () => {
+    pipelineQuery.refresh();
+    activeQuery.refresh();
+  };
 
   const filtered = useMemo(() => {
     let list = drivers;
@@ -108,9 +107,17 @@ export default function VerificationQueuePage() {
           <ArcWatermark size={420} variant="red" className="absolute -right-20 -bottom-20 opacity-[0.10]" />
           <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                Operations
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                  Operations
+                </p>
+                <LiveIndicator
+                  variant="dark"
+                  lastUpdated={newestUpdate}
+                  refreshing={pipelineQuery.refreshing || activeQuery.refreshing}
+                  onRefresh={refreshAll}
+                />
+              </div>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
                 Verification queue
               </h1>
@@ -183,12 +190,7 @@ export default function VerificationQueuePage() {
 
       {/* ─── List / states ─── */}
       {loading ? (
-        <div className="grid place-items-center rounded-3xl border border-line bg-surface p-16 text-center">
-          <span className="grid h-12 w-12 place-items-center rounded-full bg-primary-soft">
-            <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
-          </span>
-          <p className="mt-4 text-sm font-semibold text-muted">Loading queue…</p>
-        </div>
+        <TableSkeleton rows={6} />
       ) : error ? (
         <div className="rounded-2xl border border-rajlo-red/30 bg-primary-soft p-6 text-center">
           <span aria-hidden className="block text-4xl leading-none">😢</span>

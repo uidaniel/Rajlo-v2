@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { Skeleton } from "@/components/skeleton";
+import { LiveIndicator } from "@/components/live-indicator";
+import { useLiveQuery } from "@/lib/use-live-query";
 
 /**
  * Admin vehicle-change request queue. Lists pending requests
@@ -70,39 +72,18 @@ const FILTERS: { key: StatusFilter; label: string }[] = [
 
 export default function AdminVehicleChangesPage() {
   const [filter, setFilter] = useState<StatusFilter>("pending");
-  const [requests, setRequests] = useState<ChangeRequest[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const load = useMemo(
-    () => async (statusFilter: StatusFilter) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(
-          `/api/admin/vehicle-changes?status=${statusFilter}`,
-        );
-        if (!res.ok) {
-          const j = (await res.json().catch(() => ({}))) as { error?: string };
-          throw new Error(j.error ?? `HTTP ${res.status}`);
-        }
-        const json = (await res.json()) as { requests: ChangeRequest[] };
-        setRequests(json.requests);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Couldn't load requests.");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [],
+  // 20s cadence — vehicle change requests trickle in throughout the
+  // day; this is enough to surface them quickly without spamming.
+  const query = useLiveQuery<{ requests: ChangeRequest[] }>(
+    `/api/admin/vehicle-changes?status=${filter}`,
+    { interval: 20_000 },
   );
-
-  useEffect(() => {
-    void load(filter);
-  }, [filter, load]);
-
-  const refresh = () => void load(filter);
+  const requests = query.data?.requests ?? [];
+  const loading = query.loading;
+  const error = query.error;
+  const refresh = () => void query.refresh();
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 px-2 py-6 md:px-3 md:py-8">
@@ -116,9 +97,17 @@ export default function AdminVehicleChangesPage() {
           />
           <div className="relative flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                Compliance review
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                  Compliance review
+                </p>
+                <LiveIndicator
+                  variant="dark"
+                  lastUpdated={query.lastUpdated}
+                  refreshing={query.refreshing}
+                  onRefresh={refresh}
+                />
+              </div>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
                 Vehicle change requests
               </h1>

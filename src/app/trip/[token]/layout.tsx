@@ -61,9 +61,19 @@ export async function generateMetadata({
   const title = `Track ${riderName} · Rajlo`;
   const subline = STATUS_DESCRIPTIONS[trip.status] ?? "Live trip share";
 
-  // Description packs the route into the line that shows under the
-  // title in WhatsApp/Slack/iMessage previews.
-  const description = `${subline} · ${trip.pickup.name} → ${trip.dropoff.name}${
+  // Build the route string for the unfurl description. Spell out
+  // intermediate stops when there are 1–2 (still readable), collapse
+  // to a count when there are 3+ so the description stays short
+  // enough that WhatsApp/iMessage don't truncate it.
+  const stopNames = trip.stops.map((s) => s.name);
+  const routeText =
+    stopNames.length === 0
+      ? `${trip.pickup.name} → ${trip.dropoff.name}`
+      : stopNames.length <= 2
+        ? `${trip.pickup.name} → ${stopNames.join(" → ")} → ${trip.dropoff.name}`
+        : `${trip.pickup.name} → ${stopNames.length} stops → ${trip.dropoff.name}`;
+
+  const description = `${subline} · ${routeText}${
     trip.estimatedEtaMinutes !== null
       ? ` · ETA ~${trip.estimatedEtaMinutes} min`
       : ""
@@ -92,7 +102,10 @@ export async function generateMetadata({
               url: mapImage,
               width: 1200,
               height: 630,
-              alt: `${trip.pickup.name} to ${trip.dropoff.name}`,
+              alt:
+                stopNames.length > 0
+                  ? `${trip.pickup.name} via ${stopNames.length} stop${stopNames.length === 1 ? "" : "s"} to ${trip.dropoff.name}`
+                  : `${trip.pickup.name} to ${trip.dropoff.name}`,
             },
           ]
         : undefined,

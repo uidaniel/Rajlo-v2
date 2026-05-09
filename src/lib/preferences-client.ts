@@ -21,7 +21,14 @@ export type LocalPrefs = {
 };
 
 const KEY = "rajlo:prefs";
-const DEFAULTS: LocalPrefs = { theme: "system", locale: "en" };
+// Light is the platform default. Riders who want dark or follow-system
+// flip it from /rider/settings; the choice persists to both
+// localStorage (so the no-FOUC bootstrap on the next load picks it up
+// before React hydrates) and rider_preferences (so it follows them
+// across devices). Picking light by default — instead of "system" —
+// keeps the very first paint on a brand-new install consistent with
+// the brand palette and the marketing surfaces.
+const DEFAULTS: LocalPrefs = { theme: "light", locale: "en" };
 
 export function readLocalPrefs(): LocalPrefs {
   if (typeof window === "undefined") return DEFAULTS;
@@ -91,15 +98,15 @@ export const NO_FOUC_SCRIPT = `
   try {
     var raw = window.localStorage.getItem('${KEY}');
     if (!raw) {
-      document.documentElement.setAttribute('data-theme', 'system');
+      document.documentElement.setAttribute('data-theme', 'light');
       return;
     }
     var p = JSON.parse(raw);
-    var theme = (p && (p.theme === 'light' || p.theme === 'dark' || p.theme === 'system')) ? p.theme : 'system';
+    var theme = (p && (p.theme === 'light' || p.theme === 'dark' || p.theme === 'system')) ? p.theme : 'light';
     document.documentElement.setAttribute('data-theme', theme);
     if (p && p.locale === 'patois') document.documentElement.setAttribute('lang', 'jam');
   } catch (e) {
-    document.documentElement.setAttribute('data-theme', 'system');
+    document.documentElement.setAttribute('data-theme', 'light');
   }
 })();
 `.trim();

@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon, type IconName } from "@/components/icons";
 import { FadeUp } from "@/components/anim";
@@ -11,6 +10,13 @@ import {
   Sparkline,
   type DonutSlice,
 } from "@/components/charts";
+import {
+  ActivityFeedSkeleton,
+  LeaderboardSkeleton,
+  Skeleton,
+} from "@/components/skeleton";
+import { LiveIndicator } from "@/components/live-indicator";
+import { useLiveQuery } from "@/lib/use-live-query";
 import { formatJMD } from "@/lib/jamaica";
 
 /**
@@ -97,53 +103,48 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function AdminOperationsPage() {
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [activity, setActivity] = useState<Activity[]>([]);
-  const [analytics, setAnalytics] = useState<Analytics | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Three live polls running in parallel. Each has its own cadence
+  // tuned to how often the underlying data actually changes:
+  //   - stats     every 15s — counts shift on every booking / signup
+  //   - activity  every 10s — feed should feel near-instant
+  //   - analytics every 45s — heavier aggregation; doesn't need to
+  //                            churn faster than that
+  // All three pause when the tab is hidden.
+  const statsQuery = useLiveQuery<Stats>("/api/admin/stats", { interval: 15_000 });
+  const activityQuery = useLiveQuery<{ items: Activity[] }>(
+    "/api/admin/activity?limit=20",
+    { interval: 10_000 },
+  );
+  const analyticsQuery = useLiveQuery<Analytics>(
+    "/api/admin/analytics/overview?days=14",
+    { interval: 45_000 },
+  );
 
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const [s, a, an] = await Promise.all([
-          fetch("/api/admin/stats"),
-          fetch("/api/admin/activity?limit=20"),
-          fetch("/api/admin/analytics/overview?days=14"),
-        ]);
-        const [sj, aj, anj] = await Promise.all([
-          s.ok ? s.json() : null,
-          a.ok ? a.json() : { items: [] },
-          an.ok ? an.json() : null,
-        ]);
-        if (!mounted) return;
-        setStats(sj);
-        setActivity(aj.items ?? []);
-        setAnalytics(anj);
-      } catch {
-        /* silent — UI shows skeleton */
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
+  const stats = statsQuery.data;
+  const activity = activityQuery.data?.items ?? [];
+  const analytics = analyticsQuery.data;
 
-    // Re-poll the activity feed every 20s so the dashboard feels live.
-    const interval = setInterval(async () => {
-      try {
-        const a = await fetch("/api/admin/activity?limit=20");
-        if (!a.ok) return;
-        const aj = await a.json();
-        if (mounted) setActivity(aj.items ?? []);
-      } catch {
-        /* silent */
-      }
-    }, 20_000);
+  // The "first paint" loading state — true only until at least one
+  // payload has resolved, so the page swaps to skeletons just once
+  // rather than flashing them on every refresh tick.
+  const loading =
+    statsQuery.loading || analyticsQuery.loading || activityQuery.loading;
 
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, []);
+  const newestUpdate = [
+    statsQuery.lastUpdated,
+    activityQuery.lastUpdated,
+    analyticsQuery.lastUpdated,
+  ].reduce<Date | null>(
+    (acc, d) => (d && (!acc || d > acc) ? d : acc),
+    null,
+  );
+  const anyRefreshing =
+    statsQuery.refreshing || activityQuery.refreshing || analyticsQuery.refreshing;
+  const refreshAll = () => {
+    statsQuery.refresh();
+    activityQuery.refresh();
+    analyticsQuery.refresh();
+  };
 
   const ridesDelta =
     stats && stats.rides.yesterday > 0
@@ -176,9 +177,17 @@ export default function AdminOperationsPage() {
           />
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                Operations console · {new Date().toLocaleDateString("en-JM", { weekday: "long", day: "numeric", month: "long" })}
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                  Operations console · {new Date().toLocaleDateString("en-JM", { weekday: "long", day: "numeric", month: "long" })}
+                </p>
+                <LiveIndicator
+                  variant="dark"
+                  lastUpdated={newestUpdate}
+                  refreshing={anyRefreshing}
+                  onRefresh={refreshAll}
+                />
+              </div>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
                 {loading
                   ? "Loading the platform…"
@@ -204,6 +213,13 @@ export default function AdminOperationsPage() {
               >
                 <Icon name="users" className="h-4 w-4" />
                 Users
+              </Link>
+              <Link
+                href="/admin/messages"
+                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-2.5 text-sm font-bold text-white backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-white/20"
+              >
+                <Icon name="mail" className="h-4 w-4" />
+                Messaging
               </Link>
               <Link
                 href="/admin/analytics"
@@ -340,9 +356,11 @@ export default function AdminOperationsPage() {
                 accent="red"
                 formatValue={(v) => `${v} ride${v === 1 ? "" : "s"}`}
               />
+            ) : loading ? (
+              <Skeleton className="h-44 w-full" rounded="xl" />
             ) : (
               <div className="grid h-44 place-items-center text-xs text-muted">
-                {loading ? "Loading…" : "No ride data yet"}
+                No ride data yet
               </div>
             )}
           </div>
@@ -364,9 +382,21 @@ export default function AdminOperationsPage() {
                   statusDonut.reduce((sum, s) => sum + s.value, 0),
                 )}
               />
+            ) : loading ? (
+              <div className="flex flex-col items-center gap-4 md:flex-row md:items-center md:gap-6">
+                <Skeleton className="h-40 w-40" rounded="full" />
+                <div className="w-full flex-1 space-y-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center justify-between">
+                      <Skeleton className="h-3 w-24" rounded="md" />
+                      <Skeleton className="h-3 w-12" rounded="md" />
+                    </div>
+                  ))}
+                </div>
+              </div>
             ) : (
               <div className="grid h-40 place-items-center text-xs text-muted">
-                {loading ? "Loading…" : "No data"}
+                No data
               </div>
             )}
           </div>
@@ -403,9 +433,11 @@ export default function AdminOperationsPage() {
                   </li>
                 ))}
               </ul>
+            ) : loading ? (
+              <LeaderboardSkeleton rows={5} />
             ) : (
               <p className="grid h-40 place-items-center text-xs text-muted">
-                {loading ? "Loading…" : "No completed rides yet"}
+                No completed rides yet
               </p>
             )}
           </div>
@@ -445,9 +477,21 @@ export default function AdminOperationsPage() {
                   );
                 })}
               </ul>
+            ) : loading ? (
+              <ul className="space-y-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <li key={i} className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-3 w-24" rounded="md" />
+                      <Skeleton className="h-3 w-10" rounded="md" />
+                    </div>
+                    <Skeleton className="h-2 w-full" rounded="full" />
+                  </li>
+                ))}
+              </ul>
             ) : (
               <p className="grid h-40 place-items-center text-xs text-muted">
-                {loading ? "Loading…" : "No rides booked yet"}
+                No rides booked yet
               </p>
             )}
           </div>
@@ -462,7 +506,7 @@ export default function AdminOperationsPage() {
                   Live activity
                 </p>
                 <p className="mt-1 text-sm font-bold">
-                  Updates every 20 seconds
+                  Updates every 10 seconds
                 </p>
               </div>
               <Link
@@ -472,9 +516,11 @@ export default function AdminOperationsPage() {
                 Audit log →
               </Link>
             </div>
-            {activity.length === 0 ? (
+            {loading && activity.length === 0 ? (
+              <ActivityFeedSkeleton rows={6} />
+            ) : activity.length === 0 ? (
               <p className="grid flex-1 place-items-center py-10 text-xs text-muted">
-                {loading ? "Loading…" : "No recent activity"}
+                No recent activity
               </p>
             ) : (
               <ul className="-mx-2 max-h-[420px] space-y-1 overflow-y-auto pr-1">

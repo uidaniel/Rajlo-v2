@@ -24,7 +24,7 @@ const DEFAULTS = {
   push_promos: false,
   push_safety_tips: true,
   language: "en" as const,
-  theme: "system" as const,
+  theme: "light" as const,
   auto_share_enabled: false,
   auto_share_notify_arrival: true,
   auto_share_notify_delay: true,

@@ -1,12 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon } from "@/components/icons";
 import { FadeUp } from "@/components/anim";
 import { Skeleton } from "@/components/skeleton";
+import { LiveIndicator } from "@/components/live-indicator";
 import { Heatmap } from "@/components/charts";
+import { useLiveQuery } from "@/lib/use-live-query";
 import { formatJMD } from "@/lib/jamaica";
 
 /**
@@ -72,12 +74,6 @@ const STATUS_FILTERS = [
 ] as const;
 
 export default function AdminRideMonitoringPage() {
-  const [rides, setRides] = useState<RideRow[]>([]);
-  const [liveRides, setLiveRides] = useState<RideRow[]>([]);
-  const [heatmap, setHeatmap] = useState<number[][] | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadingLive, setLoadingLive] = useState(true);
-
   const [status, setStatus] = useState<(typeof STATUS_FILTERS)[number]["key"]>(
     "all",
   );
@@ -91,74 +87,62 @@ export default function AdminRideMonitoringPage() {
     return () => clearTimeout(t);
   }, [search]);
 
-  // Main filtered feed
-  const reload = useMemo(
-    () => async () => {
-      setLoading(true);
-      const params = new URLSearchParams();
-      params.set("status", status);
-      if (parish) params.set("parish", parish);
-      if (debouncedSearch) params.set("q", debouncedSearch);
-      params.set("days", String(days));
-      params.set("limit", "100");
-      try {
-        const res = await fetch(`/api/admin/rides?${params.toString()}`);
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        const json = (await res.json()) as { rides: RideRow[] };
-        setRides(json.rides ?? []);
-      } catch {
-        setRides([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [status, parish, debouncedSearch, days],
+  // Build the URL the filtered feed query depends on. Whenever any
+  // of the filter inputs flip, the URL changes and useLiveQuery
+  // resets the loading state + re-fetches.
+  const filteredUrl = (() => {
+    const params = new URLSearchParams();
+    params.set("status", status);
+    if (parish) params.set("parish", parish);
+    if (debouncedSearch) params.set("q", debouncedSearch);
+    params.set("days", String(days));
+    params.set("limit", "100");
+    return `/api/admin/rides?${params.toString()}`;
+  })();
+
+  // Main filtered feed — refresh every 20s (this is the historical
+  // browse view, not the live strip).
+  const filteredQuery = useLiveQuery<{ rides: RideRow[] }>(filteredUrl, {
+    interval: 20_000,
+  });
+  const rides = filteredQuery.data?.rides ?? [];
+  const loading = filteredQuery.loading;
+
+  // Live in-flight strip — 8s cadence so new bookings + accept/arrive
+  // transitions appear with minimal lag.
+  const liveQuery = useLiveQuery<{ rides: RideRow[] }>(
+    "/api/admin/rides?status=active&days=1&limit=50",
+    { interval: 8_000 },
   );
+  const liveRides = liveQuery.data?.rides ?? [];
+  const loadingLive = liveQuery.loading;
 
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  // Heatmap from the analytics overview — refresh every 2 minutes;
+  // hour-of-day patterns barely move minute-to-minute.
+  const heatmapQuery = useLiveQuery<{ heatmap: number[][] }>(
+    "/api/admin/analytics/overview?days=30",
+    { interval: 120_000 },
+  );
+  const heatmap = heatmapQuery.data?.heatmap ?? null;
 
-  // Live strip (auto-refresh every 10s)
-  useEffect(() => {
-    let mounted = true;
-    const fetchLive = async () => {
-      try {
-        const res = await fetch("/api/admin/rides?status=active&days=1&limit=50");
-        if (!res.ok) return;
-        const json = (await res.json()) as { rides: RideRow[] };
-        if (mounted) setLiveRides(json.rides ?? []);
-      } catch {
-        /* silent */
-      } finally {
-        if (mounted) setLoadingLive(false);
-      }
-    };
-    fetchLive();
-    const interval = setInterval(fetchLive, 10_000);
-    return () => {
-      mounted = false;
-      clearInterval(interval);
-    };
-  }, []);
-
-  // Heatmap (analytics overview, 30d)
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/analytics/overview?days=30");
-        if (!res.ok) return;
-        const json = (await res.json()) as { heatmap: number[][] };
-        if (mounted) setHeatmap(json.heatmap);
-      } catch {
-        /* silent */
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
+  // Aggregate "freshest of any sub-query" for the page-level live pill.
+  const newestUpdate = [
+    filteredQuery.lastUpdated,
+    liveQuery.lastUpdated,
+    heatmapQuery.lastUpdated,
+  ].reduce<Date | null>(
+    (acc, d) => (d && (!acc || d > acc) ? d : acc),
+    null,
+  );
+  const anyRefreshing =
+    filteredQuery.refreshing ||
+    liveQuery.refreshing ||
+    heatmapQuery.refreshing;
+  const refreshAll = () => {
+    filteredQuery.refresh();
+    liveQuery.refresh();
+    heatmapQuery.refresh();
+  };
 
   const liveCount = liveRides.length;
 
@@ -173,15 +157,27 @@ export default function AdminRideMonitoringPage() {
             className="absolute -right-20 -bottom-20 opacity-[0.10]"
           />
           <div className="relative">
-            <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-              Ride monitoring
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                Ride monitoring
+              </p>
+              <LiveIndicator
+                variant="dark"
+                lastUpdated={newestUpdate}
+                refreshing={anyRefreshing}
+                onRefresh={refreshAll}
+              />
+            </div>
             <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-              {loadingLive ? "Loading…" : `${liveCount} ride${liveCount === 1 ? "" : "s"} in flight`}
+              {loadingLive ? (
+                <Skeleton variant="dark" className="h-9 w-64" rounded="lg" />
+              ) : (
+                `${liveCount} ride${liveCount === 1 ? "" : "s"} in flight`
+              )}
             </h1>
             <p className="mt-1 text-sm text-white/70 md:text-base">
-              Every booking, accept, arrival, and completion. Auto-refreshes
-              the live strip every 10 seconds.
+              Every booking, accept, arrival, and completion. The in-flight
+              strip refreshes every 8 seconds; the historical list every 20.
             </p>
           </div>
         </div>

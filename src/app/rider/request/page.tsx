@@ -203,7 +203,7 @@ export default function RiderRequestPage() {
         <span className="rounded-full bg-rajlo-red px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg shadow-rajlo-red/30">
           Booking
         </span>
-        <span className="rounded-full bg-black px-3 py-1.5 text-[11px] font-bold text-foreground shadow-md backdrop-blur">
+        <span className="rounded-full text-black px-3 py-1.5 text-[11px] font-bold shadow-md backdrop-blur">
           {allPoints.length === 0
             ? "Where are we going?"
             : allPoints.length < 2
@@ -632,8 +632,7 @@ function WaypointSlot({
         // iOS users: the recovery path is in iOS Settings, not Safari.
         // Detect (lazy require to keep the existing import block tidy)
         // and surface the literal menu route.
-        const ua =
-          typeof navigator !== "undefined" ? navigator.userAgent : "";
+        const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
         const onIOS =
           /iPad|iPhone|iPod/.test(ua) ||
           (ua.includes("Macintosh") &&
@@ -744,4 +743,3 @@ function WaypointSlot({
     </div>
   );
 }
-

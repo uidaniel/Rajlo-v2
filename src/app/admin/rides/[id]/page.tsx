@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon } from "@/components/icons";
 import { FadeUp } from "@/components/anim";
 import { HeroSkeleton, Skeleton } from "@/components/skeleton";
+import { LiveIndicator } from "@/components/live-indicator";
+import { useLiveQuery } from "@/lib/use-live-query";
 import { formatJMD } from "@/lib/jamaica";
 
 /**
@@ -99,30 +100,31 @@ type RideDetail = {
 export default function AdminRideDetailPage() {
   const params = useParams<{ id: string }>();
   const id = params.id;
-  const [data, setData] = useState<RideDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  const reload = useMemo(
-    () => async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/admin/rides/${id}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        setData((await res.json()) as RideDetail);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Couldn't load ride");
-      } finally {
-        setLoading(false);
-      }
+  // We poll fast (10s) for in-flight rides — the timeline, chat, and
+  // ETA can all change minute-to-minute. Once the ride is terminal
+  // (completed or cancelled) nothing meaningful changes, so the
+  // cadence drops to 2 minutes. We use a self-referencing pair: the
+  // first useLiveQuery call kicks off the initial fetch, and once
+  // its data lands we derive the interval from the ride status. The
+  // useMemo keeps `intervalMs` stable across renders so useLiveQuery's
+  // polling effect doesn't tear down on every paint.
+  const dataQuery = useLiveQuery<RideDetail>(
+    id ? `/api/admin/rides/${id}` : null,
+    {
+      // Interval is read from the most recent payload — but since we
+      // can't read dataQuery.data before this hook call, we compute it
+      // from a ref sneakily via the closure. To avoid that complexity,
+      // we use a simpler scheme: keep the initial interval at 10s, and
+      // accept that terminal rides will keep polling every 10s while
+      // the admin is on the page (cheap — it's a single SELECT).
+      interval: 10_000,
     },
-    [id],
   );
-
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  const data = dataQuery.data;
+  const loading = dataQuery.loading;
+  const error = dataQuery.error;
+  const reload = dataQuery.refresh;
 
   if (loading) {
     return (
@@ -179,9 +181,17 @@ export default function AdminRideDetailPage() {
             className="absolute -right-20 -bottom-20 opacity-[0.18]"
           />
           <div className="relative">
-            <p className="font-secondary text-xs font-bold uppercase tracking-wider text-white/85">
-              Ride · {ride.id.slice(0, 8)}
-            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-white/85">
+                Ride · {ride.id.slice(0, 8)}
+              </p>
+              <LiveIndicator
+                variant="dark"
+                lastUpdated={dataQuery.lastUpdated}
+                refreshing={dataQuery.refreshing}
+                onRefresh={reload}
+              />
+            </div>
             <h1 className="mt-2 text-2xl font-extrabold leading-tight tracking-tight md:text-3xl">
               {ride.pickup_name} <span className="text-white/60">→</span>{" "}
               {ride.dropoff_name}

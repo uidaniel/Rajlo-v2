@@ -2,11 +2,13 @@
 
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon } from "@/components/icons";
 import { FadeUp } from "@/components/anim";
 import { HeroSkeleton, Skeleton } from "@/components/skeleton";
+import { LiveIndicator } from "@/components/live-indicator";
+import { useLiveQuery } from "@/lib/use-live-query";
 import { formatJMD } from "@/lib/jamaica";
 
 /**
@@ -79,34 +81,20 @@ export default function AdminUserDetailPage() {
   const router = useRouter();
   const id = params.id;
 
-  const [data, setData] = useState<UserDetail | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<"deactivate" | "reactivate" | "delete" | null>(
     null,
   );
 
-  const reload = useMemo(
-    () => async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/admin/users/${id}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = (await res.json()) as UserDetail;
-        setData(json);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Couldn't load user");
-      } finally {
-        setLoading(false);
-      }
-    },
-    [id],
+  // Refresh every 30s so a return visit from the audit log or a
+  // background admin action shows up without a hard reload.
+  const userQuery = useLiveQuery<UserDetail>(
+    id ? `/api/admin/users/${id}` : null,
+    { interval: 30_000 },
   );
-
-  useEffect(() => {
-    reload();
-  }, [reload]);
+  const data = userQuery.data;
+  const loading = userQuery.loading;
+  const error = userQuery.error;
+  const reload = userQuery.refresh;
 
   const isDeactivated = data
     ? data.auth.banned ||
@@ -254,10 +242,18 @@ export default function AdminUserDetailPage() {
                 {initials || "?"}
               </span>
               <div className="min-w-0">
-                <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                  {data.profile.role.toUpperCase()}
-                  {data.driver && ` · ${data.driver.external_id}`}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                    {data.profile.role.toUpperCase()}
+                    {data.driver && ` · ${data.driver.external_id}`}
+                  </p>
+                  <LiveIndicator
+                    variant="dark"
+                    lastUpdated={userQuery.lastUpdated}
+                    refreshing={userQuery.refreshing}
+                    onRefresh={reload}
+                  />
+                </div>
                 <h1 className="mt-1 text-3xl font-extrabold tracking-tight md:text-4xl">
                   {data.profile.fullName}
                 </h1>
