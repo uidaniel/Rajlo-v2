@@ -115,7 +115,9 @@ export default function RiderRatingsPage() {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft">
-          <span aria-hidden className="text-3xl leading-none">😢</span>
+          <span aria-hidden className="text-3xl leading-none">
+            😢
+          </span>
         </span>
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
           Couldn&apos;t load ratings
@@ -131,7 +133,7 @@ export default function RiderRatingsPage() {
   const maxBar = Math.max(1, ...distribution);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">

@@ -29,39 +29,51 @@ export const riderNav: NavItem[] = [
   { label: "Safety", labelKey: "nav.rider.safety", href: "/rider/safety", icon: "shield" },
 ];
 
+/**
+ * Driver portal nav.
+ *
+ * Removed in the production-ready pass:
+ *   - Documents — folded into TA verification (same upload UI, same data)
+ *   - Ride requests — the dashboard's inbox feed already shows them live
+ *   - Seats — multi-seat is a per-ride request setting on the rider side,
+ *             not a driver surface to manage
+ *
+ * Payouts kept as a "coming soon" stub via the catch-all [screen] route
+ * since the payments stack lands later. Earnings (which IS real) covers
+ * "what have I earned" until then.
+ */
 export const driverNav: NavItem[] = [
   { label: "Dashboard", labelKey: "nav.driver.dashboard", href: "/driver", icon: "home" },
-  { label: "Documents", labelKey: "nav.driver.documents", href: "/driver/documents", icon: "file-text" },
   { label: "TA verification", labelKey: "nav.driver.verification", href: "/driver/verification", icon: "shield-check" },
-  { label: "Ride requests", labelKey: "nav.driver.requests", href: "/driver/requests", icon: "inbox" },
   { label: "Active trip", labelKey: "nav.driver.activeTrip", href: "/driver/active-trip", icon: "navigation" },
-  { label: "Seats", labelKey: "nav.driver.seats", href: "/driver/seats", icon: "users" },
   { label: "Earnings", labelKey: "nav.driver.earnings", href: "/driver/earnings", icon: "trending-up" },
-  { label: "Payouts", labelKey: "nav.driver.payouts", href: "/driver/payouts", icon: "wallet" },
   { label: "History", labelKey: "nav.driver.history", href: "/driver/history", icon: "clock" },
   { label: "Ratings", labelKey: "nav.driver.ratings", href: "/driver/ratings", icon: "star" },
   { label: "Notifications", labelKey: "nav.driver.notifications", href: "/driver/notifications", icon: "bell" },
   { label: "Profile", labelKey: "nav.driver.profile", href: "/driver/profile", icon: "user" },
-  { label: "Support & safety", labelKey: "nav.driver.support", href: "/driver/support-safety", icon: "shield" },
+  { label: "Help & safety", labelKey: "nav.driver.support", href: "/driver/help-safety", icon: "shield" },
+  { label: "Payouts", labelKey: "nav.driver.payouts", href: "/driver/payouts", icon: "wallet" },
 ];
 
 // Admin nav stays English-only — admin is internal ops staff who all
 // work in English. No labelKey needed; we still satisfy the type by
 // pointing at a key that has no Patois translation, so it falls back
 // to the English label every time.
+//
+// Order is meaningful — Operations is the home, then the analytics
+// surface, then the live operational pages, then the back-office
+// queues. Anything that didn't have real backing tables (parishes,
+// fare rules, disputes, payouts, templates, risk alerts) was pulled
+// out rather than shipping more "coming soon" placeholders the user
+// already flagged as misleading.
 export const adminNav: NavItem[] = [
   { label: "Operations", labelKey: "nav.admin.ops", href: "/admin", icon: "home" },
-  { label: "Verification queue", labelKey: "nav.admin.verification", href: "/admin/verification-queue", icon: "clipboard-check" },
+  { label: "Analytics", labelKey: "nav.admin.analytics", href: "/admin/analytics", icon: "bar-chart" },
   { label: "Ride monitoring", labelKey: "nav.admin.monitoring", href: "/admin/ride-monitoring", icon: "activity" },
-  { label: "Parishes", labelKey: "nav.admin.parishes", href: "/admin/parishes", icon: "map" },
-  { label: "Fare rules", labelKey: "nav.admin.fareRules", href: "/admin/fare-rules", icon: "scale" },
-  { label: "Fare overrides", labelKey: "nav.admin.fareOverrides", href: "/admin/fare-overrides", icon: "trending-up" },
-  { label: "Disputes", labelKey: "nav.admin.disputes", href: "/admin/disputes", icon: "alert-triangle" },
   { label: "Users", labelKey: "nav.admin.users", href: "/admin/users", icon: "users" },
-  { label: "Payouts", labelKey: "nav.admin.payouts", href: "/admin/payouts", icon: "wallet" },
+  { label: "Verification queue", labelKey: "nav.admin.verification", href: "/admin/verification-queue", icon: "clipboard-check" },
+  { label: "Vehicle changes", labelKey: "nav.admin.vehicle", href: "/admin/vehicle-changes", icon: "car" },
   { label: "Audit logs", labelKey: "nav.admin.audit", href: "/admin/audit-logs", icon: "history" },
-  { label: "Templates", labelKey: "nav.admin.templates", href: "/admin/notification-templates", icon: "mail" },
-  { label: "Risk alerts", labelKey: "nav.admin.risk", href: "/admin/risk-alerts", icon: "shield-alert" },
 ];
 
 export const parishes = [

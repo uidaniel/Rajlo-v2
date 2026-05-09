@@ -4,277 +4,636 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon, type IconName } from "@/components/icons";
-import { FadeUp, Stagger, StaggerItem } from "@/components/anim";
+import { FadeUp } from "@/components/anim";
+import {
+  AreaChart,
+  DonutChart,
+  Sparkline,
+  type DonutSlice,
+} from "@/components/charts";
+import { formatJMD } from "@/lib/jamaica";
 
-type QueueDriver = {
-  id: string;
-  externalId: string;
-  name: string;
-  plateNumber: string | null;
-  status: string;
-  submittedAt: string;
-  docsUploaded: number;
-  docsRejected: number;
+/**
+ * Admin Operations dashboard.
+ *
+ * Top-of-funnel command centre for the platform. Pulls two payloads
+ * on first paint:
+ *
+ *   /api/admin/stats                — KPI strip + sparkline data
+ *   /api/admin/activity?limit=20    — live activity feed (right column)
+ *
+ * The chart payload (status mix, ride volume) is loaded from
+ * /api/admin/analytics/overview alongside the dashboard so the
+ * "modern interface with a lot of analytics" promise is paid up
+ * front rather than buried on a sub-page.
+ */
+
+type Stats = {
+  generatedAt: string;
+  users: { riders: number; drivers: number; admins: number; total: number };
+  drivers: {
+    active: number;
+    online: number;
+    pendingVerification: number;
+    rejected: number;
+  };
+  rides: {
+    today: number;
+    yesterday: number;
+    active: number;
+    completedToday: number;
+    cancelledToday: number;
+    sparkline7d: number[];
+  };
+  revenue: { today: number; last30d: number; sparkline30d: number[] };
+  queue: {
+    docsPending: number;
+    docsRejected: number;
+    vehicleChangesPending: number;
+    lowRatings: number;
+  };
 };
 
-export default function AdminHomePage() {
-  const [drivers, setDrivers] = useState<QueueDriver[]>([]);
+type Activity = {
+  id: string;
+  source: string;
+  tone: "info" | "good" | "warning" | "danger" | "neutral";
+  icon: string;
+  title: string;
+  body: string;
+  href?: string;
+  at: string;
+};
+
+type Analytics = {
+  daily: Array<{ label: string; rides: number; revenue: number }>;
+  statusCounts: Record<string, number>;
+  parishes: Array<{ parish: string; count: number }>;
+  topDrivers: Array<{
+    id: string;
+    externalId: string;
+    name: string;
+    rides: number;
+    revenue: number;
+  }>;
+};
+
+const STATUS_COLOURS: Record<string, string> = {
+  completed: "text-emerald-600",
+  in_progress: "text-rajlo-red",
+  accepted: "text-amber-500",
+  arrived: "text-blue-500",
+  requested: "text-rajlo-black",
+  cancelled: "text-muted",
+};
+
+const STATUS_LABELS: Record<string, string> = {
+  completed: "Completed",
+  in_progress: "In progress",
+  accepted: "Accepted",
+  arrived: "Arrived",
+  requested: "Requested",
+  cancelled: "Cancelled",
+};
+
+export default function AdminOperationsPage() {
+  const [stats, setStats] = useState<Stats | null>(null);
+  const [activity, setActivity] = useState<Activity[]>([]);
+  const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let mounted = true;
     (async () => {
       try {
-        const res = await fetch("/api/admin/verification-queue");
-        if (!res.ok) return;
-        const json = (await res.json()) as { drivers: QueueDriver[] };
-        if (mounted) setDrivers(json.drivers ?? []);
+        const [s, a, an] = await Promise.all([
+          fetch("/api/admin/stats"),
+          fetch("/api/admin/activity?limit=20"),
+          fetch("/api/admin/analytics/overview?days=14"),
+        ]);
+        const [sj, aj, anj] = await Promise.all([
+          s.ok ? s.json() : null,
+          a.ok ? a.json() : { items: [] },
+          an.ok ? an.json() : null,
+        ]);
+        if (!mounted) return;
+        setStats(sj);
+        setActivity(aj.items ?? []);
+        setAnalytics(anj);
       } catch {
-        /* silent */
+        /* silent — UI shows skeleton */
       } finally {
         if (mounted) setLoading(false);
       }
     })();
+
+    // Re-poll the activity feed every 20s so the dashboard feels live.
+    const interval = setInterval(async () => {
+      try {
+        const a = await fetch("/api/admin/activity?limit=20");
+        if (!a.ok) return;
+        const aj = await a.json();
+        if (mounted) setActivity(aj.items ?? []);
+      } catch {
+        /* silent */
+      }
+    }, 20_000);
+
     return () => {
       mounted = false;
+      clearInterval(interval);
     };
   }, []);
 
-  const pendingCount = drivers.filter((d) => d.status === "pending_review").length;
-  const rejectedCount = drivers.filter((d) => d.status === "rejected").length;
-  const longestWait = drivers
-    .filter((d) => d.status === "pending_review")
-    .sort((a, b) => new Date(a.submittedAt).getTime() - new Date(b.submittedAt).getTime())[0];
+  const ridesDelta =
+    stats && stats.rides.yesterday > 0
+      ? Math.round(
+          ((stats.rides.today - stats.rides.yesterday) /
+            stats.rides.yesterday) *
+            100,
+        )
+      : null;
+
+  const statusDonut: DonutSlice[] = analytics
+    ? Object.entries(analytics.statusCounts)
+        .filter(([, count]) => count > 0)
+        .map(([status, count]) => ({
+          label: STATUS_LABELS[status] ?? status,
+          value: count,
+          color: STATUS_COLOURS[status] ?? "text-muted",
+        }))
+    : [];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-2 py-6 md:px-3 md:py-8">
+    <div className="mx-auto max-w-7xl space-y-6 px-2 py-4 md:px-3 md:py-8">
       {/* ─── Hero ─── */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-7 text-white shadow-xl md:p-10">
-          <ArcWatermark size={420} variant="red" className="absolute -right-20 -bottom-20 opacity-[0.10]" />
-          <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+          <ArcWatermark
+            size={520}
+            variant="red"
+            className="absolute -right-20 -bottom-20 opacity-[0.10]"
+          />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                Operations console
+                Operations console · {new Date().toLocaleDateString("en-JM", { weekday: "long", day: "numeric", month: "long" })}
               </p>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-                Welcome back.
+                {loading
+                  ? "Loading the platform…"
+                  : `${stats?.rides.active ?? 0} active ride${stats?.rides.active === 1 ? "" : "s"} · ${stats?.drivers.online ?? 0} driver${stats?.drivers.online === 1 ? "" : "s"} online`}
               </h1>
-              <p className="mt-1 text-sm text-white/70 md:text-base">
-                {pendingCount > 0
-                  ? `${pendingCount} driver${pendingCount === 1 ? "" : "s"} awaiting verification.`
-                  : "No outstanding verifications. Great work."}
+              <p className="mt-2 max-w-2xl text-sm text-white/75 md:text-base">
+                Everything happening across the platform — every booking,
+                every driver event, every admin decision — surfaces here in
+                real time.
               </p>
             </div>
-            <Link
-              href="/admin/verification-queue"
-              className="inline-flex items-center gap-2 rounded-full bg-rajlo-red px-6 py-3 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 transition-all hover:-translate-y-0.5 hover:bg-primary-hover"
-            >
-              Open verification queue
-              <Icon name="arrow-right" className="h-4 w-4" />
-            </Link>
+            <div className="flex flex-wrap items-center gap-3">
+              <Link
+                href="/admin/ride-monitoring"
+                className="inline-flex items-center gap-2 rounded-full bg-rajlo-red px-5 py-2.5 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 transition-all hover:-translate-y-0.5 hover:bg-primary-hover"
+              >
+                <Icon name="navigation" className="h-4 w-4" />
+                Live rides
+              </Link>
+              <Link
+                href="/admin/users"
+                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-2.5 text-sm font-bold text-white backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-white/20"
+              >
+                <Icon name="users" className="h-4 w-4" />
+                Users
+              </Link>
+              <Link
+                href="/admin/analytics"
+                className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-2.5 text-sm font-bold text-white backdrop-blur transition-all hover:-translate-y-0.5 hover:bg-white/20"
+              >
+                <Icon name="bar-chart" className="h-4 w-4" />
+                Analytics
+              </Link>
+            </div>
           </div>
         </div>
       </FadeUp>
 
-      {/* ─── Stats ─── */}
-      <Stagger className="grid gap-4 md:grid-cols-4">
-        <Stat
-          label="Pending review"
-          value={loading ? "—" : String(pendingCount)}
-          icon="clipboard-check"
-          tone="amber"
+      {/* ─── KPI strip ─── */}
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <KpiTile
+          eyebrow="Rides today"
+          value={loading ? "—" : String(stats?.rides.today ?? 0)}
+          caption={
+            stats
+              ? `${stats.rides.completedToday} completed · ${stats.rides.cancelledToday} cancelled`
+              : undefined
+          }
+          delta={ridesDelta}
+          sparkline={stats?.rides.sparkline7d ?? []}
+          icon="navigation"
         />
-        <Stat
-          label="Resubmit"
-          value={loading ? "—" : String(rejectedCount)}
-          icon="alert-triangle"
-          tone="red"
+        <KpiTile
+          eyebrow="Revenue today"
+          value={loading ? "—" : formatJMD(stats?.revenue.today ?? 0)}
+          caption={
+            stats
+              ? `30-day total · ${formatJMD(stats.revenue.last30d)}`
+              : undefined
+          }
+          sparkline={stats?.revenue.sparkline30d ?? []}
+          sparkAccent="emerald"
+          icon="trending-up"
         />
-        <Stat
-          label="Total in queue"
-          value={loading ? "—" : String(drivers.length)}
-          icon="inbox"
-        />
-        <Stat
-          label="Longest wait"
+        <KpiTile
+          eyebrow="Drivers online"
           value={
             loading
               ? "—"
-              : longestWait
-                ? hoursAgo(longestWait.submittedAt)
-                : "—"
+              : `${stats?.drivers.online ?? 0} / ${stats?.drivers.active ?? 0}`
           }
-          icon="clock"
-          tone={longestWait && hoursSince(longestWait.submittedAt) > 48 ? "red" : "default"}
+          caption={
+            stats
+              ? `${stats.drivers.pendingVerification} awaiting verification`
+              : undefined
+          }
+          icon="user"
         />
-      </Stagger>
+        <KpiTile
+          eyebrow="Riders on file"
+          value={loading ? "—" : String(stats?.users.riders ?? 0)}
+          caption={
+            stats
+              ? `${stats.users.total} total accounts · ${stats.users.admins} admin${stats.users.admins === 1 ? "" : "s"}`
+              : undefined
+          }
+          icon="users"
+        />
+      </div>
 
-      {/* ─── Quick actions ─── */}
-      <FadeUp delay={0.05}>
-        <div>
-          <p className="font-secondary mb-3 text-xs font-bold uppercase tracking-wider text-rajlo-red">
-            Quick actions
-          </p>
-          <div className="grid gap-3 md:grid-cols-3">
-            <ActionCard
-              icon="clipboard-check"
-              label="Verification queue"
-              desc="Review pending driver applications"
-              href="/admin/verification-queue"
-            />
-            <ActionCard
-              icon="map"
-              label="Parishes & fares"
-              desc="Manage parish-pair fare rules"
-              href="/admin/fare-rules"
-            />
-            <ActionCard
-              icon="activity"
-              label="Live ride monitoring"
-              desc="Watch active trips in real time"
-              href="/admin/ride-monitoring"
-            />
-          </div>
-        </div>
-      </FadeUp>
-
-      {/* ─── Recent submissions preview ─── */}
-      <FadeUp delay={0.1}>
-        <div className="rounded-2xl border border-line bg-surface p-5 md:p-7">
-          <div className="mb-4 flex items-center justify-between">
-            <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-              Latest submissions
+      {/* ─── Action queue strip ─── */}
+      {stats && (stats.queue.docsPending > 0 ||
+        stats.queue.docsRejected > 0 ||
+        stats.queue.vehicleChangesPending > 0 ||
+        stats.queue.lowRatings > 0) && (
+        <FadeUp delay={0.05}>
+          <div className="rounded-2xl border border-rajlo-red/20 bg-primary-soft/40 p-4 md:p-5">
+            <p className="font-secondary mb-3 text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+              Needs attention
             </p>
-            <Link
-              href="/admin/verification-queue"
-              className="text-xs font-bold text-rajlo-red hover:underline"
-            >
-              View all →
-            </Link>
-          </div>
-          {loading ? (
-            <div className="grid place-items-center py-10">
-              <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
+            <div className="grid gap-3 md:grid-cols-4">
+              <QueueChip
+                count={stats.queue.docsPending}
+                label="Pending TA documents"
+                href="/admin/verification-queue"
+                icon="clipboard-check"
+              />
+              <QueueChip
+                count={stats.queue.docsRejected}
+                label="Rejected documents"
+                href="/admin/verification-queue"
+                icon="alert-triangle"
+                tone="danger"
+              />
+              <QueueChip
+                count={stats.queue.vehicleChangesPending}
+                label="Vehicle change requests"
+                href="/admin/vehicle-changes"
+                icon="car"
+              />
+              <QueueChip
+                count={stats.queue.lowRatings}
+                label="1-2 ★ ratings"
+                href="/admin/audit-logs?source=admin"
+                icon="star"
+                tone="danger"
+              />
             </div>
-          ) : drivers.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted">
-              No drivers awaiting verification right now.
+          </div>
+        </FadeUp>
+      )}
+
+      {/* ─── Charts row ─── */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        {/* Volume area chart — spans 2 columns */}
+        <FadeUp delay={0.08}>
+          <div className="rounded-2xl border border-line bg-surface p-5 lg:col-span-2">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                  Ride volume
+                </p>
+                <p className="mt-1 text-sm font-bold">Last 14 days</p>
+              </div>
+              <Link
+                href="/admin/analytics"
+                className="text-xs font-bold text-rajlo-red hover:underline"
+              >
+                Full analytics →
+              </Link>
+            </div>
+            {analytics && analytics.daily.length > 0 ? (
+              <AreaChart
+                data={analytics.daily.map((d) => ({
+                  label: d.label,
+                  value: d.rides,
+                }))}
+                height={180}
+                accent="red"
+                formatValue={(v) => `${v} ride${v === 1 ? "" : "s"}`}
+              />
+            ) : (
+              <div className="grid h-44 place-items-center text-xs text-muted">
+                {loading ? "Loading…" : "No ride data yet"}
+              </div>
+            )}
+          </div>
+        </FadeUp>
+
+        {/* Status mix donut */}
+        <FadeUp delay={0.1}>
+          <div className="rounded-2xl border border-line bg-surface p-5">
+            <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+              Status mix
             </p>
-          ) : (
-            <ul className="divide-y divide-line">
-              {drivers.slice(0, 5).map((d) => (
-                <li key={d.id}>
-                  <Link
-                    href={`/admin/verification-detail?driverId=${encodeURIComponent(d.externalId)}`}
-                    className="flex items-center gap-3 py-3 transition-colors hover:bg-surface-soft"
+            <p className="mt-1 mb-4 text-sm font-bold">Last 14 days</p>
+            {statusDonut.length > 0 ? (
+              <DonutChart
+                data={statusDonut}
+                size={160}
+                centreLabel="Rides"
+                centreValue={String(
+                  statusDonut.reduce((sum, s) => sum + s.value, 0),
+                )}
+              />
+            ) : (
+              <div className="grid h-40 place-items-center text-xs text-muted">
+                {loading ? "Loading…" : "No data"}
+              </div>
+            )}
+          </div>
+        </FadeUp>
+      </div>
+
+      {/* ─── Bottom row: Top drivers + parishes + activity ─── */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        <FadeUp delay={0.12}>
+          <div className="rounded-2xl border border-line bg-surface p-5">
+            <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+              Top drivers
+            </p>
+            <p className="mt-1 mb-4 text-sm font-bold">By rides completed</p>
+            {analytics && analytics.topDrivers.length > 0 ? (
+              <ul className="space-y-3">
+                {analytics.topDrivers.slice(0, 5).map((d, i) => (
+                  <li
+                    key={d.id}
+                    className="flex items-center gap-3 rounded-xl border border-line bg-surface-soft px-3 py-2.5"
                   >
-                    <span
-                      className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl text-white ${
-                        d.status === "rejected" ? "bg-rajlo-red" : "bg-rajlo-black"
-                      }`}
-                    >
-                      <Icon
-                        name={d.status === "rejected" ? "alert-triangle" : "clipboard-check"}
-                        className="h-4 w-4"
-                      />
+                    <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-rajlo-red text-xs font-extrabold text-white">
+                      {i + 1}
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-bold">{d.name}</p>
                       <p className="truncate text-xs text-muted">
-                        {d.externalId} · submitted {hoursAgo(d.submittedAt)}
+                        {d.externalId} · {d.rides} ride{d.rides === 1 ? "" : "s"}
                       </p>
                     </div>
-                    <Icon name="chevron-right" className="h-4 w-4 text-muted" />
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      </FadeUp>
+                    <p className="shrink-0 text-xs font-extrabold tracking-tight text-rajlo-red">
+                      {formatJMD(d.revenue)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="grid h-40 place-items-center text-xs text-muted">
+                {loading ? "Loading…" : "No completed rides yet"}
+              </p>
+            )}
+          </div>
+        </FadeUp>
+
+        <FadeUp delay={0.14}>
+          <div className="rounded-2xl border border-line bg-surface p-5">
+            <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+              Top origin parishes
+            </p>
+            <p className="mt-1 mb-4 text-sm font-bold">Where rides start</p>
+            {analytics && analytics.parishes.length > 0 ? (
+              <ul className="space-y-3">
+                {analytics.parishes.slice(0, 5).map((p, i) => {
+                  const max = analytics.parishes[0].count;
+                  const pct = max > 0 ? (p.count / max) * 100 : 0;
+                  return (
+                    <li key={p.parish} className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <p className="flex items-center gap-2 text-sm font-bold">
+                          <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-primary-soft text-[10px] font-extrabold text-rajlo-red">
+                            {i + 1}
+                          </span>
+                          {p.parish}
+                        </p>
+                        <p className="text-xs font-extrabold text-muted">
+                          {p.count}
+                        </p>
+                      </div>
+                      <div className="h-2 w-full overflow-hidden rounded-full bg-surface-soft">
+                        <div
+                          className="h-full rounded-full bg-rajlo-red transition-all duration-500"
+                          style={{ width: `${Math.max(2, pct)}%` }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="grid h-40 place-items-center text-xs text-muted">
+                {loading ? "Loading…" : "No rides booked yet"}
+              </p>
+            )}
+          </div>
+        </FadeUp>
+
+        {/* Activity feed */}
+        <FadeUp delay={0.16}>
+          <div className="flex h-full flex-col rounded-2xl border border-line bg-surface p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <div>
+                <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                  Live activity
+                </p>
+                <p className="mt-1 text-sm font-bold">
+                  Updates every 20 seconds
+                </p>
+              </div>
+              <Link
+                href="/admin/audit-logs"
+                className="text-xs font-bold text-rajlo-red hover:underline"
+              >
+                Audit log →
+              </Link>
+            </div>
+            {activity.length === 0 ? (
+              <p className="grid flex-1 place-items-center py-10 text-xs text-muted">
+                {loading ? "Loading…" : "No recent activity"}
+              </p>
+            ) : (
+              <ul className="-mx-2 max-h-[420px] space-y-1 overflow-y-auto pr-1">
+                {activity.slice(0, 12).map((a) => (
+                  <ActivityRow key={a.id} item={a} />
+                ))}
+              </ul>
+            )}
+          </div>
+        </FadeUp>
+      </div>
     </div>
   );
 }
 
-function Stat({
-  label,
+function KpiTile({
+  eyebrow,
   value,
+  caption,
+  delta,
+  sparkline,
+  sparkAccent = "red",
   icon,
-  tone = "default",
 }: {
-  label: string;
+  eyebrow: string;
   value: string;
+  caption?: string;
+  delta?: number | null;
+  sparkline?: number[];
+  sparkAccent?: "red" | "emerald" | "black";
   icon: IconName;
-  tone?: "default" | "amber" | "red";
 }) {
-  const toneClass =
-    tone === "red"
-      ? "text-rajlo-red"
-      : tone === "amber"
-        ? "text-amber-700"
-        : "text-rajlo-red";
-  const iconBg =
-    tone === "red"
-      ? "bg-primary-soft text-rajlo-red"
-      : tone === "amber"
-        ? "bg-amber-50 text-amber-700"
-        : "bg-primary-soft text-rajlo-red";
   return (
-    <StaggerItem>
-      <div className="rounded-2xl border border-line bg-surface p-4 transition-shadow hover:shadow-md">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
-          <span className={`grid h-7 w-7 place-items-center rounded-lg ${iconBg}`}>
-            <Icon name={icon} className="h-3.5 w-3.5" />
-          </span>
+    <div className="rounded-2xl border border-line bg-surface p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+            {eyebrow}
+          </p>
+          <p className="mt-1 text-2xl font-extrabold tracking-tight md:text-3xl">
+            {value}
+          </p>
         </div>
-        <p className={`mt-2 text-2xl font-extrabold tracking-tight md:text-3xl ${toneClass}`}>
-          {value}
-        </p>
+        <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary-soft text-rajlo-red">
+          <Icon name={icon} className="h-5 w-5" />
+        </span>
       </div>
-    </StaggerItem>
+      <div className="mt-3 flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          {caption && (
+            <p className="truncate text-[11px] text-muted">{caption}</p>
+          )}
+          {delta !== undefined && delta !== null && (
+            <p
+              className={`mt-1 text-[11px] font-extrabold ${
+                delta > 0
+                  ? "text-emerald-600"
+                  : delta < 0
+                    ? "text-rajlo-red"
+                    : "text-muted"
+              }`}
+            >
+              {delta > 0 ? "▲" : delta < 0 ? "▼" : "—"}{" "}
+              {Math.abs(delta)}% vs yesterday
+            </p>
+          )}
+        </div>
+        {sparkline && sparkline.length > 0 && (
+          <Sparkline data={sparkline} accent={sparkAccent} className="h-10 w-20" />
+        )}
+      </div>
+    </div>
   );
 }
 
-function ActionCard({
-  icon,
+function QueueChip({
+  count,
   label,
-  desc,
   href,
+  icon,
+  tone = "default",
 }: {
-  icon: IconName;
+  count: number;
   label: string;
-  desc: string;
   href: string;
+  icon: IconName;
+  tone?: "default" | "danger";
 }) {
   return (
     <Link
       href={href}
-      className="group flex items-start gap-4 rounded-2xl border border-line bg-surface p-5 transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-md"
+      className={`group flex items-center justify-between gap-3 rounded-xl border bg-surface px-3 py-2.5 transition-all hover:-translate-y-0.5 hover:shadow-md ${
+        tone === "danger"
+          ? "border-rajlo-red/20 hover:border-rajlo-red"
+          : "border-line hover:border-rajlo-red/40"
+      }`}
     >
-      <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-primary-soft text-rajlo-red transition-colors group-hover:bg-rajlo-red group-hover:text-white">
-        <Icon name={icon} className="h-5 w-5" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-bold">{label}</p>
-        <p className="text-xs text-muted">{desc}</p>
+      <div className="flex items-center gap-2.5">
+        <span
+          className={`grid h-8 w-8 place-items-center rounded-lg ${
+            tone === "danger"
+              ? "bg-rajlo-red text-white"
+              : "bg-primary-soft text-rajlo-red"
+          }`}
+        >
+          <Icon name={icon} className="h-4 w-4" />
+        </span>
+        <div className="min-w-0">
+          <p className="text-base font-extrabold tracking-tight">{count}</p>
+          <p className="truncate text-[11px] font-semibold text-muted">{label}</p>
+        </div>
       </div>
       <Icon
-        name="arrow-right"
-        className="h-4 w-4 text-muted transition-transform group-hover:translate-x-1 group-hover:text-rajlo-red"
+        name="chevron-right"
+        className="h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5"
       />
     </Link>
   );
 }
 
-function hoursSince(iso: string): number {
-  return (Date.now() - new Date(iso).getTime()) / (1000 * 60 * 60);
+function ActivityRow({ item }: { item: Activity }) {
+  const toneClasses = {
+    info: "bg-blue-50 text-blue-700",
+    good: "bg-emerald-50 text-emerald-700",
+    warning: "bg-amber-50 text-amber-700",
+    danger: "bg-primary-soft text-rajlo-red",
+    neutral: "bg-surface-soft text-muted",
+  } as const;
+  const inner = (
+    <div className="flex items-start gap-3 rounded-xl px-2 py-2 transition-colors hover:bg-surface-soft">
+      <span
+        className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg ${toneClasses[item.tone]}`}
+      >
+        <Icon name={item.icon as IconName} className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-xs font-extrabold tracking-tight">
+          {item.title}
+        </p>
+        <p className="truncate text-[11px] text-muted">{item.body}</p>
+      </div>
+      <p className="shrink-0 text-[10px] font-semibold text-muted">
+        {timeAgo(item.at)}
+      </p>
+    </div>
+  );
+  return (
+    <li>
+      {item.href ? <Link href={item.href}>{inner}</Link> : inner}
+    </li>
+  );
 }
 
-function hoursAgo(iso: string): string {
-  const hrs = hoursSince(iso);
-  if (hrs < 1) return `${Math.floor(hrs * 60)}m ago`;
-  if (hrs < 24) return `${Math.floor(hrs)}h ago`;
-  return `${Math.floor(hrs / 24)}d ago`;
+function timeAgo(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(ms / 60_000);
+  if (m < 1) return "now";
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h`;
+  return `${Math.floor(h / 24)}d`;
 }

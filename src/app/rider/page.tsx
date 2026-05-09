@@ -31,11 +31,7 @@ import { useT } from "@/lib/i18n";
 
 type ActiveRideMini = {
   id: string;
-  status:
-    | "requested"
-    | "accepted"
-    | "arrived"
-    | "in_progress";
+  status: "requested" | "accepted" | "arrived" | "in_progress";
   pickup: { name: string };
   dropoff: { name: string };
   estimatedEtaMinutes: number | null;
@@ -49,7 +45,13 @@ type ActiveDriverMini = {
 
 type HistoryRow = {
   id: string;
-  status: "requested" | "accepted" | "arrived" | "in_progress" | "completed" | "cancelled";
+  status:
+    | "requested"
+    | "accepted"
+    | "arrived"
+    | "in_progress"
+    | "completed"
+    | "cancelled";
   pickup: { name: string; address: string };
   dropoff: { name: string; address: string };
   fareJMD: number;
@@ -72,7 +74,9 @@ export default function RiderDashboardPage() {
     driver: ActiveDriverMini;
   } | null>(null);
   const [history, setHistory] = useState<HistoryRow[]>([]);
-  const [ratingSummary, setRatingSummary] = useState<RatingSummary | null>(null);
+  const [ratingSummary, setRatingSummary] = useState<RatingSummary | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
 
   // First name from profiles (separately from the rest because it
@@ -206,9 +210,7 @@ export default function RiderDashboardPage() {
     () =>
       history.find(
         (r) =>
-          r.status === "completed" &&
-          r.driverName &&
-          r.myRatingStars === null,
+          r.status === "completed" && r.driverName && r.myRatingStars === null,
       ) ?? null,
     [history],
   );
@@ -269,7 +271,7 @@ export default function RiderDashboardPage() {
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-muted">
                   Where to?
                 </span>
-                <span className="block truncate text-sm font-bold text-foreground">
+                <span className="block truncate text-sm text-black font-bold ">
                   Search a place, address, or landmark
                 </span>
               </span>
@@ -369,7 +371,10 @@ export default function RiderDashboardPage() {
                   ? `${activeTrip.driver.name}${activeTrip.driver.vehicle ? ` · ${activeTrip.driver.vehicle}` : ""}`
                   : "Looking for a driver…"}
                 {activeTrip.driver?.plateNumber ? (
-                  <span className="text-muted"> ({activeTrip.driver.plateNumber})</span>
+                  <span className="text-muted">
+                    {" "}
+                    ({activeTrip.driver.plateNumber})
+                  </span>
                 ) : null}
               </p>
               <p className="truncate text-xs text-muted">
@@ -494,8 +499,7 @@ export default function RiderDashboardPage() {
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-bold">
-                      {r.pickup.name}{" "}
-                      <span className="text-rajlo-red">→</span>{" "}
+                      {r.pickup.name} <span className="text-rajlo-red">→</span>{" "}
                       {r.dropoff.name}
                     </p>
                     <p className="truncate text-[11px] text-muted">
@@ -514,7 +518,9 @@ export default function RiderDashboardPage() {
                       {formatJMD(r.fareJMD)}
                     </p>
                     <p className="text-[10px] text-muted">
-                      {r.status === "cancelled" ? "cancelled" : "tap for receipt"}
+                      {r.status === "cancelled"
+                        ? "cancelled"
+                        : "tap for receipt"}
                     </p>
                   </div>
                   <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-muted transition-all group-hover:bg-rajlo-red group-hover:text-white">
@@ -561,7 +567,8 @@ export default function RiderDashboardPage() {
               <Stat
                 label="Avg rating"
                 value={
-                  ratingSummary?.average !== null && ratingSummary?.average !== undefined
+                  ratingSummary?.average !== null &&
+                  ratingSummary?.average !== undefined
                     ? ratingSummary.average.toFixed(1)
                     : "—"
                 }
@@ -695,9 +702,13 @@ function Stat({
         {label}
       </p>
       <p className="mt-1 text-2xl font-extrabold tracking-tight md:text-3xl">
-        {prefix && <span className="text-sm font-bold text-white/70">{prefix}</span>}
+        {prefix && (
+          <span className="text-sm font-bold text-white/70">{prefix}</span>
+        )}
         {value}
-        {suffix && <span className="text-sm font-bold text-white/70">{suffix}</span>}
+        {suffix && (
+          <span className="text-sm font-bold text-white/70">{suffix}</span>
+        )}
       </p>
     </div>
   );
@@ -724,8 +735,10 @@ function friendlyDate(iso: string): string {
     const wkday = d.toLocaleDateString("en-JM", { weekday: "short" });
     return `${wkday} · ${time}`;
   }
-  return d.toLocaleDateString("en-JM", {
-    day: "numeric",
-    month: "short",
-  }) + ` · ${time}`;
+  return (
+    d.toLocaleDateString("en-JM", {
+      day: "numeric",
+      month: "short",
+    }) + ` · ${time}`
+  );
 }

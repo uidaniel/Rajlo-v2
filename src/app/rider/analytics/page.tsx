@@ -73,9 +73,7 @@ export default function RiderAnalyticsPage() {
         setData(json);
       } catch (e) {
         if (!cancelled)
-          setError(
-            e instanceof Error ? e.message : "Couldn't load analytics.",
-          );
+          setError(e instanceof Error ? e.message : "Couldn't load analytics.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -104,7 +102,9 @@ export default function RiderAnalyticsPage() {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft">
-          <span aria-hidden className="text-3xl leading-none">😢</span>
+          <span aria-hidden className="text-3xl leading-none">
+            😢
+          </span>
         </span>
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
           Couldn&apos;t load analytics
@@ -119,7 +119,7 @@ export default function RiderAnalyticsPage() {
   const noTrips = data.totals.lifetime.trips === 0;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">
@@ -136,7 +136,8 @@ export default function RiderAnalyticsPage() {
               {formatJMD(data.totals.lifetime.spendJMD)}
             </h1>
             <p className="mt-1 text-sm text-white/75">
-              {t("analytics.allTime", "Lifetime")} · {data.totals.lifetime.trips} trip
+              {t("analytics.allTime", "Lifetime")} ·{" "}
+              {data.totals.lifetime.trips} trip
               {data.totals.lifetime.trips === 1 ? "" : "s"} on Rajlo
             </p>
 
@@ -192,8 +193,8 @@ export default function RiderAnalyticsPage() {
               No spending yet
             </h2>
             <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
-              Take your first ride and your spending breakdown will land
-              here — monthly trend, top routes, parish split, the lot.
+              Take your first ride and your spending breakdown will land here —
+              monthly trend, top routes, parish split, the lot.
             </p>
             <Link
               href="/rider/request"
@@ -257,15 +258,17 @@ export default function RiderAnalyticsPage() {
                     const max = Math.max(
                       ...data.byParish.map((p) => p.spendJMD),
                     );
-                    return data.byParish.slice(0, 8).map((p) => (
-                      <ProgressRow
-                        key={p.parish}
-                        label={p.parish}
-                        caption={`${p.trips} trip${p.trips === 1 ? "" : "s"}`}
-                        spendJMD={p.spendJMD}
-                        share={max > 0 ? p.spendJMD / max : 0}
-                      />
-                    ));
+                    return data.byParish
+                      .slice(0, 8)
+                      .map((p) => (
+                        <ProgressRow
+                          key={p.parish}
+                          label={p.parish}
+                          caption={`${p.trips} trip${p.trips === 1 ? "" : "s"}`}
+                          spendJMD={p.spendJMD}
+                          share={max > 0 ? p.spendJMD / max : 0}
+                        />
+                      ));
                   })()}
                 </div>
               </div>

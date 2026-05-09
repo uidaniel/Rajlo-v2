@@ -3,12 +3,9 @@
 import React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { RideRequestCard } from "@/components/ride-request-card";
-import { complianceThresholds } from "@/lib/mock-data";
-import { buildMockCompliancePayload } from "@/lib/compliance-utils";
 import { Icon, type IconName } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
-import { FadeUp, Stagger, StaggerItem } from "@/components/anim";
+import { FadeUp } from "@/components/anim";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { formatJMD } from "@/lib/jamaica";
 import { useFleetBroadcaster } from "@/lib/use-fleet";
@@ -16,8 +13,24 @@ import {
   HeroSkeleton,
   RideCardSkeleton,
   Skeleton,
-  StatsGridSkeleton,
 } from "@/components/skeleton";
+
+/**
+ * Driver dashboard — single-page command surface.
+ *
+ * Sections, top → bottom:
+ *   1. Hero: name + online toggle + this-week earnings + brand bloom
+ *   2. Active-trip banner (if any) — bypasses the inbox while on a trip
+ *   3. Stat tiles (4): today, this-week-vs-last, acceptance, rating
+ *   4. 7-day earnings chart (vertical bars, brand-themed)
+ *   5. Compliance health card (real `/api/driver/compliance`)
+ *   6. Live inbox of incoming ride requests (Realtime-driven)
+ *   7. Quick actions (verification, history, earnings, profile)
+ *
+ * Every number is real. The mock `compliance-utils` payload that used
+ * to seed the page is gone — we render a skeleton until the real
+ * stats land instead.
+ */
 
 type RidePlace = { name: string; address: string; parish: string | null };
 
@@ -37,7 +50,7 @@ type InboxSolo = {
 
 type InboxCarpool = {
   kind: "carpool";
-  id: string; // primary's id — used for the accept call
+  id: string;
   groupId: string;
   rideIds: string[];
   primary: { rideId: string; pickup: RidePlace; dropoff: RidePlace; seats: number; fareJMD: number };
@@ -49,34 +62,50 @@ type InboxCarpool = {
 
 type InboxEntry = InboxSolo | InboxCarpool;
 
+type Stats = {
+  earnings: {
+    today: number;
+    thisWeek: number;
+    thisMonth: number;
+    lastWeek: number;
+  };
+  tripCounts: {
+    today: number;
+    thisWeek: number;
+    thisMonth: number;
+    lastWeek: number;
+  };
+  weekChangePct: number | null;
+  tripsChangePct: number | null;
+  dailySeries: Array<{ label: string; spendJMD: number; trips: number }>;
+  acceptanceRate: number | null;
+  rating: { average: number | null; count: number };
+  online: { is: boolean; since: string | null };
+  driverSince: string;
+};
+
+type Compliance = {
+  expired: number;
+  urgent: number;
+  upcoming: number;
+};
+
 export default function DriverHomePage() {
   const router = useRouter();
-  const [complianceSummary, setComplianceSummary] = React.useState(
-    () => buildMockCompliancePayload("DRV-1031").summary,
-  );
-  // Online/offline status is persisted in `drivers.is_online`. We
-  // start `null` on mount and resolve to true/false from the API so
-  // the toggle reflects the driver's last intent, not whatever the
-  // last reload happened to default to. Until the resolve completes,
-  // the toggle is disabled (visually grey) so the driver doesn't
-  // accidentally tap and overwrite their persisted state.
+  const [firstName, setFirstName] = React.useState<string | null>(null);
+  const [stats, setStats] = React.useState<Stats | null>(null);
+  const [statsError, setStatsError] = React.useState<string | null>(null);
+  const [compliance, setCompliance] = React.useState<Compliance | null>(null);
   const [online, setOnlineState] = React.useState<boolean | null>(null);
   const [onlineSyncing, setOnlineSyncing] = React.useState(false);
   const [inboxRides, setInboxRides] = React.useState<InboxEntry[]>([]);
   const [acceptError, setAcceptError] = React.useState<string | null>(null);
   const [accepting, setAccepting] = React.useState<string | null>(null);
-  // Auth user id — needed so our fleet broadcasts include a stable driver
-  // identifier, which lets the rider booking screen dedupe the multiple
-  // pings from one driver into a single moving car marker.
   const [driverUserId, setDriverUserId] = React.useState<string | null>(null);
-  // Whether the driver has an in-flight trip (status accepted/arrived/
-  // in_progress). When true, we hide the inbox and show a CTA back to
-  // the active-trip console — the driver can't accept new rides while
-  // already on one, so a "you have an active trip" banner is far more
-  // useful than an empty inbox.
   const [hasActiveTrip, setHasActiveTrip] = React.useState(false);
   const [bootstrapping, setBootstrapping] = React.useState(true);
 
+  /* ─── Auth user id (for fleet broadcaster) ─── */
   React.useEffect(() => {
     let mounted = true;
     (async () => {
@@ -91,31 +120,107 @@ export default function DriverHomePage() {
     };
   }, []);
 
-  // Hydrate the persisted online flag on mount. After this resolves,
-  // the toggle reflects the driver's last intent — so refreshing the
-  // page or returning later doesn't silently flip them back online
-  // (or offline) against their will.
+  /* ─── First name from profiles ─── */
   React.useEffect(() => {
-    let cancelled = false;
+    let mounted = true;
     (async () => {
       try {
-        const res = await fetch("/api/driver/online");
+        const res = await fetch("/api/me/profile");
         if (!res.ok) return;
-        const json = (await res.json()) as { online: boolean };
-        if (!cancelled) setOnlineState(json.online);
+        const json = (await res.json()) as {
+          profile: { fullName: string | null };
+        };
+        if (mounted)
+          setFirstName(json.profile.fullName?.split(" ")[0] ?? null);
       } catch {
-        /* fall back: stay null → toggle stays disabled */
+        /* fine — header still reads */
       }
     })();
     return () => {
-      cancelled = true;
+      mounted = false;
     };
   }, []);
 
-  // Persist toggle flips to the API. Optimistic update with rollback
-  // on error so the UI stays snappy but doesn't lie when the network
-  // is broken. Disables itself while a previous PATCH is still in
-  // flight to avoid racing flips.
+  /* ─── Stats (the real one — replaces all mock data) ─── */
+  const refreshStats = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/driver/stats");
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? `HTTP ${res.status}`);
+      }
+      const json = (await res.json()) as Stats;
+      setStats(json);
+      setOnlineState(json.online.is);
+      setStatsError(null);
+    } catch (e) {
+      setStatsError(
+        e instanceof Error ? e.message : "Couldn't load your stats.",
+      );
+    }
+  }, []);
+
+  React.useEffect(() => {
+    void refreshStats();
+  }, [refreshStats]);
+
+  /* ─── Compliance (real, via the auth-aware endpoint) ─── */
+  React.useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/driver/compliance");
+        if (!res.ok) return;
+        const json = (await res.json()) as { summary?: Compliance };
+        if (mounted && json.summary) setCompliance(json.summary);
+      } catch {
+        /* silent — section just won't render */
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  /* ─── Active trip detection ─── */
+  React.useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await fetch("/api/driver/rides/active");
+        if (!res.ok) return;
+        const json = (await res.json()) as { ride: { id: string } | null };
+        if (!cancelled) setHasActiveTrip(!!json.ride);
+      } catch {
+        /* network blip */
+      } finally {
+        if (!cancelled) setBootstrapping(false);
+      }
+    };
+    check();
+
+    const supabase = createSupabaseBrowserClient();
+    const channel = supabase
+      .channel("driver-active-presence")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "rides" },
+        () => {
+          if (!cancelled) {
+            check();
+            void refreshStats();
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      supabase.removeChannel(channel);
+    };
+  }, [refreshStats]);
+
+  /* ─── Online toggle persistence ─── */
   const setOnline = React.useCallback(
     async (next: boolean) => {
       if (online === next || onlineSyncing) return;
@@ -130,7 +235,6 @@ export default function DriverHomePage() {
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
       } catch {
-        // Roll back to whatever the previous server-confirmed value was.
         setOnlineState(prev);
       } finally {
         setOnlineSyncing(false);
@@ -139,94 +243,19 @@ export default function DriverHomePage() {
     [online, onlineSyncing],
   );
 
-  // On mount and on every Realtime ride change, check if the driver
-  // already has a trip in flight. If yes, surface the banner instead of
-  // the inbox so the driver always knows where to find their trip.
-  // Realtime alone isn't enough here: the driver might have refreshed
-  // mid-trip with no inbox change pending, so we need the initial fetch.
-  React.useEffect(() => {
-    let cancelled = false;
-
-    const checkActive = async () => {
-      try {
-        const res = await fetch("/api/driver/rides/active");
-        if (!res.ok) return;
-        const json = (await res.json()) as { ride: { id: string } | null };
-        if (!cancelled) setHasActiveTrip(!!json.ride);
-      } catch {
-        /* network blip — Realtime will re-trigger this shortly */
-      } finally {
-        if (!cancelled) setBootstrapping(false);
-      }
-    };
-    checkActive();
-
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel("driver-active-presence")
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "rides" },
-        () => {
-          if (!cancelled) checkActive();
-        },
-      )
-      .subscribe();
-
-    return () => {
-      cancelled = true;
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
-  // Fleet broadcaster: while online, push our GPS to the global
-  // `fleet:online` channel every ~5s. Riders on the booking screen
-  // subscribe and render a car icon for each unique driverId. The
-  // hook itself is a no-op when either argument is falsy, so there's
-  // no GPS access until the driver explicitly toggles online.
-  // Also gated off while on an active trip — at that point GPS is
-  // already flowing through the per-ride position channel, no need to
-  // double-broadcast.
+  /* ─── Fleet broadcaster ─── */
   const { error: fleetError } = useFleetBroadcaster(
     driverUserId,
     online === true && !hasActiveTrip,
   );
 
-  React.useEffect(() => {
-    let mounted = true;
-    (async () => {
-      try {
-        const response = await fetch("/api/driver/compliance?driverId=DRV-1031");
-        if (!response.ok) return;
-        const payload = (await response.json()) as {
-          summary: { expired: number; urgent: number; upcoming: number };
-        };
-        if (mounted && payload.summary) setComplianceSummary(payload.summary);
-      } catch {
-        /* silent — fall back to mock */
-      }
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
-  // Inbox: initial fetch + Supabase Realtime subscription on `rides`. RLS
-  // restricts what the driver receives to (a) rides assigned to them and
-  // (b) the open `requested` pool — so any INSERT into the open pool, or
-  // any UPDATE that flips a ride's status (someone else accepts → it
-  // leaves the pool), pushes us a refresh. No polling.
-  //
-  // Skipped while the driver has an active trip — they can't take a new
-  // ride from the inbox until they finish the current one, so there's
-  // no point keeping the websocket open or fetching the list.
+  /* ─── Live inbox ─── */
   React.useEffect(() => {
     if (!online || hasActiveTrip) {
       setInboxRides([]);
       return;
     }
     let cancelled = false;
-
     const refresh = async () => {
       try {
         const res = await fetch("/api/driver/inbox");
@@ -235,11 +264,10 @@ export default function DriverHomePage() {
           setInboxRides(json.rides ?? []);
         }
       } catch {
-        /* network blip — Realtime will trigger another refresh later */
+        /* Realtime will retry */
       }
     };
     refresh();
-
     const supabase = createSupabaseBrowserClient();
     const channel = supabase
       .channel("driver-inbox")
@@ -251,13 +279,13 @@ export default function DriverHomePage() {
         },
       )
       .subscribe();
-
     return () => {
       cancelled = true;
       supabase.removeChannel(channel);
     };
   }, [online, hasActiveTrip]);
 
+  /* ─── Accept handler ─── */
   const handleAccept = async (rideId: string) => {
     setAccepting(rideId);
     setAcceptError(null);
@@ -266,451 +294,766 @@ export default function DriverHomePage() {
         method: "POST",
       });
       if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(err.error ?? `Server returned ${res.status}`);
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? `Server returned ${res.status}`);
       }
-      // Send the driver straight to the active-trip console — that's
-      // the only view they can usefully act on while the trip is in
-      // flight, and going there directly is snappier than rendering an
-      // intermediate "ride accepted!" card. The active-trip page
-      // hydrates from /api/driver/rides/active, so it's also
-      // refresh-survivable.
       router.push("/driver/active-trip");
-    } catch (err) {
+    } catch (e) {
       setAcceptError(
-        err instanceof Error ? err.message : "Couldn't accept ride.",
+        e instanceof Error ? e.message : "Couldn't accept ride. Try again.",
       );
+    } finally {
       setAccepting(null);
     }
   };
 
-  const handleDecline = (rideId: string) => {
-    // Phase 2A.1 doesn't persist declines — just hide locally so the
-    // driver can keep scanning the inbox. A "declined" event log + per-driver
-    // decline filtering will land in 2A.2.
-    setInboxRides((prev) => prev.filter((r) => r.id !== rideId));
-  };
-
-  const incomingCount = inboxRides.length;
-
-  /* While the active-trip check is in flight, render a dashboard-
-     shaped skeleton instead of a spinner. Same vertical rhythm as
-     the loaded view (hero + stats + 2-3 inbox cards) so the page
-     doesn't jump when the data resolves. */
-  if (bootstrapping) {
-    return (
-      <div className="mx-auto max-w-5xl space-y-5 px-2 py-6 md:px-3 md:py-8">
-        <HeroSkeleton />
-        <StatsGridSkeleton count={4} />
-        <div className="space-y-3">
-          <Skeleton className="h-5 w-44" rounded="md" />
-          {[0, 1, 2].map((i) => (
-            <RideCardSkeleton key={i} />
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  /* ───────────── Active-trip CTA ─────────────
-     If the driver landed back on the dashboard while a trip is in
-     flight (refresh, deep-link, swipe-back, etc.), they can't usefully
-     act on this page — the inbox is hidden, status changes happen on
-     /driver/active-trip. Render a single big CTA pointing them there.
-     This is the refresh-survivable replacement for the old "Ride
-     accepted!" inline view. */
-  if (hasActiveTrip) {
-    return (
-      <div className="mx-auto max-w-3xl space-y-6 px-2 py-10 md:px-3 md:py-12">
-        <FadeUp>
-          <div className="relative overflow-hidden rounded-3xl bg-rajlo-red p-7 text-white shadow-xl shadow-rajlo-red/25 md:p-10">
-            <ArcWatermark
-              size={320}
-              variant="white"
-              className="absolute -right-14 -bottom-14 opacity-[0.12]"
-            />
-            <div className="relative">
-              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-white/85">
-                You&apos;re on a trip
-              </p>
-              <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-                Active ride in progress
-              </h1>
-              <p className="mt-2 max-w-md text-sm text-white/85 md:text-base">
-                Open the active-trip console to see the live route, the
-                rider&apos;s details, and the next-action button.
-              </p>
-              <Link
-                href="/driver/active-trip"
-                className="group mt-6 inline-flex items-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-rajlo-red shadow-lg transition-all hover:-translate-y-0.5"
-              >
-                Open active trip
-                <Icon
-                  name="arrow-right"
-                  className="h-4 w-4 transition-transform group-hover:translate-x-1"
-                />
-              </Link>
-            </div>
-          </div>
-        </FadeUp>
-      </div>
-    );
-  }
-
-  /* ───────────── Default view ───────────── */
-  const complianceTone =
-    complianceSummary.expired > 0
-      ? "danger"
-      : complianceSummary.urgent > 0
-        ? "warn"
-        : complianceSummary.upcoming > 0
-          ? "info"
-          : null;
-
   return (
-    <div className="mx-auto max-w-5xl space-y-5 px-2 py-6 md:px-3 md:py-8">
-      {/* ─────── Welcome / status hero ─────── */}
+    <div className="mx-auto max-w-3xl space-y-5 px-2 py-2 md:px-3 md:py-8">
+      {/* HERO */}
       <FadeUp>
-        <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl md:p-8">
-          <ArcWatermark size={420} variant="red" className="absolute -right-20 -bottom-32 opacity-[0.12]" />
-          <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                Driver dashboard
-              </p>
-              <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-                {online === null
-                  ? "Checking your status…"
-                  : online
-                    ? "You're online & ready."
-                    : "You're offline."}
-              </h1>
-              <p className="mt-1 text-sm text-white/70 md:text-base">
-                {online === null
-                  ? "We're loading your last saved status."
-                  : online
-                    ? "Incoming ride requests will appear below."
-                    : "Toggle online to start receiving requests."}
-              </p>
-            </div>
-
-            <button
-              type="button"
-              onClick={() => online !== null && setOnline(!online)}
-              disabled={online === null || onlineSyncing}
-              aria-pressed={online === true}
-              aria-label={online ? "Go offline" : "Go online"}
-              className={`relative inline-flex h-11 w-20 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
-                online ? "bg-emerald-500" : "bg-white/15"
-              }`}
-            >
-              <span
-                className={`inline-flex h-9 w-9 transform items-center justify-center rounded-full bg-white shadow-lg transition-all ${
-                  online ? "translate-x-10" : "translate-x-1"
+        <div
+          className={`relative overflow-hidden rounded-3xl p-6 text-white shadow-2xl md:p-8 ${
+            online
+              ? "bg-linear-to-br from-emerald-700 via-rajlo-black to-rajlo-black shadow-emerald-700/30"
+              : "bg-linear-to-br from-rajlo-black via-rajlo-black to-[#1a1d10] shadow-rajlo-black/30"
+          }`}
+        >
+          <ArcWatermark
+            size={420}
+            variant="red"
+            className="absolute -right-20 -bottom-32 opacity-[0.18]"
+          />
+          <div className="relative space-y-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                  Driver dashboard
+                </p>
+                <h1 className="mt-2 text-3xl font-extrabold leading-[1.1] tracking-tight md:text-4xl">
+                  {online === null
+                    ? "Loading your day…"
+                    : online
+                      ? `Hi ${firstName ?? "there"}, you're live.`
+                      : `Hi ${firstName ?? "there"}.`}
+                </h1>
+                <p className="mt-1 text-sm text-white/75">
+                  {online === null
+                    ? "We're checking your last status."
+                    : online
+                      ? "Incoming ride requests show up below."
+                      : "Toggle online when you're ready to take rides."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => online !== null && setOnline(!online)}
+                disabled={online === null || onlineSyncing}
+                aria-pressed={online === true}
+                aria-label={online ? "Go offline" : "Go online"}
+                className={`relative inline-flex h-11 w-20 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+                  online ? "bg-emerald-500" : "bg-white/15"
                 }`}
               >
-                {onlineSyncing ? (
-                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-rajlo-red border-t-transparent" />
-                ) : (
-                  <Icon
-                    name={online ? "check-circle" : "x"}
-                    className={`h-4 w-4 ${online ? "text-emerald-600" : "text-muted"}`}
-                  />
-                )}
-              </span>
-            </button>
-          </div>
-        </div>
-      </FadeUp>
-
-      {/* ─────── Fleet broadcast error ───────
-         If the driver toggled online but the browser denied location
-         access (or some other GPS error), surface it here so they
-         know why riders aren't seeing their car. The error comes from
-         the fleet broadcaster hook — it captures geolocation failures
-         silently otherwise, which is bad UX. */}
-      {online && fleetError && (
-        <FadeUp delay={0.03}>
-          <div className="flex items-start gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-amber-500 text-white">
-              <Icon name="alert-triangle" className="h-4 w-4" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-sm font-bold leading-snug text-amber-900">
-                Riders can&apos;t see your car on the map yet
-              </p>
-              <p className="mt-0.5 text-xs text-amber-800">{fleetError}</p>
+                <span
+                  className={`inline-flex h-9 w-9 transform items-center justify-center rounded-full bg-white shadow-lg transition-all ${
+                    online ? "translate-x-10" : "translate-x-1"
+                  }`}
+                >
+                  {onlineSyncing ? (
+                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-rajlo-red border-t-transparent" />
+                  ) : (
+                    <Icon
+                      name={online ? "check-circle" : "x"}
+                      className={`h-4 w-4 ${online ? "text-emerald-600" : "text-muted"}`}
+                    />
+                  )}
+                </span>
+              </button>
             </div>
-          </div>
-        </FadeUp>
-      )}
 
-      {/* ─────── Compliance banner ─────── */}
-      {complianceTone && (
-        <FadeUp delay={0.05}>
-          <div
-            className={`flex flex-col gap-3 rounded-2xl border p-5 md:flex-row md:items-center md:justify-between ${
-              complianceTone === "danger"
-                ? "border-rajlo-red/30 bg-primary-soft"
-                : complianceTone === "warn"
-                  ? "border-amber-200 bg-amber-50"
-                  : "border-rajlo-red/20 bg-primary-soft/40"
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <span
-                className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl ${
-                  complianceTone === "danger"
-                    ? "bg-rajlo-red text-white"
-                    : complianceTone === "warn"
-                      ? "bg-amber-500 text-white"
-                      : "bg-rajlo-red/15 text-rajlo-red"
-                }`}
-              >
-                <Icon
-                  name={complianceTone === "danger" ? "alert-triangle" : "shield-alert"}
-                  className="h-5 w-5"
+            {/* Inline mini-stat strip — at-a-glance "how am I doing today" */}
+            {stats ? (
+              <div className="grid grid-cols-3 gap-2 border-t border-white/15 pt-5 sm:gap-4">
+                <HeroStat
+                  label="This week"
+                  value={formatJMD(stats.earnings.thisWeek)}
+                  caption={`${stats.tripCounts.thisWeek} trip${stats.tripCounts.thisWeek === 1 ? "" : "s"}`}
                 />
-              </span>
-              <div>
-                <p className="text-sm font-bold leading-snug">
-                  {complianceSummary.expired > 0
-                    ? `${complianceSummary.expired} TA document${complianceSummary.expired > 1 ? "s" : ""} expired or missing.`
-                    : complianceSummary.urgent > 0
-                      ? `${complianceSummary.urgent} TA document${complianceSummary.urgent > 1 ? "s" : ""} expire within ${complianceThresholds.urgentDays} days.`
-                      : `${complianceSummary.upcoming} TA document${complianceSummary.upcoming > 1 ? "s" : ""} due within ${complianceThresholds.warningDays} days.`}
-                </p>
-                <p className="mt-0.5 text-xs text-muted">
-                  Keep TA documents current to continue accepting ride requests.
-                </p>
-              </div>
-            </div>
-            <Link
-              href="/driver/verification"
-              className="shrink-0 self-start rounded-full bg-rajlo-red px-4 py-2 text-xs font-bold text-white hover:bg-primary-hover md:self-center"
-            >
-              View compliance →
-            </Link>
-          </div>
-        </FadeUp>
-      )}
-
-      {/* ─────── Stats ─────── */}
-      <Stagger className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <Stat label="Requests" value={incomingCount.toString()} icon="inbox" />
-        <Stat label="Today" value="JMD 5.2k" icon="trending-up" />
-        <Stat label="Rating" value="4.8" icon="star" />
-        <Stat label="Trips" value="142" icon="navigation" />
-      </Stagger>
-
-      {/* ─────── Incoming requests ─────── */}
-      {online && (
-        <FadeUp delay={0.1}>
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-extrabold tracking-tight md:text-xl">
-                Incoming requests
-              </h2>
-              {incomingCount > 0 && (
-                <span className="rounded-full bg-primary-soft px-2.5 py-1 text-[11px] font-bold text-rajlo-red">
-                  {incomingCount} new
-                </span>
-              )}
-            </div>
-
-            {acceptError && (
-              <div className="mb-3 rounded-xl border border-rajlo-red/30 bg-primary-soft px-4 py-3 text-sm font-semibold text-rajlo-red">
-                {acceptError}
-              </div>
-            )}
-
-            {incomingCount === 0 ? (
-              <div className="rounded-2xl border border-line bg-surface p-8 text-center">
-                <span className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-surface-soft text-muted">
-                  <Icon name="inbox" className="h-5 w-5" />
-                </span>
-                <p className="mt-3 text-sm font-bold">No new requests yet</p>
-                <p className="mt-1 text-xs text-muted">
-                  Stay online — incoming rides will pop up here automatically.
-                </p>
+                <HeroStat
+                  label="Today"
+                  value={formatJMD(stats.earnings.today)}
+                  caption={`${stats.tripCounts.today} trip${stats.tripCounts.today === 1 ? "" : "s"}`}
+                />
+                <HeroStat
+                  label="Rating"
+                  value={
+                    stats.rating.average !== null
+                      ? stats.rating.average.toFixed(1)
+                      : "—"
+                  }
+                  caption={
+                    stats.rating.count > 0
+                      ? `${stats.rating.count} rating${stats.rating.count === 1 ? "" : "s"}`
+                      : "No ratings yet"
+                  }
+                />
               </div>
             ) : (
-              <div className="space-y-3">
-                {inboxRides.map((entry) => (
-                  <div key={entry.id} className="relative">
-                    {accepting === entry.id && (
-                      <div className="pointer-events-none absolute inset-0 z-10 grid place-items-center rounded-2xl bg-white/70 backdrop-blur-sm">
-                        <span className="h-6 w-6 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
-                      </div>
-                    )}
-                    {entry.kind === "solo" ? (
-                      <RideRequestCard
-                        ride={{
-                          id: entry.id,
-                          from: entry.pickup.name,
-                          to: entry.dropoff.name,
-                          eta: entry.estimatedEtaMinutes
-                            ? `${entry.estimatedEtaMinutes} min`
-                            : "—",
-                          price: formatJMD(entry.estimatedFareJMD),
-                          seats: entry.seats,
-                          status: "searching" as const,
-                        }}
-                        onAccept={() => handleAccept(entry.id)}
-                        onDecline={() => handleDecline(entry.id)}
-                      />
-                    ) : (
-                      <CarpoolRequestCard
-                        entry={entry}
-                        onAccept={() => handleAccept(entry.id)}
-                        onDecline={() => handleDecline(entry.id)}
-                      />
-                    )}
-                  </div>
+              <div className="grid grid-cols-3 gap-2 border-t border-white/15 pt-5">
+                {[0, 1, 2].map((i) => (
+                  <Skeleton
+                    key={i}
+                    className="h-14 w-full"
+                    rounded="xl"
+                    variant="dark"
+                  />
                 ))}
               </div>
             )}
+
+            {/* Online time / since when */}
+            {online && stats?.online.since && (
+              <p className="text-[11px] font-semibold text-emerald-200">
+                Online since{" "}
+                {new Date(stats.online.since).toLocaleTimeString("en-JM", {
+                  hour: "numeric",
+                  minute: "2-digit",
+                })}
+              </p>
+            )}
+          </div>
+        </div>
+      </FadeUp>
+
+      {/* GPS / fleet warning */}
+      {online && fleetError && (
+        <FadeUp delay={0.04}>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+            <p className="font-bold">Location sharing is off</p>
+            <p className="mt-1">{fleetError}</p>
           </div>
         </FadeUp>
       )}
 
-      {/* ─────── Quick actions ─────── */}
-      <FadeUp delay={0.15}>
-        <div>
-          <h2 className="mb-3 text-lg font-extrabold tracking-tight md:text-xl">Quick actions</h2>
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <ActionCard label="Earnings" href="/driver/earnings" icon="trending-up" />
-            <ActionCard label="History" href="/driver/history" icon="clock" />
-            <ActionCard label="Compliance" href="/driver/verification" icon="shield-check" />
-            <ActionCard label="Notifications" href="/driver/notifications" icon="bell" />
+      {statsError && (
+        <FadeUp delay={0.04}>
+          <div className="rounded-2xl border border-rajlo-red/30 bg-primary-soft px-4 py-3 text-xs font-semibold text-rajlo-red">
+            {statsError}
           </div>
+        </FadeUp>
+      )}
+
+      {/* ACTIVE TRIP BANNER */}
+      {!bootstrapping && hasActiveTrip && (
+        <FadeUp delay={0.05}>
+          <Link
+            href="/driver/active-trip"
+            className="group flex items-center justify-between gap-4 rounded-2xl border border-emerald-300 bg-emerald-50 p-5 shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+          >
+            <div className="flex items-center gap-3">
+              <span className="grid h-11 w-11 place-items-center rounded-xl bg-emerald-600 text-white shadow-md">
+                <Icon name="navigation" className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-sm font-extrabold tracking-tight text-emerald-900">
+                  You have an active trip
+                </p>
+                <p className="mt-0.5 text-xs text-emerald-800">
+                  Tap to open the navigation console.
+                </p>
+              </div>
+            </div>
+            <Icon
+              name="arrow-right"
+              className="h-5 w-5 text-emerald-700 transition-transform group-hover:translate-x-0.5"
+            />
+          </Link>
+        </FadeUp>
+      )}
+
+      {/* 4-TILE STAT GRID (richer than the hero strip) */}
+      <FadeUp delay={0.08}>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <StatTile
+            eyebrow="This week"
+            value={stats ? formatJMD(stats.earnings.thisWeek) : "—"}
+            caption={
+              stats
+                ? `${stats.tripCounts.thisWeek} trip${stats.tripCounts.thisWeek === 1 ? "" : "s"}`
+                : ""
+            }
+            changePct={stats?.weekChangePct ?? null}
+            icon="trending-up"
+          />
+          <StatTile
+            eyebrow="This month"
+            value={stats ? formatJMD(stats.earnings.thisMonth) : "—"}
+            caption={
+              stats
+                ? `${stats.tripCounts.thisMonth} trip${stats.tripCounts.thisMonth === 1 ? "" : "s"}`
+                : ""
+            }
+            icon="calculator"
+          />
+          <StatTile
+            eyebrow="Acceptance · 30d"
+            value={
+              stats?.acceptanceRate !== null && stats?.acceptanceRate !== undefined
+                ? `${stats.acceptanceRate}%`
+                : "—"
+            }
+            caption="Trips accepted vs cancelled"
+            icon="check-circle"
+            valueClass={
+              stats?.acceptanceRate !== null &&
+              stats?.acceptanceRate !== undefined &&
+              stats.acceptanceRate < 70
+                ? "text-amber-600"
+                : "text-foreground"
+            }
+          />
+          <StatTile
+            eyebrow="Driver rating"
+            value={
+              stats?.rating.average !== null && stats?.rating.average !== undefined
+                ? stats.rating.average.toFixed(1)
+                : "—"
+            }
+            caption={
+              stats?.rating.count
+                ? `${stats.rating.count} review${stats.rating.count === 1 ? "" : "s"}`
+                : "No ratings yet"
+            }
+            icon="star"
+          />
         </div>
       </FadeUp>
+
+      {/* 7-DAY EARNINGS CHART */}
+      {stats && (
+        <FadeUp delay={0.12}>
+          <div className="rounded-2xl border border-line bg-surface p-5">
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+                  Last 7 days
+                </p>
+                <p className="mt-1 text-sm font-bold">Daily earnings</p>
+              </div>
+              <p className="text-[11px] text-muted">
+                Bar height = JMD earned · today highlighted
+              </p>
+            </div>
+            <DailyBars data={stats.dailySeries} />
+          </div>
+        </FadeUp>
+      )}
+
+      {/* COMPLIANCE HEALTH CARD */}
+      {compliance && (
+        <FadeUp delay={0.14}>
+          <ComplianceCard summary={compliance} />
+        </FadeUp>
+      )}
+
+      {/* INBOX */}
+      <FadeUp delay={0.16}>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-soft text-rajlo-red">
+                <Icon name="inbox" className="h-3.5 w-3.5" />
+              </span>
+              <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                Live ride requests
+              </p>
+            </div>
+            <span className="text-[11px] font-semibold text-muted">
+              {hasActiveTrip
+                ? "On a trip"
+                : online
+                  ? `${inboxRides.length} waiting`
+                  : "Offline"}
+            </span>
+          </div>
+
+          {acceptError && (
+            <div className="rounded-2xl border border-rajlo-red/30 bg-primary-soft px-4 py-3 text-xs font-semibold text-rajlo-red">
+              {acceptError}
+            </div>
+          )}
+
+          {online === null || bootstrapping ? (
+            <RideCardSkeleton />
+          ) : hasActiveTrip ? (
+            <EmptyInbox
+              icon="navigation"
+              title="You're already on a trip"
+              body="Finish your current trip first — we'll route new requests to you when you're free."
+              ctaLabel="Open active trip"
+              ctaHref="/driver/active-trip"
+            />
+          ) : !online ? (
+            <EmptyInbox
+              icon="x"
+              title="You're offline"
+              body="Toggle online above to start receiving ride requests."
+            />
+          ) : inboxRides.length === 0 ? (
+            <EmptyInbox
+              icon="inbox"
+              title="No requests yet"
+              body="Stay online — incoming rides will pop up here automatically."
+            />
+          ) : (
+            <ul className="space-y-3">
+              {inboxRides.map((r) => (
+                <li key={r.id}>
+                  <InboxCard
+                    entry={r}
+                    onAccept={() => handleAccept(r.id)}
+                    accepting={accepting === r.id}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </FadeUp>
+
+      {/* QUICK ACTIONS */}
+      <FadeUp delay={0.2}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <QuickActionTile
+            icon="shield-check"
+            label="TA verification"
+            caption="Compliance, expiry timers, document uploads."
+            href="/driver/verification"
+          />
+          <QuickActionTile
+            icon="trending-up"
+            label="Earnings"
+            caption="Today, this week, monthly trend, and per-trip records."
+            href="/driver/earnings"
+          />
+          <QuickActionTile
+            icon="clock"
+            label="Trip history"
+            caption="Every completed and cancelled trip with rider ratings."
+            href="/driver/history"
+          />
+          <QuickActionTile
+            icon="star"
+            label="My ratings"
+            caption="Lifetime average, recent reviews, 5-star streak."
+            href="/driver/ratings"
+          />
+        </div>
+      </FadeUp>
+
+      {bootstrapping && !stats && (
+        <FadeUp>
+          <HeroSkeleton />
+        </FadeUp>
+      )}
     </div>
   );
 }
 
-function Stat({ label, value, icon }: { label: string; value: string; icon: IconName }) {
+/* ─── Reusable bits ─── */
+
+function HeroStat({
+  label,
+  value,
+  caption,
+}: {
+  label: string;
+  value: string;
+  caption: string;
+}) {
   return (
-    <StaggerItem>
-      <div className="rounded-2xl border border-line bg-surface p-4 transition-shadow hover:shadow-md">
-        <div className="flex items-center justify-between">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted">{label}</p>
-          <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-soft text-rajlo-red">
-            <Icon name={icon} className="h-3.5 w-3.5" />
-          </span>
-        </div>
-        <p className="mt-2 text-2xl font-extrabold tracking-tight text-rajlo-red md:text-3xl">
-          {value}
-        </p>
-      </div>
-    </StaggerItem>
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-white/55">
+        {label}
+      </p>
+      <p className="mt-0.5 truncate text-base font-extrabold tracking-tight md:text-lg">
+        {value}
+      </p>
+      <p className="truncate text-[10px] text-white/65">{caption}</p>
+    </div>
   );
 }
 
-function ActionCard({
-  label,
-  href,
+function StatTile({
+  eyebrow,
+  value,
+  caption,
+  changePct,
   icon,
+  valueClass = "text-foreground",
 }: {
-  label: string;
-  href: string;
+  eyebrow: string;
+  value: string;
+  caption: string;
+  changePct?: number | null;
   icon: IconName;
+  valueClass?: string;
+}) {
+  const arrow =
+    changePct === null || changePct === undefined
+      ? null
+      : changePct === 0
+        ? "—"
+        : changePct > 0
+          ? "▲"
+          : "▼";
+  const tone =
+    changePct === null || changePct === undefined
+      ? "bg-surface-soft text-muted"
+      : changePct >= 0
+        ? "bg-emerald-50 text-emerald-700"
+        : "bg-primary-soft text-rajlo-red";
+
+  return (
+    <div className="rounded-2xl border border-line bg-surface p-4">
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+          {eyebrow}
+        </p>
+        <span className="grid h-6 w-6 place-items-center rounded-lg bg-primary-soft text-rajlo-red">
+          <Icon name={icon} className="h-3 w-3" />
+        </span>
+      </div>
+      <p className={`mt-1.5 text-2xl font-extrabold tracking-tight ${valueClass}`}>
+        {value}
+      </p>
+      <div className="mt-2 flex items-center justify-between gap-2">
+        {caption && (
+          <p className="truncate text-[11px] text-muted">{caption}</p>
+        )}
+        {arrow && (
+          <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-extrabold ${tone}`}
+          >
+            {arrow} {Math.abs(changePct ?? 0)}%
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function DailyBars({
+  data,
+}: {
+  data: Array<{ label: string; spendJMD: number; trips: number }>;
+}) {
+  const max = Math.max(1, ...data.map((d) => d.spendJMD));
+  const lastIdx = data.length - 1;
+  return (
+    <div
+      className="flex items-end gap-1.5 sm:gap-2.5"
+      role="img"
+      aria-label="7-day earnings chart"
+    >
+      {data.map((d, i) => {
+        const isLast = i === lastIdx;
+        const heightPct = max > 0 ? Math.max(2, (d.spendJMD / max) * 100) : 2;
+        return (
+          <div
+            key={d.label + i}
+            className="group flex min-w-0 flex-1 flex-col items-center gap-1.5"
+          >
+            <div className="relative flex h-32 w-full items-end justify-center sm:h-40">
+              <span
+                className={`absolute -top-5 whitespace-nowrap text-[9px] font-bold transition-opacity ${
+                  isLast
+                    ? "text-rajlo-red opacity-100"
+                    : "text-foreground opacity-0 group-hover:opacity-100"
+                }`}
+              >
+                {d.spendJMD > 0 ? formatJMD(d.spendJMD) : ""}
+              </span>
+              <div
+                className={`w-full rounded-t-lg transition-all duration-300 ${
+                  isLast
+                    ? "bg-rajlo-red shadow-md shadow-rajlo-red/30"
+                    : d.spendJMD > 0
+                      ? "bg-rajlo-black/85 group-hover:bg-rajlo-red"
+                      : "bg-line"
+                }`}
+                style={{ height: `${heightPct}%` }}
+              />
+            </div>
+            <p
+              className={`truncate text-[10px] font-semibold ${
+                isLast ? "text-rajlo-red" : "text-muted"
+              }`}
+            >
+              {d.label}
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ComplianceCard({ summary }: { summary: Compliance }) {
+  const total = summary.expired + summary.urgent + summary.upcoming;
+  const tone =
+    summary.expired > 0
+      ? "danger"
+      : summary.urgent > 0
+        ? "warning"
+        : summary.upcoming > 0
+          ? "info"
+          : "good";
+
+  const headline =
+    tone === "danger"
+      ? "Action needed — document expired"
+      : tone === "warning"
+        ? "Renewal due within 7 days"
+        : tone === "info"
+          ? "Renewals coming up"
+          : "All compliance up to date";
+
+  const palette = {
+    danger: { bg: "bg-primary-soft", border: "border-rajlo-red/30", text: "text-rajlo-red" },
+    warning: { bg: "bg-amber-50", border: "border-amber-300", text: "text-amber-800" },
+    info: { bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-800" },
+    good: { bg: "bg-emerald-50", border: "border-emerald-300", text: "text-emerald-800" },
+  }[tone];
+
+  return (
+    <div className={`rounded-2xl border ${palette.border} ${palette.bg} p-5`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+            TA compliance
+          </p>
+          <p className={`mt-1 text-base font-extrabold tracking-tight ${palette.text}`}>
+            {headline}
+          </p>
+        </div>
+        <Link
+          href="/driver/verification"
+          className="shrink-0 rounded-full bg-rajlo-black px-3 py-1.5 text-[11px] font-bold text-white transition-opacity hover:opacity-90"
+        >
+          Review
+        </Link>
+      </div>
+      {total > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs font-semibold">
+          {summary.expired > 0 && (
+            <span className="text-rajlo-red">
+              {summary.expired} expired
+            </span>
+          )}
+          {summary.urgent > 0 && (
+            <span className="text-amber-700">
+              {summary.urgent} renew within 7 days
+            </span>
+          )}
+          {summary.upcoming > 0 && (
+            <span className="text-muted">
+              {summary.upcoming} upcoming · ≤ 60 days
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function EmptyInbox({
+  icon,
+  title,
+  body,
+  ctaLabel,
+  ctaHref,
+}: {
+  icon: IconName;
+  title: string;
+  body: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-dashed border-line bg-surface-soft p-8 text-center">
+      <span className="mx-auto grid h-10 w-10 place-items-center rounded-full bg-surface text-muted">
+        <Icon name={icon} className="h-4 w-4" />
+      </span>
+      <p className="mt-3 text-sm font-extrabold tracking-tight">{title}</p>
+      <p className="mx-auto mt-1 max-w-sm text-xs text-muted">{body}</p>
+      {ctaLabel && ctaHref && (
+        <Link
+          href={ctaHref}
+          className="mt-4 inline-flex items-center gap-2 rounded-full bg-rajlo-red px-4 py-2 text-xs font-bold text-white"
+        >
+          {ctaLabel}
+          <Icon name="arrow-right" className="h-3 w-3" />
+        </Link>
+      )}
+    </div>
+  );
+}
+
+function QuickActionTile({
+  icon,
+  label,
+  caption,
+  href,
+}: {
+  icon: IconName;
+  label: string;
+  caption: string;
+  href: string;
 }) {
   return (
     <Link
       href={href}
-      className="group flex flex-col items-start gap-3 rounded-2xl border border-line bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-md"
+      className="group flex items-start gap-3 rounded-2xl border border-line bg-surface p-5 transition-all hover:-translate-y-0.5 hover:border-rajlo-red/30 hover:shadow-md"
     >
-      <span className="grid h-10 w-10 place-items-center rounded-xl bg-primary-soft text-rajlo-red transition-colors group-hover:bg-rajlo-red group-hover:text-white">
+      <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-primary-soft text-rajlo-red transition-colors group-hover:bg-rajlo-red group-hover:text-white">
         <Icon name={icon} className="h-5 w-5" />
       </span>
-      <p className="text-sm font-bold">{label}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-extrabold tracking-tight">{label}</p>
+        <p className="mt-0.5 text-xs text-muted">{caption}</p>
+      </div>
+      <Icon
+        name="chevron-right"
+        className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-rajlo-red"
+      />
     </Link>
   );
 }
 
 /**
- * Inbox card for a carpool group — two riders going the same way that
- * the matcher paired together. Visually distinct from solo cards (a
- * "Carpool" badge + a 2-passenger pickup ladder) so the driver knows
- * up-front they're committing to two pickups + two dropoffs in one go.
- * Accepting this card claims BOTH rides atomically server-side.
+ * Inbox card — handles both solo rides and carpool pairs. Carpool
+ * entries advertise both pickups + the combined fare so the driver
+ * knows what they're committing to before tapping Accept.
  */
-function CarpoolRequestCard({
+function InboxCard({
   entry,
   onAccept,
-  onDecline,
+  accepting,
 }: {
-  entry: InboxCarpool;
+  entry: InboxEntry;
   onAccept: () => void;
-  onDecline: () => void;
+  accepting: boolean;
 }) {
+  const fareJMD =
+    entry.kind === "solo" ? entry.estimatedFareJMD : entry.combinedFareJMD;
+  const seats = entry.kind === "solo" ? entry.seats : entry.totalSeats;
+  // Use a ticking state so the "X mins ago" label refreshes without
+  // shoving a Date.now() call into the render body (impure).
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
+  const minutesAgo = Math.max(
+    0,
+    Math.round((now - new Date(entry.requestedAt).getTime()) / 60_000),
+  );
+
   return (
-    <div className="overflow-hidden rounded-2xl border-2 border-rajlo-red/30 bg-surface shadow-sm">
-      <div className="flex items-center justify-between gap-3 bg-primary-soft px-4 py-2.5">
-        <div className="flex items-center gap-2">
-          <span className="grid h-7 w-7 place-items-center rounded-full bg-rajlo-red text-white">
-            <Icon name="users" className="h-3.5 w-3.5" />
-          </span>
-          <span className="text-xs font-extrabold uppercase tracking-wider text-rajlo-red">
-            Carpool · 2 riders
-          </span>
+    <div className="rounded-2xl border border-line bg-surface p-5 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            {entry.kind === "carpool" && (
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-amber-800">
+                Carpool · 2 riders
+              </span>
+            )}
+            <span className="text-[11px] font-semibold text-muted">
+              {minutesAgo === 0
+                ? "Just now"
+                : `${minutesAgo}m ago`}
+            </span>
+          </div>
+          <p className="mt-2 text-base font-extrabold tracking-tight">
+            {entry.kind === "solo"
+              ? entry.pickup.name
+              : entry.primary.pickup.name}{" "}
+            <span className="text-muted">→</span>{" "}
+            {entry.kind === "solo"
+              ? entry.dropoff.name
+              : entry.primary.dropoff.name}
+          </p>
+          {entry.kind === "carpool" && (
+            <p className="mt-1 text-xs text-muted">
+              Then: {entry.secondary.pickup.name} →{" "}
+              {entry.secondary.dropoff.name}
+            </p>
+          )}
         </div>
-        <span className="text-xs font-bold text-rajlo-red">
-          {formatJMD(entry.combinedFareJMD)}
-        </span>
-      </div>
-
-      <div className="space-y-4 p-4 md:p-6">
-        <div>
-          <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
-            Rider 1 · Pickup first
+        <div className="shrink-0 text-right">
+          <p className="text-xl font-extrabold tracking-tight text-rajlo-red">
+            {formatJMD(fareJMD)}
           </p>
-          <p className="mt-0.5 truncate text-sm font-bold">
-            {entry.primary.pickup.name}
+          <p className="text-[11px] text-muted">
+            {seats} seat{seats === 1 ? "" : "s"}
           </p>
-          <p className="mt-0.5 truncate text-xs text-muted">
-            → {entry.primary.dropoff.name}
-          </p>
-          <p className="mt-1 text-[11px] text-muted">
-            {entry.primary.seats} seat{entry.primary.seats === 1 ? "" : "s"} ·{" "}
-            {formatJMD(entry.primary.fareJMD)}
-          </p>
-        </div>
-        <div className="border-t border-line pt-4">
-          <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
-            Rider 2 · Pickup second
-          </p>
-          <p className="mt-0.5 truncate text-sm font-bold">
-            {entry.secondary.pickup.name}
-          </p>
-          <p className="mt-0.5 truncate text-xs text-muted">
-            → {entry.secondary.dropoff.name}
-          </p>
-          <p className="mt-1 text-[11px] text-muted">
-            {entry.secondary.seats} seat{entry.secondary.seats === 1 ? "" : "s"} ·{" "}
-            {formatJMD(entry.secondary.fareJMD)}
-          </p>
-        </div>
-
-        <div className="flex gap-2 border-t border-line pt-4">
-          <button
-            type="button"
-            onClick={onDecline}
-            className="flex-1 rounded-lg border border-line py-2.5 text-sm font-bold transition-colors hover:bg-surface-soft"
-          >
-            Decline
-          </button>
-          <button
-            type="button"
-            onClick={onAccept}
-            className="flex-1 rounded-lg bg-rajlo-red py-2.5 text-sm font-bold text-white transition-opacity hover:opacity-90"
-          >
-            Accept carpool
-          </button>
         </div>
       </div>
+
+      {entry.kind === "solo" &&
+        (entry.estimatedDistanceKm !== null ||
+          entry.estimatedEtaMinutes !== null ||
+          entry.stopsCount > 0) && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
+            {entry.estimatedDistanceKm !== null && (
+              <span className="flex items-center gap-1.5">
+                <Icon name="map" className="h-3 w-3" />
+                {entry.estimatedDistanceKm.toFixed(1)} km
+              </span>
+            )}
+            {entry.estimatedEtaMinutes !== null && (
+              <span className="flex items-center gap-1.5">
+                <Icon name="clock" className="h-3 w-3" />~
+                {entry.estimatedEtaMinutes} min
+              </span>
+            )}
+            {entry.stopsCount > 0 && (
+              <span className="flex items-center gap-1.5">
+                <Icon name="map-pin" className="h-3 w-3" />
+                {entry.stopsCount} extra stop
+                {entry.stopsCount === 1 ? "" : "s"}
+              </span>
+            )}
+          </div>
+        )}
+
+      {entry.kind === "solo" && entry.notes && (
+        <div className="mt-3 rounded-xl bg-primary-soft px-3 py-2 text-[11px] leading-relaxed text-foreground">
+          <p className="font-bold text-rajlo-red">Note from rider</p>
+          <p className="mt-0.5">{entry.notes}</p>
+        </div>
+      )}
+
+      <button
+        type="button"
+        onClick={onAccept}
+        disabled={accepting}
+        className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-rajlo-red px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 transition-all hover:-translate-y-0.5 hover:bg-primary-hover disabled:cursor-wait disabled:opacity-70"
+      >
+        {accepting ? (
+          <>
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+            Accepting…
+          </>
+        ) : (
+          <>
+            Accept ride
+            <Icon name="arrow-right" className="h-4 w-4" />
+          </>
+        )}
+      </button>
     </div>
   );
 }

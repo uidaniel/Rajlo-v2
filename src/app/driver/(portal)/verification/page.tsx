@@ -1,7 +1,46 @@
 "use client";
+
 import { useEffect, useMemo, useState } from "react";
-import { type TADocument } from "@/lib/mock-data";
-import { buildMockCompliancePayload } from "@/lib/compliance-utils";
+import Link from "next/link";
+import { Icon } from "@/components/icons";
+import { ArcWatermark } from "@/components/arc-pattern";
+import { FadeUp } from "@/components/anim";
+import { HeroSkeleton, Skeleton } from "@/components/skeleton";
+import {
+  complianceThresholds,
+  type DocStatus,
+  type TADocument,
+} from "@/lib/mock-data";
+
+/**
+ * Driver TA verification page — production version.
+ *
+ * Loads the SIGNED-IN driver's compliance payload from the auth-aware
+ * `/api/driver/compliance` endpoint (no more hard-coded DRV-1031). The
+ * page renders:
+ *
+ *   1. Hero with the headline compliance verdict (all good / X expired
+ *      / Y renew within 7 days etc.) — driven by the same `summary`
+ *      the dashboard reads
+ *   2. Filter pills (All / Action needed / Expiring / Approved)
+ *   3. One card per required TA document, with status pill, expiry
+ *      countdown, admin note (if any), and a quick link to the
+ *      onboarding/resubmit flow when something needs uploading
+ *   4. "Renew at TA" reference link block
+ *
+ * Replaces the old hand-rolled mock-driven version that used emoji
+ * status icons and a select-from-list editor — that pattern was a
+ * leftover from early scaffolding and didn't fit the current brand.
+ */
+
+type CompliancePayload = {
+  driverId: string;
+  docs: TADocument[];
+  summary: { expired: number; urgent: number; upcoming: number };
+  source: "supabase" | "mock";
+};
+
+type Tab = "all" | "action" | "soon" | "ok";
 
 function daysUntil(dateStr?: string): number | null {
   if (!dateStr) return null;
@@ -9,237 +48,491 @@ function daysUntil(dateStr?: string): number | null {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-function statusLabel(doc: TADocument): { text: string; color: string; bg: string; icon: string } {
+function severityRank(doc: TADocument): number {
+  // Lower = needs attention sooner. Used to sort the list so the
+  // most-urgent doc lands at the top of every filter view.
   const days = daysUntil(doc.expiryDate);
-  if (doc.status === "expired" || (days !== null && days < 0)) {
-    return { text: "Expired", color: "#c0392b", bg: "#fdecea", icon: "🔴" };
-  }
-  if (doc.status === "expiring_soon" || (days !== null && days <= 30)) {
-    return { text: days !== null ? `Expires in ${days}d` : "Expiring soon", color: "#b45309", bg: "#fef7e0", icon: "⚠️" };
-  }
-  if (doc.status === "pending") {
-    return { text: "Pending Review", color: "#1e6f5c", bg: "#d8ede7", icon: "🔄" };
-  }
-  if (doc.status === "rejected") {
-    return { text: "Rejected", color: "#c0392b", bg: "#fdecea", icon: "❌" };
-  }
-  if (doc.status === "missing") {
-    return { text: "Missing", color: "#c0392b", bg: "#fdecea", icon: "📋" };
-  }
-  if (days !== null && days <= 60) {
-    return { text: `Renew in ${days}d`, color: "#b45309", bg: "#fef7e0", icon: "⏰" };
-  }
-  return { text: "Approved", color: "#1e6f5c", bg: "#d8ede7", icon: "✅" };
+  if (doc.status === "expired" || (days !== null && days < 0)) return 0;
+  if (doc.status === "missing") return 1;
+  if (doc.status === "rejected") return 2;
+  if (doc.status === "pending") return 3;
+  if (days !== null && days <= complianceThresholds.criticalDays) return 4;
+  if (days !== null && days <= complianceThresholds.urgentDays) return 5;
+  if (days !== null && days <= complianceThresholds.warningDays) return 6;
+  return 9;
 }
 
-function renewalLabel(doc: TADocument): string {
-  if (doc.renewalPeriodDays === 0) return "Permanent";
-  if (doc.renewalPeriodDays === 365) return "Annual";
-  if (doc.renewalPeriodDays === 730) return "Every 2 years";
-  if (doc.renewalPeriodDays >= 1825) return "Every 5 years";
-  return `Every ${doc.renewalPeriodDays} days`;
+function statusBadge(doc: TADocument): {
+  label: string;
+  tone: "danger" | "warning" | "info" | "good";
+} {
+  const days = daysUntil(doc.expiryDate);
+  if (doc.status === "expired" || (days !== null && days < 0))
+    return { label: "Expired", tone: "danger" };
+  if (doc.status === "missing")
+    return { label: "Not uploaded", tone: "danger" };
+  if (doc.status === "rejected")
+    return { label: "Rejected — resubmit", tone: "danger" };
+  if (doc.status === "pending")
+    return { label: "Pending review", tone: "info" };
+  if (days !== null && days <= complianceThresholds.urgentDays)
+    return { label: `Renew · ${days}d left`, tone: "warning" };
+  if (days !== null && days <= complianceThresholds.warningDays)
+    return { label: `Renew · ${days}d left`, tone: "info" };
+  return { label: "Approved", tone: "good" };
 }
+
+function tonePalette(tone: "danger" | "warning" | "info" | "good") {
+  switch (tone) {
+    case "danger":
+      return {
+        pill: "bg-primary-soft text-rajlo-red border-rajlo-red/30",
+        accent: "border-l-rajlo-red",
+      };
+    case "warning":
+      return {
+        pill: "bg-amber-50 text-amber-800 border-amber-300",
+        accent: "border-l-amber-500",
+      };
+    case "info":
+      return {
+        pill: "bg-emerald-50 text-emerald-800 border-emerald-300",
+        accent: "border-l-emerald-500",
+      };
+    case "good":
+      return {
+        pill: "bg-emerald-50 text-emerald-800 border-emerald-300",
+        accent: "border-l-emerald-500",
+      };
+  }
+}
+
+function renewalLabel(periodDays: number): string {
+  if (periodDays === 0) return "Permanent";
+  if (periodDays <= 365) return "Renew yearly";
+  if (periodDays <= 730) return "Renew every 2 years";
+  if (periodDays <= 1825) return "Renew every 5 years";
+  return `Renew every ${Math.round(periodDays / 365)} years`;
+}
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "action", label: "Action needed" },
+  { key: "soon", label: "Expiring" },
+  { key: "ok", label: "Approved" },
+];
+
+const ACTION_STATES: DocStatus[] = ["expired", "missing", "rejected"];
 
 export default function DriverVerificationPage() {
-  const [driverId] = useState("DRV-1031");
-  const [docs, setDocs] = useState<TADocument[]>([]);
-  const [selected, setSelected] = useState<TADocument | null>(null);
+  const [data, setData] = useState<CompliancePayload | null>(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [tab, setTab] = useState<Tab>("all");
 
   useEffect(() => {
-    let mounted = true;
-
-    async function loadCompliance() {
-      setLoading(true);
-      setLoadError(null);
+    let cancelled = false;
+    (async () => {
       try {
-        const response = await fetch(`/api/driver/compliance?driverId=${driverId}`);
-        if (!response.ok) {
-          throw new Error("Failed to load compliance data");
+        const res = await fetch("/api/driver/compliance");
+        if (!res.ok) {
+          const j = (await res.json().catch(() => ({}))) as { error?: string };
+          throw new Error(j.error ?? `HTTP ${res.status}`);
         }
-        const payload = (await response.json()) as { docs: TADocument[] };
-        if (mounted) {
-          setDocs(payload.docs ?? buildMockCompliancePayload(driverId).docs);
-        }
-      } catch {
-        if (mounted) {
-          setDocs(buildMockCompliancePayload(driverId).docs);
-          setLoadError("Showing fallback data. Connect Supabase to load live records.");
-        }
+        const json = (await res.json()) as CompliancePayload;
+        if (!cancelled) setData(json);
+      } catch (e) {
+        if (!cancelled)
+          setError(
+            e instanceof Error ? e.message : "Couldn't load compliance.",
+          );
       } finally {
-        if (mounted) setLoading(false);
+        if (!cancelled) setLoading(false);
       }
-    }
-
-    loadCompliance();
-
+    })();
     return () => {
-      mounted = false;
+      cancelled = true;
     };
-  }, [driverId]);
+  }, []);
 
-  const expiredOrMissing = useMemo(() => docs.filter((d) => {
-    const days = daysUntil(d.expiryDate);
-    return d.status === "expired" || d.status === "missing" || (days !== null && days < 0);
-  }), [docs]);
+  const sortedDocs = useMemo(
+    () => (data ? [...data.docs].sort((a, b) => severityRank(a) - severityRank(b)) : []),
+    [data],
+  );
 
-  const expiringSoon = useMemo(() => docs.filter((d) => {
-    const days = daysUntil(d.expiryDate);
-    return (days !== null && days >= 0 && days <= 60) || d.status === "expiring_soon";
-  }), [docs]);
+  const filtered = useMemo(() => {
+    if (tab === "all") return sortedDocs;
+    return sortedDocs.filter((d) => {
+      const days = daysUntil(d.expiryDate);
+      if (tab === "action") {
+        if (ACTION_STATES.includes(d.status)) return true;
+        return days !== null && days < 0;
+      }
+      if (tab === "soon") {
+        if (ACTION_STATES.includes(d.status)) return false;
+        if (d.status === "pending") return false;
+        return (
+          days !== null &&
+          days >= 0 &&
+          days <= complianceThresholds.warningDays
+        );
+      }
+      if (tab === "ok") {
+        if (ACTION_STATES.includes(d.status)) return false;
+        if (d.status === "pending") return false;
+        return (
+          days === null ||
+          days > complianceThresholds.warningDays
+        );
+      }
+      return true;
+    });
+  }, [sortedDocs, tab]);
 
-  const allGood = expiredOrMissing.length === 0 && expiringSoon.length === 0;
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-3xl space-y-5 px-2 py-2 md:px-3 md:py-8">
+        <HeroSkeleton />
+        {[0, 1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-28 w-full" rounded="xl" />
+        ))}
+      </div>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <div className="mx-auto max-w-md px-4 py-16 text-center">
+        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft">
+          <span aria-hidden className="text-3xl leading-none">
+            😢
+          </span>
+        </span>
+        <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
+          Couldn&apos;t load compliance
+        </h1>
+        <p className="mt-2 text-sm text-muted">
+          {error ?? "Something went wrong. Please try again."}
+        </p>
+      </div>
+    );
+  }
+
+  const { summary } = data;
+  const heroTone =
+    summary.expired > 0
+      ? "danger"
+      : summary.urgent > 0
+        ? "warning"
+        : summary.upcoming > 0
+          ? "info"
+          : "good";
+
+  const heroTitle =
+    heroTone === "danger"
+      ? "Action needed"
+      : heroTone === "warning"
+        ? "Renewals due soon"
+        : heroTone === "info"
+          ? "Stay ahead of renewals"
+          : "All compliance up to date";
+  const heroSubtitle =
+    heroTone === "danger"
+      ? "One or more documents are expired or missing. Your account stays inactive until they're back in good standing."
+      : heroTone === "warning"
+        ? "Documents need renewal within 7 days. Get them in before they expire to avoid suspension."
+        : heroTone === "info"
+          ? "Some documents are coming up for renewal. We'll keep you posted as expiry approaches."
+          : "Every Transport Authority requirement on file is approved and current. Keep it up.";
 
   return (
-    <div className="min-h-screen pb-12" style={{ background: "var(--background)" }}>
-      {/* Header */}
-      <div
-        className="sticky top-0 z-10 px-4 py-4 border-b"
-        style={{ background: "var(--surface)", borderColor: "var(--line)" }}
-      >
-        <div className="max-w-2xl mx-auto">
-          <h1 className="text-lg font-bold" style={{ color: "var(--foreground)" }}>TA Compliance Status</h1>
-          <p className="text-sm" style={{ color: "var(--muted)" }}>
-            All 10 Jamaica Transport Authority required documents
-          </p>
+    <div className="mx-auto max-w-3xl space-y-5 px-2 py-2 md:px-3 md:py-8">
+      {/* Hero */}
+      <FadeUp>
+        <div
+          className={`relative overflow-hidden rounded-3xl p-7 text-white shadow-2xl md:p-9 ${
+            heroTone === "danger"
+              ? "bg-rajlo-red shadow-rajlo-red/30"
+              : heroTone === "warning"
+                ? "bg-rajlo-black shadow-rajlo-black/30"
+                : "bg-emerald-700 shadow-emerald-700/30"
+          }`}
+        >
+          <ArcWatermark
+            size={420}
+            variant={heroTone === "warning" ? "red" : "white"}
+            className="absolute -right-20 -bottom-32 opacity-[0.18]"
+          />
+          <div className="relative">
+            <p className="font-secondary text-xs font-bold uppercase tracking-wider text-white/85">
+              TA compliance · {data.driverId}
+            </p>
+            <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
+              {heroTitle}
+            </h1>
+            <p className="mt-2 max-w-md text-sm text-white/85">
+              {heroSubtitle}
+            </p>
+
+            {/* Stat strip — counts of each severity bucket */}
+            <div className="mt-5 grid grid-cols-3 gap-3 border-t border-white/15 pt-4">
+              <HeroCount
+                value={summary.expired}
+                label="Expired or missing"
+                hot={summary.expired > 0}
+              />
+              <HeroCount
+                value={summary.urgent}
+                label="≤ 7 days"
+                hot={summary.urgent > 0}
+              />
+              <HeroCount
+                value={summary.upcoming}
+                label="≤ 60 days"
+                hot={false}
+              />
+            </div>
+          </div>
         </div>
-      </div>
+      </FadeUp>
 
-      <div className="max-w-2xl mx-auto px-4 pt-4 space-y-4">
-        {loadError && (
-          <div className="rounded-xl border px-4 py-2 text-xs" style={{ borderColor: "#b45309", color: "#92660c", background: "#fef7e0" }}>
-            {loadError}
-          </div>
-        )}
-
-        {loading && (
-          <div className="rounded-xl border px-4 py-3 text-sm" style={{ borderColor: "var(--line)", background: "var(--surface)", color: "var(--muted)" }}>
-            Loading compliance records...
-          </div>
-        )}
-
-        {/* Summary banner */}
-        {!loading && !allGood && (
-          <div
-            className="rounded-2xl px-4 py-3 border"
-            style={{
-              background: expiredOrMissing.length > 0 ? "#fdecea" : "#fef7e0",
-              borderColor: expiredOrMissing.length > 0 ? "#c0392b" : "#b45309",
-            }}
-          >
-            <p
-              className="text-sm font-semibold"
-              style={{ color: expiredOrMissing.length > 0 ? "#c0392b" : "#b45309" }}
-            >
-              {expiredOrMissing.length > 0
-                ? `${expiredOrMissing.length} document${expiredOrMissing.length > 1 ? "s" : ""} expired or missing — account may be suspended`
-                : `${expiringSoon.length} document${expiringSoon.length > 1 ? "s" : ""} expiring within 60 days — renew soon`}
-            </p>
-            <p className="text-xs mt-0.5" style={{ color: expiredOrMissing.length > 0 ? "#c0392b" : "#92660c" }}>
-              Contact the Jamaica Transport Authority at 876-926-9937 or visit transportauthority.gov.jm
-            </p>
-          </div>
-        )}
-        {!loading && allGood && (
-          <div
-            className="rounded-2xl px-4 py-3 border"
-            style={{ background: "var(--primary-soft)", borderColor: "var(--primary)" }}
-          >
-            <p className="text-sm font-semibold" style={{ color: "var(--primary)" }}>
-              ✅ All documents are current — you&apos;re fully compliant
-            </p>
-          </div>
-        )}
-
-        {/* Document cards */}
-        <div className="space-y-2">
-          {docs.map((doc) => {
-            const s = statusLabel(doc);
-            const days = daysUntil(doc.expiryDate);
-            return (
-              <button
-                key={doc.id}
-                onClick={() => setSelected(selected?.id === doc.id ? null : doc)}
-                className="w-full text-left rounded-2xl border p-4 transition-all"
-                style={{
-                  background: "var(--surface)",
-                  borderColor: selected?.id === doc.id ? "var(--primary)" : "var(--line)",
-                }}
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold truncate" style={{ color: "var(--foreground)" }}>
-                      {s.icon} {doc.label}
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: "var(--muted)" }}>
-                      {renewalLabel(doc)}
-                      {doc.expiryDate && ` • Expires ${doc.expiryDate}`}
-                    </p>
-                  </div>
+      {/* Filter tabs */}
+      <FadeUp delay={0.05}>
+        <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="inline-flex gap-1 rounded-full border border-line bg-surface-soft p-1">
+            {TABS.map((t) => {
+              const active = tab === t.key;
+              const count =
+                t.key === "all"
+                  ? sortedDocs.length
+                  : t.key === "action"
+                    ? sortedDocs.filter((d) => {
+                        const days = daysUntil(d.expiryDate);
+                        return (
+                          ACTION_STATES.includes(d.status) ||
+                          (days !== null && days < 0)
+                        );
+                      }).length
+                    : t.key === "soon"
+                      ? sortedDocs.filter((d) => {
+                          if (ACTION_STATES.includes(d.status)) return false;
+                          if (d.status === "pending") return false;
+                          const days = daysUntil(d.expiryDate);
+                          return (
+                            days !== null &&
+                            days >= 0 &&
+                            days <= complianceThresholds.warningDays
+                          );
+                        }).length
+                      : sortedDocs.filter((d) => {
+                          if (ACTION_STATES.includes(d.status)) return false;
+                          if (d.status === "pending") return false;
+                          const days = daysUntil(d.expiryDate);
+                          return (
+                            days === null ||
+                            days > complianceThresholds.warningDays
+                          );
+                        }).length;
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => setTab(t.key)}
+                  className={`relative rounded-full px-4 py-2 text-xs font-bold transition-all md:text-sm md:px-5 ${
+                    active
+                      ? "bg-rajlo-red text-white shadow-md shadow-rajlo-red/30"
+                      : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  {t.label}
                   <span
-                    className="flex-shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                    style={{ background: s.bg, color: s.color }}
+                    className={`ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-extrabold ${
+                      active
+                        ? "bg-white/20 text-white"
+                        : "bg-rajlo-red/10 text-rajlo-red"
+                    }`}
                   >
-                    {s.text}
+                    {count}
                   </span>
-                </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </FadeUp>
 
-                {/* Expanded detail */}
-                {selected?.id === doc.id && (
-                  <div className="mt-3 pt-3 border-t space-y-2" style={{ borderColor: "var(--line)" }}>
-                    <p className="text-xs" style={{ color: "var(--muted)" }}>{doc.description}</p>
-                    {doc.note && (
-                      <p className="text-xs font-medium" style={{ color: s.color }}>
-                        {doc.note}
+      {/* Doc cards */}
+      {filtered.length === 0 ? (
+        <FadeUp delay={0.08}>
+          <div className="rounded-2xl border border-dashed border-line bg-surface-soft p-10 text-center">
+            <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-emerald-100 text-emerald-700">
+              <Icon name="check-circle" className="h-5 w-5" />
+            </span>
+            <p className="mt-3 text-sm font-extrabold tracking-tight">
+              Nothing in this view
+            </p>
+            <p className="mx-auto mt-1 max-w-sm text-xs text-muted">
+              No documents match this filter. Switch tab above.
+            </p>
+          </div>
+        </FadeUp>
+      ) : (
+        <div className="space-y-3">
+          {filtered.map((doc, i) => {
+            const badge = statusBadge(doc);
+            const palette = tonePalette(badge.tone);
+            const days = daysUntil(doc.expiryDate);
+            const needsAction =
+              ACTION_STATES.includes(doc.status) ||
+              (days !== null && days < 0);
+
+            return (
+              <FadeUp key={doc.id} delay={0.06 + i * 0.02}>
+                <div
+                  className={`rounded-2xl border border-l-4 border-line bg-surface p-5 ${palette.accent}`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-extrabold tracking-tight">
+                        {doc.label}
                       </p>
-                    )}
-                    {days !== null && days > 0 && days <= 60 && (
-                      <div className="space-y-1">
-                        <div className="flex justify-between text-xs" style={{ color: "var(--muted)" }}>
-                          <span>Renewal urgency</span>
-                          <span>{days} days left</span>
-                        </div>
-                        <div className="h-1.5 rounded-full" style={{ background: "var(--line)" }}>
-                          <div
-                            className="h-1.5 rounded-full"
-                            style={{
-                              width: `${Math.max(0, Math.min(100, (days / 60) * 100))}%`,
-                              background: days <= 7 ? "#c0392b" : days <= 30 ? "#b45309" : "#1e6f5c",
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                    <a
-                      href="/driver/documents"
-                      className="inline-block mt-1 rounded-full px-4 py-1.5 text-xs font-semibold text-white"
-                      style={{ background: "var(--primary)" }}
-                      onClick={(e) => e.stopPropagation()}
+                      <p className="mt-0.5 text-xs text-muted">
+                        {doc.description}
+                      </p>
+                    </div>
+                    <span
+                      className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ${palette.pill}`}
                     >
-                      Update Document
-                    </a>
+                      {badge.label}
+                    </span>
                   </div>
-                )}
-              </button>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-muted">
+                    <span className="flex items-center gap-1.5">
+                      <Icon name="clock" className="h-3 w-3" />
+                      {renewalLabel(doc.renewalPeriodDays)}
+                    </span>
+                    {doc.expiryDate && (
+                      <span className="flex items-center gap-1.5">
+                        <Icon name="check-circle" className="h-3 w-3" />
+                        Expires{" "}
+                        {new Date(doc.expiryDate).toLocaleDateString("en-JM", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                    )}
+                  </div>
+
+                  {doc.note && (
+                    <div className="mt-3 rounded-xl bg-primary-soft px-3 py-2 text-[11px] leading-relaxed text-foreground">
+                      <p className="font-bold text-rajlo-red">
+                        Note from operations
+                      </p>
+                      <p className="mt-0.5">{doc.note}</p>
+                    </div>
+                  )}
+
+                  {(needsAction || badge.tone === "warning") && (
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Link
+                        href={`/driver/renew/${doc.id}`}
+                        className="inline-flex items-center gap-1.5 rounded-full bg-rajlo-red px-4 py-2 text-xs font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-primary-hover"
+                      >
+                        {needsAction ? "Upload / resubmit" : "Renew now"}
+                        <Icon name="arrow-right" className="h-3 w-3" />
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </FadeUp>
             );
           })}
         </div>
+      )}
 
-        {/* TA contact footer */}
-        <div
-          className="rounded-2xl border px-4 py-4 text-sm space-y-1"
-          style={{ background: "var(--surface-soft)", borderColor: "var(--line)" }}
-        >
-          <p className="font-semibold" style={{ color: "var(--foreground)" }}>Jamaica Transport Authority</p>
-          <p style={{ color: "var(--muted)" }}>📞 876-926-9937</p>
-          <p style={{ color: "var(--muted)" }}>🌐 transportauthority.gov.jm</p>
-          <p className="text-xs pt-1" style={{ color: "var(--muted)" }}>
-            Contact the TA directly to renew your Franchise Certificate, COF, or Driver Badge.
-            Fees and schedules are set annually by the TA — verify current amounts before visiting.
+      {/* External renewal references */}
+      <FadeUp delay={0.18}>
+        <div className="rounded-2xl border border-line bg-surface p-5">
+          <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+            Where to renew
           </p>
+          <ul className="mt-3 space-y-2 text-sm">
+            <RenewalLink
+              label="Transport Authority"
+              detail="Franchise + driver badge renewals · 119 Maxfield Avenue"
+              href="https://www.ta.org.jm/"
+            />
+            <RenewalLink
+              label="Island Traffic Authority"
+              detail="Driver's licence + COF inspections"
+              href="https://www.ita.gov.jm/"
+            />
+            <RenewalLink
+              label="Tax Administration Jamaica"
+              detail="TRN + NIS records"
+              href="https://www.jamaicatax.gov.jm/"
+            />
+          </ul>
         </div>
-      </div>
+      </FadeUp>
     </div>
   );
 }
+
+function HeroCount({
+  value,
+  label,
+  hot,
+}: {
+  value: number;
+  label: string;
+  hot: boolean;
+}) {
+  return (
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-white/55">
+        {label}
+      </p>
+      <p
+        className={`mt-0.5 text-2xl font-extrabold tracking-tight ${
+          hot ? "text-white" : "text-white/85"
+        }`}
+      >
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function RenewalLink({
+  label,
+  detail,
+  href,
+}: {
+  label: string;
+  detail: string;
+  href: string;
+}) {
+  return (
+    <li>
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="group flex items-start justify-between gap-3 rounded-xl px-3 py-2 transition-colors hover:bg-surface-soft"
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-bold">{label}</p>
+          <p className="mt-0.5 text-xs text-muted">{detail}</p>
+        </div>
+        <Icon
+          name="arrow-right"
+          className="mt-1 h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-rajlo-red"
+        />
+      </a>
+    </li>
+  );
+}
+
