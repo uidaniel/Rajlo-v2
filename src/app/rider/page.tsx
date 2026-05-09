@@ -318,46 +318,6 @@ export default function RiderDashboardPage() {
         </section>
       </FadeUp>
 
-      {/* ============== MODE PICKER ==============
-         The two-engine spine: Private Ride (Mode A — door-to-door,
-         metered) and Route Taxi (Mode B — TA-regulated corridors,
-         pay-by-leg). The hero's "Where to?" already defaults to
-         Private; this tile section makes Route Taxi a peer not a
-         hidden mode. */}
-      <FadeUp delay={0.04}>
-        <section>
-          <div className="mb-3 flex items-end justify-between">
-            <div>
-              <p className="font-secondary text-[11px] font-bold uppercase tracking-wider text-rajlo-red">
-                Choose your ride
-              </p>
-              <h2 className="mt-1 text-xl font-extrabold tracking-tight md:text-2xl">
-                Two ways to move
-              </h2>
-            </div>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2">
-            <ModeTile
-              href="/rider/request"
-              eyebrow="Private Ride"
-              title="Door to door"
-              hint="Your own car, your stops. Metered fare, multi-stop ready."
-              priceLine="From JMD $200 · upfront quote"
-              icon="car"
-              accent="black"
-            />
-            <ModeTile
-              href="/rider/route-taxi"
-              eyebrow="Route Taxi"
-              title="Catch the next car"
-              hint="Shared red plates on a fixed corridor. TA-regulated fare per leg."
-              priceLine="From JMD $130 · TA-published fare"
-              icon="navigation"
-              accent="red"
-            />
-          </div>
-        </section>
-      </FadeUp>
 
       {/* ============== LOADING SHIMMER ==============
          While the three parallel fetches are in flight, render
@@ -755,56 +715,6 @@ function TrustChip({ icon, label }: { icon: IconName; label: string }) {
   );
 }
 
-function ModeTile({
-  href,
-  eyebrow,
-  title,
-  hint,
-  priceLine,
-  icon,
-  accent,
-}: {
-  href: string;
-  eyebrow: string;
-  title: string;
-  hint: string;
-  priceLine: string;
-  icon: IconName;
-  accent: "red" | "black";
-}) {
-  const accentBg =
-    accent === "red"
-      ? "bg-gradient-to-br from-rajlo-red via-rajlo-red to-[#c00]"
-      : "bg-gradient-to-br from-rajlo-black via-rajlo-black to-[#1a1d10]";
-  return (
-    <Link
-      href={href}
-      className={`group relative flex items-stretch overflow-hidden rounded-3xl border border-line bg-surface transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-lg hover:shadow-rajlo-red/15`}
-    >
-      <span
-        aria-hidden
-        className={`grid w-20 shrink-0 place-items-center text-white ${accentBg}`}
-      >
-        <Icon name={icon} className="h-7 w-7" />
-      </span>
-      <span className="flex min-w-0 flex-1 flex-col justify-center gap-0.5 px-5 py-5">
-        <span className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
-          {eyebrow}
-        </span>
-        <span className="text-base font-extrabold tracking-tight md:text-lg">
-          {title}
-        </span>
-        <span className="text-xs leading-relaxed text-muted">{hint}</span>
-        <span className="mt-1 text-[11px] font-bold text-foreground">
-          {priceLine}
-        </span>
-      </span>
-      <span className="grid w-12 shrink-0 place-items-center text-muted transition-all group-hover:text-rajlo-red">
-        <Icon name="arrow-right" className="h-4 w-4" />
-      </span>
-    </Link>
-  );
-}
 
 function Stat({
   label,

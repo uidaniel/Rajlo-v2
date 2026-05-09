@@ -16,6 +16,21 @@ import {
   type Place,
 } from "@/lib/jamaica";
 
+type RouteTaxiMatch = {
+  route: {
+    id: string;
+    origin: string;
+    destination: string;
+    parish: string | null;
+    distanceKm: number;
+    taFareJmd: number;
+    slug: string;
+  };
+  direction: "forward" | "reverse";
+  fareJmd: number;
+  confidence: "high" | "medium" | "low";
+};
+
 /**
  * Rider booking screen. Multi-stop aware: pickup + 0–4 intermediate stops +
  * dropoff. Live map preview, live fare preview.
@@ -46,6 +61,14 @@ export default function RiderRequestPage() {
   // drops to ~65% of solo. If no match is found, the ride proceeds
   // normally as a solo trip at the regular fare.
   const [allowCarpool, setAllowCarpool] = useState(false);
+  // Mode B (Route Taxi) lives inside this flow now. The picker only
+  // surfaces once we have both pickup + dropoff — before that, the
+  // matcher has nothing to chew on. Default mode is `private` because
+  // route taxi may not even be available for this trip.
+  const [mode, setMode] = useState<"private" | "route_taxi">("private");
+  const [matches, setMatches] = useState<RouteTaxiMatch[] | null>(null);
+  const [matching, setMatching] = useState(false);
+  const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   // While we're checking on mount whether the user already has an active
@@ -134,6 +157,75 @@ export default function RiderRequestPage() {
     [stops],
   );
 
+  // Whenever both endpoints land, hit the matcher to see if any TA
+  // corridor covers this trip. Multi-stop trips can't use Mode B
+  // (route taxi is single-leg by definition) — skip the call and
+  // force-pin the rider to private.
+  useEffect(() => {
+    if (!pickup || !dropoff || filledStops.length > 0) {
+      setMatches(null);
+      setSelectedRouteId(null);
+      if (mode !== "private") setMode("private");
+      return;
+    }
+    let cancelled = false;
+    setMatching(true);
+    (async () => {
+      try {
+        const res = await fetch("/api/rider/route-taxi/match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pickup: {
+              name: pickup.name,
+              address: pickup.address,
+              parish: pickup.parish,
+            },
+            dropoff: {
+              name: dropoff.name,
+              address: dropoff.address,
+              parish: dropoff.parish,
+            },
+          }),
+        });
+        if (!res.ok) throw new Error("match failed");
+        const json = (await res.json()) as { matches: RouteTaxiMatch[] };
+        if (cancelled) return;
+        setMatches(json.matches);
+        // Pre-select the top match so the rider can flip to Route Taxi
+        // mode in one tap without picking from the list. They can swap
+        // to a different match if there are several.
+        if (json.matches.length > 0) {
+          setSelectedRouteId(json.matches[0].route.id);
+        } else {
+          setSelectedRouteId(null);
+          if (mode !== "private") setMode("private");
+        }
+      } catch {
+        if (!cancelled) {
+          setMatches([]);
+          setSelectedRouteId(null);
+        }
+      } finally {
+        if (!cancelled) setMatching(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // We intentionally don't depend on `mode` — it's only set HERE,
+    // never the trigger. Putting it in deps creates a feedback loop.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pickup, dropoff, filledStops.length]);
+
+  const selectedMatch = useMemo(
+    () =>
+      mode === "route_taxi" && selectedRouteId
+        ? (matches ?? []).find((m) => m.route.id === selectedRouteId) ?? null
+        : null,
+    [mode, selectedRouteId, matches],
+  );
+
   const allPoints = useMemo(() => {
     const list: Place[] = [];
     if (pickup) list.push(pickup);
@@ -191,6 +283,49 @@ export default function RiderRequestPage() {
     if (!canSubmit || !pickup || !dropoff) return;
     setSubmitting(true);
     setSubmitError(null);
+
+    // Route Taxi (Mode B) — branch out to the hail endpoint with the
+    // matched corridor, then send the rider to the live-status page
+    // we already built. The rest of the form (seats, carpool, notes,
+    // multi-stop) doesn't apply: route taxis are single-seat,
+    // single-leg, regulated.
+    if (mode === "route_taxi" && selectedMatch) {
+      try {
+        const res = await fetch("/api/rider/route-taxi/hail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            routeId: selectedMatch.route.id,
+            pickupLat: pickup.lat,
+            pickupLng: pickup.lng,
+          }),
+        });
+        const json = (await res.json().catch(() => ({}))) as {
+          ok?: boolean;
+          message?: string;
+          error?: string;
+        };
+        if (res.status === 402) {
+          setSubmitError(
+            json.message ??
+              "Top up your wallet — this trip can't be hailed yet.",
+          );
+          setSubmitting(false);
+          return;
+        }
+        if (!res.ok || !json.ok) {
+          throw new Error(json.message ?? json.error ?? "Hail failed");
+        }
+        router.push("/rider/route-taxi");
+      } catch (err) {
+        setSubmitError(
+          err instanceof Error ? err.message : "Couldn't hail a route taxi.",
+        );
+        setSubmitting(false);
+      }
+      return;
+    }
+
     try {
       const res = await fetch("/api/rider/rides", {
         method: "POST",
@@ -357,8 +492,172 @@ export default function RiderRequestPage() {
         </div>
       </FadeUp>
 
+      {/* Ride mode picker. Only renders once we have both endpoints —
+         before that, the matcher has nothing to look at. The card
+         layout collapses gracefully:
+           • Multi-stop trip → only Private Ride card (route taxi
+             can't serve multi-leg trips)
+           • No matching corridor → only Private Ride card
+           • Matches found → both cards, rider picks
+      */}
+      {pickup && dropoff && (
+        <FadeUp delay={0.13}>
+          <div className="mt-6">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
+                Choose your ride
+              </span>
+              <span className="h-px flex-1 bg-line" />
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {/* Private Ride — always available */}
+              <button
+                type="button"
+                onClick={() => setMode("private")}
+                aria-pressed={mode === "private"}
+                className={`group relative flex flex-col items-stretch gap-2 rounded-2xl border p-4 text-left transition-all ${
+                  mode === "private"
+                    ? "border-rajlo-red bg-primary-soft shadow-md shadow-rajlo-red/15"
+                    : "border-line bg-surface hover:border-rajlo-red/40 hover:bg-primary-soft/40"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
+                      mode === "private"
+                        ? "bg-rajlo-red text-white"
+                        : "bg-primary-soft text-rajlo-red"
+                    }`}
+                  >
+                    <Icon name="car" className="h-4 w-4" />
+                  </span>
+                  <span className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                    Private Ride
+                  </span>
+                </div>
+                <p className="text-base font-extrabold tracking-tight">
+                  {fare.fareJMD > 0 ? formatJMD(fare.fareJMD) : "Tap to choose"}
+                </p>
+                <p className="text-[11px] leading-relaxed text-muted">
+                  Door to door, your stops, ~{fare.etaMinutes} min ETA. Multi-stop ready.
+                </p>
+              </button>
+
+              {/* Route Taxi — only when matches exist AND single-leg */}
+              {filledStops.length === 0 && matching && (
+                <div className="flex flex-col items-stretch gap-2 rounded-2xl border border-line bg-surface-soft p-4">
+                  <Skeleton className="h-9 w-9" rounded="xl" />
+                  <Skeleton className="h-4 w-24" rounded="md" />
+                  <Skeleton className="h-3 w-full" rounded="md" />
+                </div>
+              )}
+              {filledStops.length === 0 &&
+                !matching &&
+                matches &&
+                matches.length > 0 &&
+                selectedMatch && (
+                  <button
+                    type="button"
+                    onClick={() => setMode("route_taxi")}
+                    aria-pressed={mode === "route_taxi"}
+                    className={`group relative flex flex-col items-stretch gap-2 rounded-2xl border p-4 text-left transition-all ${
+                      mode === "route_taxi"
+                        ? "border-rajlo-red bg-primary-soft shadow-md shadow-rajlo-red/15"
+                        : "border-line bg-surface hover:border-rajlo-red/40 hover:bg-primary-soft/40"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
+                          mode === "route_taxi"
+                            ? "bg-rajlo-red text-white"
+                            : "bg-primary-soft text-rajlo-red"
+                        }`}
+                      >
+                        <Icon name="navigation" className="h-4 w-4" />
+                      </span>
+                      <span className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                        Route Taxi
+                      </span>
+                    </div>
+                    <p className="text-base font-extrabold tracking-tight">
+                      {formatJMD(selectedMatch.fareJmd)}
+                    </p>
+                    <p className="text-[11px] leading-relaxed text-muted">
+                      <span className="font-semibold text-foreground">
+                        {selectedMatch.direction === "reverse"
+                          ? `${selectedMatch.route.destination} → ${selectedMatch.route.origin}`
+                          : `${selectedMatch.route.origin} → ${selectedMatch.route.destination}`}
+                      </span>
+                      <br />
+                      {selectedMatch.route.distanceKm.toFixed(1)} km · TA-regulated · single seat
+                    </p>
+                  </button>
+                )}
+            </div>
+
+            {/* Multi-route picker — only when route_taxi mode is on AND
+               there's more than one match to pick from. Lets the rider
+               swap to a different corridor if our first pick was wrong. */}
+            {mode === "route_taxi" && matches && matches.length > 1 && (
+              <div className="mt-3">
+                <p className="font-secondary mb-2 text-[10px] font-bold uppercase tracking-wider text-muted">
+                  Other corridors that match · {matches.length - 1}
+                </p>
+                <div className="space-y-1.5">
+                  {matches
+                    .filter((m) => m.route.id !== selectedRouteId)
+                    .map((m) => (
+                      <button
+                        key={m.route.id}
+                        type="button"
+                        onClick={() => setSelectedRouteId(m.route.id)}
+                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3 py-2 text-left transition-all hover:border-rajlo-red hover:bg-primary-soft/40"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs font-bold">
+                            {m.direction === "reverse"
+                              ? `${m.route.destination} → ${m.route.origin}`
+                              : `${m.route.origin} → ${m.route.destination}`}
+                          </p>
+                          <p className="text-[10px] text-muted">
+                            {m.route.distanceKm.toFixed(1)} km
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-xs font-extrabold text-rajlo-red">
+                          {formatJMD(m.fareJmd)}
+                        </p>
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* Hint when no route taxi covers this corridor */}
+            {filledStops.length === 0 &&
+              !matching &&
+              matches &&
+              matches.length === 0 && (
+                <p className="mt-2 rounded-xl bg-surface-soft px-3 py-2 text-[11px] text-muted">
+                  No TA route taxi covers this trip yet — Private Ride is your
+                  option.
+                </p>
+              )}
+
+            {/* Hint when multi-stop blocks Mode B */}
+            {filledStops.length > 0 && (
+              <p className="mt-2 rounded-xl bg-surface-soft px-3 py-2 text-[11px] text-muted">
+                Route taxis don&apos;t support multi-stop trips — drop the extra
+                stops to see if a corridor matches.
+              </p>
+            )}
+          </div>
+        </FadeUp>
+      )}
+
       <FadeUp delay={0.15}>
-        <div className="mt-6">
+        <div className={`mt-6 ${mode === "route_taxi" ? "hidden" : ""}`}>
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-semibold">Seats needed</p>
             <p className="text-xs text-muted">
@@ -397,6 +696,8 @@ export default function RiderRequestPage() {
           onClick={() => setAllowCarpool((v) => !v)}
           aria-pressed={allowCarpool}
           className={`mt-6 flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition-all ${
+            mode === "route_taxi" ? "hidden" : ""
+          } ${
             allowCarpool
               ? "border-rajlo-red bg-primary-soft shadow-md shadow-rajlo-red/15"
               : "border-line bg-surface hover:border-rajlo-red/40 hover:bg-primary-soft/40"
@@ -445,7 +746,7 @@ export default function RiderRequestPage() {
       </FadeUp>
 
       <FadeUp delay={0.2}>
-        <div className="mt-6">
+        <div className={`mt-6 ${mode === "route_taxi" ? "hidden" : ""}`}>
           <label className="block">
             <span className="text-sm font-semibold">
               Notes for the driver{" "}
@@ -464,7 +765,7 @@ export default function RiderRequestPage() {
         </div>
       </FadeUp>
 
-      {fare.fareJMD > 0 && (
+      {fare.fareJMD > 0 && mode !== "route_taxi" && (
         <FadeUp delay={0.25}>
           <div className="mt-6 overflow-hidden rounded-2xl border border-line bg-surface-soft">
             <div className="flex items-center justify-between border-b border-line bg-white px-5 py-4">
@@ -508,14 +809,31 @@ export default function RiderRequestPage() {
     </>
   );
 
+  // Action-bar amount + label adapts to the selected mode. Route Taxi
+  // shows the regulated TA fare (the one the rider committed to in
+  // the picker); Private Ride shows the live estimate from the
+  // existing fare engine.
+  const barFareJmd =
+    mode === "route_taxi" && selectedMatch
+      ? selectedMatch.fareJmd
+      : fare.fareJMD;
+  const barLabel =
+    mode === "route_taxi" && selectedMatch
+      ? "Route taxi fare"
+      : fare.fareJMD > 0
+        ? "Trip total"
+        : "Estimate appears here";
+  const ctaLabel =
+    mode === "route_taxi" && selectedMatch ? "Hail next car" : "Request ride";
+
   const barContent = (
     <>
       <div className="min-w-0">
         <p className="text-[10px] font-bold uppercase tracking-wider text-muted">
-          {fare.fareJMD > 0 ? "Trip total" : "Estimate appears here"}
+          {barLabel}
         </p>
         <p className="text-lg font-extrabold tracking-tight">
-          {fare.fareJMD > 0 ? formatJMD(fare.fareJMD) : "—"}
+          {barFareJmd > 0 ? formatJMD(barFareJmd) : "—"}
         </p>
       </div>
       <button
@@ -527,11 +845,11 @@ export default function RiderRequestPage() {
         {submitting ? (
           <>
             <span className="h-4 w-4 animate-spin rounded-full border-[2px] border-white border-t-transparent" />
-            Requesting…
+            {mode === "route_taxi" ? "Hailing…" : "Requesting…"}
           </>
         ) : (
           <>
-            Request ride
+            {ctaLabel}
             <Icon
               name="arrow-right"
               className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
