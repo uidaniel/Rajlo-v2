@@ -83,27 +83,27 @@ export async function POST(request: Request) {
   const concession = body.concession === true;
   const fareJmd = concession ? Math.round(baseFare / 2) : baseFare;
 
-  // Optional rider pickup GPS. Validated as plausibly inside Jamaica
-  // so a stuck-on-zero or wrong-country fix can't poison the matcher.
-  // When the rider declined location share, we leave the hail's
-  // pickup_lat/lng at 0 — drivers fall back to "no proximity hint."
+  // Optional rider pickup GPS. The proximity-sort matcher uses it
+  // when it's good; when it's bad (stuck-on-zero fix, browser dev
+  // tools emulating a non-JM location, IP geolocation falling back to
+  // an ISP datacenter), we drop the coords silently and let the
+  // matcher fall back to the no-proximity-hint path. Hard-failing the
+  // hail on a bad fix would be over-strict — the rider still wants
+  // to ride, just without the proximity affordance.
   let pickupLat = 0;
   let pickupLng = 0;
   if (
     typeof body.pickupLat === "number" &&
     typeof body.pickupLng === "number"
   ) {
-    if (!isWithinJamaica({ lat: body.pickupLat, lng: body.pickupLng })) {
-      return NextResponse.json(
-        {
-          error: "out_of_bounds",
-          message: "Pickup coordinates are outside Jamaica.",
-        },
-        { status: 400 },
+    if (isWithinJamaica({ lat: body.pickupLat, lng: body.pickupLng })) {
+      pickupLat = body.pickupLat;
+      pickupLng = body.pickupLng;
+    } else {
+      console.warn(
+        `route-taxi/hail: ignoring out-of-bounds pickup (${body.pickupLat}, ${body.pickupLng}) for user ${user.id}`,
       );
     }
-    pickupLat = body.pickupLat;
-    pickupLng = body.pickupLng;
   }
 
   // Cashless gate. Don't let a hail leave the door if the rider can't

@@ -217,6 +217,10 @@ function StartSessionPicker({
   const [direction, setDirection] = useState<"forward" | "reverse">("forward");
   const [capacity, setCapacity] = useState(4);
   const [starting, setStarting] = useState(false);
+  // 466 routes is too much to scroll through. Search-first window;
+  // expand button reveals more if the driver wants to browse.
+  const VISIBLE_LIMIT = 15;
+  const [visibleLimit, setVisibleLimit] = useState(VISIBLE_LIMIT);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,8 +249,8 @@ function StartSessionPicker({
     return Array.from(set).sort();
   }, [routes]);
 
-  const grouped = useMemo(() => {
-    if (!routes) return [];
+  const { grouped, filteredCount } = useMemo(() => {
+    if (!routes) return { grouped: [], filteredCount: 0 };
     const q = search.trim().toLowerCase();
     const filtered = routes.filter((r) => {
       if (parishFilter && r.parish !== parishFilter) return false;
@@ -256,17 +260,27 @@ function StartSessionPicker({
         r.destination.toLowerCase().includes(q)
       );
     });
+    const visible = filtered.slice(0, visibleLimit);
     const groups = new Map<string, RouteRow[]>();
-    for (const r of filtered) {
+    for (const r of visible) {
       const key = r.parish ?? "Other";
       const arr = groups.get(key) ?? [];
       arr.push(r);
       groups.set(key, arr);
     }
-    return Array.from(groups.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([parish, rows]) => ({ parish, rows }));
-  }, [routes, search, parishFilter]);
+    return {
+      grouped: Array.from(groups.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([parish, rows]) => ({ parish, rows })),
+      filteredCount: filtered.length,
+    };
+  }, [routes, search, parishFilter, visibleLimit]);
+
+  // Reset the cap so a leftover expansion from a previous filter
+  // doesn't bleed into a fresh search.
+  useEffect(() => {
+    setVisibleLimit(VISIBLE_LIMIT);
+  }, [search, parishFilter]);
 
   const startSession = async () => {
     if (!selected) return;
@@ -412,6 +426,12 @@ function StartSessionPicker({
                 <p className="text-sm font-bold">No matching routes</p>
               </div>
             )}
+            {routes && grouped.length > 0 && filteredCount > visibleLimit && (
+              <p className="mb-3 rounded-xl bg-surface-soft px-3 py-2 text-[11px] text-muted">
+                Showing {visibleLimit} of {filteredCount} matching routes —
+                refine the search above to find yours quickly.
+              </p>
+            )}
             {routes && grouped.length > 0 && (
               <Stagger className="space-y-6" amount={0.04}>
                 {grouped.map((g) => (
@@ -460,6 +480,19 @@ function StartSessionPicker({
                   </StaggerItem>
                 ))}
               </Stagger>
+            )}
+
+            {routes && grouped.length > 0 && filteredCount > visibleLimit && (
+              <button
+                type="button"
+                onClick={() => setVisibleLimit((v) => v + 30)}
+                className="mt-4 w-full rounded-2xl border-2 border-dashed border-line bg-surface-soft px-4 py-3 text-sm font-bold text-foreground hover:border-rajlo-red hover:text-rajlo-red"
+              >
+                Show {Math.min(30, filteredCount - visibleLimit)} more
+                <span className="ml-2 text-xs font-medium text-muted">
+                  ({filteredCount - visibleLimit} remaining)
+                </span>
+              </button>
             )}
           </div>
         </section>

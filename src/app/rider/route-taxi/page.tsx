@@ -92,6 +92,10 @@ export default function RiderRouteTaxiPage() {
   // experience is dramatically better with it (proximity sort, "X km
   // away" badges) — riders can opt out if they prefer.
   const [shareLocation, setShareLocation] = useState(true);
+  // Don't dump 466 routes on the rider — search-first UX with a small
+  // visible window. They can expand if they really want to browse.
+  const VISIBLE_LIMIT = 15;
+  const [visibleLimit, setVisibleLimit] = useState(VISIBLE_LIMIT);
 
   // Pull the rider's in-flight hail (if any). Drives the live status
   // banner at the top of the page and clears the local hail-success
@@ -180,9 +184,11 @@ export default function RiderRouteTaxiPage() {
     return Array.from(set).sort();
   }, [routes]);
 
-  // Filtered + grouped view.
-  const grouped = useMemo(() => {
-    if (!routes) return [];
+  // Filtered, capped, grouped view. We surface both the visible
+  // window AND the total filtered count so the "Show all" expand can
+  // tell the rider exactly how many more routes are hidden.
+  const { grouped, filteredCount } = useMemo(() => {
+    if (!routes) return { grouped: [], filteredCount: 0 };
     const q = search.trim().toLowerCase();
     const filtered = routes.filter((r) => {
       if (parishFilter && r.parish !== parishFilter) return false;
@@ -192,17 +198,28 @@ export default function RiderRouteTaxiPage() {
         r.destination.toLowerCase().includes(q)
       );
     });
+    const visible = filtered.slice(0, visibleLimit);
     const groups = new Map<string, RouteRow[]>();
-    for (const r of filtered) {
+    for (const r of visible) {
       const key = r.parish ?? "Other";
       const arr = groups.get(key) ?? [];
       arr.push(r);
       groups.set(key, arr);
     }
-    return Array.from(groups.entries())
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([parish, rows]) => ({ parish, rows }));
-  }, [routes, search, parishFilter]);
+    return {
+      grouped: Array.from(groups.entries())
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([parish, rows]) => ({ parish, rows })),
+      filteredCount: filtered.length,
+    };
+  }, [routes, search, parishFilter, visibleLimit]);
+
+  // Reset the visible cap whenever the rider changes their filter so
+  // they're not stuck looking at an expanded view of a totally
+  // different result set.
+  useEffect(() => {
+    setVisibleLimit(VISIBLE_LIMIT);
+  }, [search, parishFilter]);
 
   const submitHail = async () => {
     if (!selected) return;
@@ -256,7 +273,8 @@ export default function RiderRouteTaxiPage() {
       if (!res.ok || !json.ok || !json.hail || !json.route) {
         setHail({
           state: "error",
-          message: json.error ?? "Couldn't place the hail. Try again.",
+          message:
+            json.message ?? json.error ?? "Couldn't place the hail. Try again.",
         });
         return;
       }
@@ -424,6 +442,13 @@ export default function RiderRouteTaxiPage() {
               </div>
             )}
 
+            {routes && grouped.length > 0 && filteredCount > visibleLimit && (
+              <p className="mb-3 rounded-xl bg-surface-soft px-3 py-2 text-[11px] text-muted">
+                Showing {visibleLimit} of {filteredCount} matching routes —
+                refine your search above for the exact one.
+              </p>
+            )}
+
             {routes && grouped.length > 0 && (
               <Stagger className="space-y-6" amount={0.04}>
                 {grouped.map((g) => (
@@ -477,6 +502,19 @@ export default function RiderRouteTaxiPage() {
                   </StaggerItem>
                 ))}
               </Stagger>
+            )}
+
+            {routes && grouped.length > 0 && filteredCount > visibleLimit && (
+              <button
+                type="button"
+                onClick={() => setVisibleLimit((v) => v + 30)}
+                className="mt-4 w-full rounded-2xl border-2 border-dashed border-line bg-surface-soft px-4 py-3 text-sm font-bold text-foreground hover:border-rajlo-red hover:text-rajlo-red"
+              >
+                Show {Math.min(30, filteredCount - visibleLimit)} more
+                <span className="ml-2 text-xs font-medium text-muted">
+                  ({filteredCount - visibleLimit} remaining)
+                </span>
+              </button>
             )}
           </div>
         </section>
