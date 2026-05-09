@@ -303,14 +303,32 @@ export default function RiderRequestPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             routeId: selectedMatch.route.id,
-            pickupLat: pickup.lat,
-            pickupLng: pickup.lng,
+            // Full Place objects — let the server store the rider's
+            // actual A→B (not the route's named endpoints) so the
+            // driver map shows real pickup spots and the timeout
+            // fallback can deep-link into Private Ride with the same
+            // points prefilled.
+            pickup: {
+              name: pickup.name,
+              address: pickup.address,
+              lat: pickup.lat,
+              lng: pickup.lng,
+              parish: pickup.parish,
+            },
+            dropoff: {
+              name: dropoff.name,
+              address: dropoff.address,
+              lat: dropoff.lat,
+              lng: dropoff.lng,
+              parish: dropoff.parish,
+            },
           }),
         });
         const json = (await res.json().catch(() => ({}))) as {
           ok?: boolean;
           message?: string;
           error?: string;
+          hail?: { id: string };
         };
         if (res.status === 402) {
           setSubmitError(
@@ -320,10 +338,13 @@ export default function RiderRequestPage() {
           setSubmitting(false);
           return;
         }
-        if (!res.ok || !json.ok) {
+        if (!res.ok || !json.ok || !json.hail?.id) {
           throw new Error(json.message ?? json.error ?? "Hail failed");
         }
-        router.push("/rider/route-taxi");
+        // Hand off to the dedicated live hailing screen with the new
+        // hail's id. The page polls /[id] and renders the right UI for
+        // each status — searching → driver matched → onboard → done.
+        router.push(`/rider/route-taxi/live?id=${json.hail.id}`);
       } catch (err) {
         setSubmitError(
           err instanceof Error ? err.message : "Couldn't hail a route taxi.",

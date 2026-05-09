@@ -23,12 +23,25 @@ import { isWithinJamaica } from "@/lib/jamaica";
  * Pickup/dropoff names default to the route's origin/destination — the
  * "leg" override (rider boarding mid-route) lands in Phase 2.
  */
+type RiderPlace = {
+  name?: unknown;
+  address?: unknown;
+  lat?: unknown;
+  lng?: unknown;
+  parish?: unknown;
+};
+
 type HailBody = {
   routeId?: string;
   concession?: boolean;
-  /** Optional — rider's current GPS, used so the matched driver knows
-   *  where to find them and the matcher can sort hails closest-first.
-   *  When omitted, the route's origin name is the only pickup hint. */
+  /** Rider's actual pickup (the Google Place they selected on the
+   *  request page). When provided, we store the rider's name + coords
+   *  rather than the route's named origin — drivers see the real
+   *  pickup spot and the timeout fallback can prefill /rider/request. */
+  pickup?: RiderPlace;
+  /** Rider's actual dropoff. Same reasoning. */
+  dropoff?: RiderPlace;
+  /** Legacy params kept for back-compat with older clients. */
   pickupLat?: number;
   pickupLng?: number;
 };
@@ -83,27 +96,50 @@ export async function POST(request: Request) {
   const concession = body.concession === true;
   const fareJmd = concession ? Math.round(baseFare / 2) : baseFare;
 
-  // Optional rider pickup GPS. The proximity-sort matcher uses it
-  // when it's good; when it's bad (stuck-on-zero fix, browser dev
-  // tools emulating a non-JM location, IP geolocation falling back to
-  // an ISP datacenter), we drop the coords silently and let the
-  // matcher fall back to the no-proximity-hint path. Hard-failing the
-  // hail on a bad fix would be over-strict — the rider still wants
-  // to ride, just without the proximity affordance.
+  // Resolve the actual pickup + dropoff. Prefer the full `pickup`/
+  // `dropoff` Place objects from the new request flow; fall back to
+  // legacy `pickupLat/pickupLng` for older clients; final fallback is
+  // the route's named endpoints with no coords.
+  //
+  // Why this matters:
+  //   • Driver map shows the rider's real pickup spot, not just
+  //     "somewhere on this corridor".
+  //   • Timeout fallback can deep-link the rider back into
+  //     /rider/request with their original A→B prefilled.
+  //   • Trip history can render where the rider actually went, not
+  //     a generic corridor name.
+  const riderPickup = pickPlace(body.pickup);
+  const riderDropoff = pickPlace(body.dropoff);
+
+  let pickupName = route.origin_name;
   let pickupLat = 0;
   let pickupLng = 0;
-  if (
+  let pickupParish: string | null = route.origin_parish;
+
+  if (riderPickup) {
+    pickupName = riderPickup.name || pickupName;
+    pickupLat = riderPickup.lat;
+    pickupLng = riderPickup.lng;
+    pickupParish = riderPickup.parish ?? pickupParish;
+  } else if (
     typeof body.pickupLat === "number" &&
-    typeof body.pickupLng === "number"
+    typeof body.pickupLng === "number" &&
+    isWithinJamaica({ lat: body.pickupLat, lng: body.pickupLng })
   ) {
-    if (isWithinJamaica({ lat: body.pickupLat, lng: body.pickupLng })) {
-      pickupLat = body.pickupLat;
-      pickupLng = body.pickupLng;
-    } else {
-      console.warn(
-        `route-taxi/hail: ignoring out-of-bounds pickup (${body.pickupLat}, ${body.pickupLng}) for user ${user.id}`,
-      );
-    }
+    pickupLat = body.pickupLat;
+    pickupLng = body.pickupLng;
+  }
+
+  let dropoffName = route.destination_name;
+  let dropoffLat = 0;
+  let dropoffLng = 0;
+  let dropoffParish: string | null = route.destination_parish;
+
+  if (riderDropoff) {
+    dropoffName = riderDropoff.name || dropoffName;
+    dropoffLat = riderDropoff.lat;
+    dropoffLng = riderDropoff.lng;
+    dropoffParish = riderDropoff.parish ?? dropoffParish;
   }
 
   // Cashless gate. Don't let a hail leave the door if the rider can't
@@ -125,14 +161,14 @@ export async function POST(request: Request) {
       rider_id: user.id,
       route_id: route.id,
       session_id: null, // matcher attaches in Phase 2
-      pickup_name: route.origin_name,
+      pickup_name: pickupName,
       pickup_lat: pickupLat,
       pickup_lng: pickupLng,
-      pickup_parish: route.origin_parish,
-      dropoff_name: route.destination_name,
-      dropoff_lat: 0,
-      dropoff_lng: 0,
-      dropoff_parish: route.destination_parish,
+      pickup_parish: pickupParish,
+      dropoff_name: dropoffName,
+      dropoff_lat: dropoffLat,
+      dropoff_lng: dropoffLng,
+      dropoff_parish: dropoffParish,
       distance_km: distanceKm,
       fare_jmd: fareJmd,
       concession,
@@ -162,4 +198,29 @@ export async function POST(request: Request) {
       destination: route.destination_name,
     },
   });
+}
+
+/**
+ * Normalise an incoming Place-shaped object. Returns null when name +
+ * coords are missing OR coords are outside Jamaica (we can't trust
+ * stuck-on-zero / wrong-country fixes for storage).
+ */
+function pickPlace(p: unknown):
+  | { name: string; address: string; lat: number; lng: number; parish: string | null }
+  | null {
+  if (!p || typeof p !== "object") return null;
+  const obj = p as Record<string, unknown>;
+  const name = typeof obj.name === "string" ? obj.name.trim() : "";
+  const lat = Number(obj.lat);
+  const lng = Number(obj.lng);
+  if (!name) return null;
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (!isWithinJamaica({ lat, lng })) return null;
+  return {
+    name,
+    address: typeof obj.address === "string" ? obj.address : "",
+    lat,
+    lng,
+    parish: typeof obj.parish === "string" ? obj.parish : null,
+  };
 }

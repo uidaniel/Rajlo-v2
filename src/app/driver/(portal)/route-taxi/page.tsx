@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { MapView } from "@/components/map-view";
+import type { Place } from "@/lib/jamaica";
 import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp, Stagger, StaggerItem } from "@/components/anim";
@@ -66,13 +68,15 @@ type HailRow = {
   dropoff: string;
   distanceKm: number;
   fareJmd: number;
-  concession: boolean;
+  concession?: boolean;
   requestedAt: string;
   /** Set by the server when both the driver and the rider have shared
    *  GPS — the hail row is sorted closest-first when present. */
   proximityKm?: number | null;
   pickupLat?: number | null;
   pickupLng?: number | null;
+  dropoffLat?: number | null;
+  dropoffLng?: number | null;
 };
 
 type AcceptedHail = HailRow & { acceptedAt: string };
@@ -105,12 +109,14 @@ export default function DriverRouteTaxiPage() {
   // session the picker is static — no need to hammer the API.
   useBackgroundRefresh(refresh, 5000, { enabled: Boolean(data?.session) });
 
-  // Push the driver's GPS to the session every 15s while it's active.
-  // Drives proximity-sorted hails on the matcher and "X km away" tags
-  // on the rider's live status. Silent failures (denied permission,
-  // browser without geolocation) just mean the driver loses the
-  // proximity sort — every other hail action still works.
-  useDriverPositionPush(Boolean(data?.session));
+  // Driver's local GPS — pushed to the session for proximity sort,
+  // and used by the in-page map block so the driver sees themselves
+  // relative to their assigned riders' pickup/dropoff pins.
+  const [driverPosition, setDriverPosition] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+  useDriverPositionPush(Boolean(data?.session), setDriverPosition);
 
   const transition = useCallback(
     async (
@@ -189,6 +195,7 @@ export default function DriverRouteTaxiPage() {
       pending={data.pending}
       accepted={data.accepted}
       onboard={data.onboard}
+      driverPosition={driverPosition}
       onTransition={transition}
       onEnd={endSession}
       actionPending={actionPending}
@@ -611,6 +618,18 @@ function CapacityStepper({
   );
 }
 
+/** Stamp a hail's lat/lng + name into the Place shape MapView wants. */
+function hailToPlace(name: string, lat: number, lng: number): Place {
+  return {
+    placeId: "",
+    name,
+    address: name,
+    lat,
+    lng,
+    parish: null,
+  };
+}
+
 /* ════════════════════ ACTIVE SESSION — MONITOR ════════════════════ */
 
 function ActiveSessionMonitor({
@@ -618,6 +637,7 @@ function ActiveSessionMonitor({
   pending,
   accepted,
   onboard,
+  driverPosition,
   onTransition,
   onEnd,
   actionPending,
@@ -628,6 +648,7 @@ function ActiveSessionMonitor({
   pending: HailRow[];
   accepted: AcceptedHail[];
   onboard: OnboardHail[];
+  driverPosition: { lat: number; lng: number } | null;
   onTransition: (
     id: string,
     to: "accepted" | "picked_up" | "completed" | "cancelled",
@@ -640,6 +661,57 @@ function ActiveSessionMonitor({
   const seatsFull = session.seatsRemaining <= 0;
   const isPending = (id: string, to: string) =>
     actionPending === `${id}:${to}`;
+
+  // Pick the next-action target so the driver always sees ONE clear
+  // pin to head toward (matches the live-trip page's single-driver-
+  // single-rider model). Priority:
+  //   1. First onboard hail's dropoff (drop them off next)
+  //   2. First accepted hail's pickup (head to pickup)
+  //   3. First pending hail's pickup (preview before accepting)
+  const nextAction = useMemo(() => {
+    const onboardWithDropoff = onboard.find(
+      (h) => h.dropoffLat != null && h.dropoffLng != null,
+    );
+    if (onboardWithDropoff) {
+      return {
+        kind: "dropoff" as const,
+        place: hailToPlace(
+          onboardWithDropoff.dropoff,
+          onboardWithDropoff.dropoffLat as number,
+          onboardWithDropoff.dropoffLng as number,
+        ),
+      };
+    }
+    const acceptedWithPickup = accepted.find(
+      (h) => h.pickupLat != null && h.pickupLng != null,
+    );
+    if (acceptedWithPickup) {
+      return {
+        kind: "pickup" as const,
+        place: hailToPlace(
+          acceptedWithPickup.pickup,
+          acceptedWithPickup.pickupLat as number,
+          acceptedWithPickup.pickupLng as number,
+        ),
+      };
+    }
+    const pendingWithPickup = pending.find(
+      (h) => h.pickupLat != null && h.pickupLng != null,
+    );
+    if (pendingWithPickup) {
+      return {
+        kind: "pickup" as const,
+        place: hailToPlace(
+          pendingWithPickup.pickup,
+          pendingWithPickup.pickupLat as number,
+          pendingWithPickup.pickupLng as number,
+        ),
+      };
+    }
+    return null;
+  }, [onboard, accepted, pending]);
+
+  const showMap = Boolean(driverPosition || nextAction);
 
   return (
     <div className="space-y-6">
@@ -696,6 +768,53 @@ function ActiveSessionMonitor({
           </div>
         </section>
       </FadeUp>
+
+      {/* Live map — shows the driver's GPS pin + the next-action
+         pickup/dropoff so they always know where to head. Mirrors
+         the rider's live-trip map: one driver, one target. */}
+      {showMap && (
+        <FadeUp delay={0.03}>
+          <section className="overflow-hidden rounded-3xl border border-line bg-surface">
+            <div className="flex items-center justify-between border-b border-line bg-surface-soft px-5 py-3">
+              <div className="min-w-0">
+                <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                  {nextAction?.kind === "dropoff"
+                    ? "Drop off next"
+                    : nextAction?.kind === "pickup"
+                      ? onboard.length > 0 || accepted.length > 0
+                        ? "Pick up next"
+                        : "Closest hail"
+                      : "Live map"}
+                </p>
+                <p className="truncate text-sm font-bold">
+                  {nextAction?.place.name ?? "Waiting for hails…"}
+                </p>
+              </div>
+              {!driverPosition && (
+                <span className="rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-amber-800 ring-1 ring-amber-200">
+                  Awaiting GPS
+                </span>
+              )}
+            </div>
+            <MapView
+              pickup={
+                nextAction?.kind === "pickup" ? nextAction.place : null
+              }
+              stops={[]}
+              dropoff={
+                nextAction?.kind === "dropoff" ? nextAction.place : null
+              }
+              driverPosition={driverPosition}
+              liveRoute={
+                nextAction
+                  ? { target: nextAction.kind }
+                  : null
+              }
+              className="h-72 w-full"
+            />
+          </section>
+        </FadeUp>
+      )}
 
       {actionError && (
         <FadeUp delay={0.04}>
@@ -908,7 +1027,17 @@ function ActiveSessionMonitor({
  * proximity sort feels live, infrequent enough that we don't drain
  * the driver's battery while they're parked at a stand.
  */
-function useDriverPositionPush(enabled: boolean): void {
+function useDriverPositionPush(
+  enabled: boolean,
+  onPosition?: (pos: { lat: number; lng: number }) => void,
+): void {
+  // Hold the latest callback in a ref so changes to it don't restart
+  // the interval (would cause a fresh GPS prompt every render).
+  const onPositionRef = useRef(onPosition);
+  useEffect(() => {
+    onPositionRef.current = onPosition;
+  });
+
   useEffect(() => {
     if (!enabled) return;
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
@@ -919,13 +1048,13 @@ function useDriverPositionPush(enabled: boolean): void {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           if (cancelled) return;
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          onPositionRef.current?.({ lat, lng });
           void fetch("/api/driver/route-taxi/sessions/position", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-            }),
+            body: JSON.stringify({ lat, lng }),
           }).catch(() => {
             /* offline / 5xx — next tick will retry */
           });

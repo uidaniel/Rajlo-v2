@@ -79,7 +79,7 @@ export async function GET() {
   const { data: pending } = await supabase
     .from("route_hails")
     .select(
-      "id, rider_id, pickup_name, pickup_lat, pickup_lng, dropoff_name, distance_km, fare_jmd, concession, requested_at",
+      "id, rider_id, pickup_name, pickup_lat, pickup_lng, dropoff_name, dropoff_lat, dropoff_lng, distance_km, fare_jmd, concession, requested_at",
     )
     .eq("route_id", session.route_id)
     .eq("status", "requested")
@@ -91,7 +91,7 @@ export async function GET() {
   const { data: accepted } = await supabase
     .from("route_hails")
     .select(
-      "id, rider_id, pickup_name, dropoff_name, distance_km, fare_jmd, accepted_at",
+      "id, rider_id, pickup_name, pickup_lat, pickup_lng, dropoff_name, dropoff_lat, dropoff_lng, distance_km, fare_jmd, accepted_at",
     )
     .eq("session_id", session.id)
     .eq("status", "accepted")
@@ -101,7 +101,7 @@ export async function GET() {
   const { data: onboard } = await supabase
     .from("route_hails")
     .select(
-      "id, rider_id, pickup_name, dropoff_name, distance_km, fare_jmd, picked_up_at",
+      "id, rider_id, pickup_name, pickup_lat, pickup_lng, dropoff_name, dropoff_lat, dropoff_lng, distance_km, fare_jmd, picked_up_at",
     )
     .eq("session_id", session.id)
     .eq("status", "picked_up")
@@ -137,7 +137,11 @@ export async function GET() {
         id: h.id,
         riderId: h.rider_id,
         pickup: h.pickup_name,
+        pickupLat: nonZero(h.pickup_lat),
+        pickupLng: nonZero(h.pickup_lng),
         dropoff: h.dropoff_name,
+        dropoffLat: nonZero(h.dropoff_lat),
+        dropoffLng: nonZero(h.dropoff_lng),
         distanceKm: Number(h.distance_km),
         fareJmd: h.fare_jmd,
         acceptedAt: h.accepted_at,
@@ -147,7 +151,11 @@ export async function GET() {
         id: h.id,
         riderId: h.rider_id,
         pickup: h.pickup_name,
+        pickupLat: nonZero(h.pickup_lat),
+        pickupLng: nonZero(h.pickup_lng),
         dropoff: h.dropoff_name,
+        dropoffLat: nonZero(h.dropoff_lat),
+        dropoffLng: nonZero(h.dropoff_lng),
         distanceKm: Number(h.distance_km),
         fareJmd: h.fare_jmd,
         pickedUpAt: h.picked_up_at,
@@ -157,6 +165,16 @@ export async function GET() {
       onboardingStatus: driver.onboarding_status,
     },
   });
+}
+
+/**
+ * `(0, 0)` is our sentinel for "rider declined location share" since
+ * the column is NOT NULL. Translate it back to null for the client
+ * so the UI can decide whether to render a pin.
+ */
+function nonZero(n: number | null | undefined): number | null {
+  if (n == null) return null;
+  return n === 0 ? null : Number(n);
 }
 
 /**

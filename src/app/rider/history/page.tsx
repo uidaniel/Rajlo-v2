@@ -32,6 +32,8 @@ type RideStatus =
 
 type HistoryRow = {
   id: string;
+  /** Mode A or Mode B. Used for the badge + the row's deep link. */
+  kind?: "private" | "route_taxi";
   status: RideStatus;
   pickup: { name: string; address: string };
   dropoff: { name: string; address: string };
@@ -48,6 +50,8 @@ type HistoryRow = {
   driverRatingCount: number;
   myRatingStars: number | null;
   carpool: boolean;
+  /** Set on route taxi entries that paid the half-fare concession. */
+  concession?: boolean;
 };
 
 type Tab = "all" | "ongoing" | "cancelled";
@@ -403,6 +407,7 @@ function HistoryCard({ row, onRate }: { row: HistoryRow; onRate: () => void }) {
       });
 
   const statusBadge = STATUS_BADGE[row.status];
+  const isRouteTaxi = row.kind === "route_taxi";
   const isOngoing = [
     "requested",
     "accepted",
@@ -410,19 +415,42 @@ function HistoryCard({ row, onRate }: { row: HistoryRow; onRate: () => void }) {
     "in_progress",
   ].includes(row.status);
 
+  // Route taxi rows have their own live page + their detail page
+  // doesn't exist as /rider/history/[rideId]. Send taps to the
+  // dedicated live screen for in-flight hails, and to the catalogue
+  // for terminal ones (no detail screen yet — Phase 9 maybe).
+  const href = isRouteTaxi
+    ? isOngoing
+      ? `/rider/route-taxi/live?id=${row.id}`
+      : "/rider/route-taxi"
+    : isOngoing
+      ? "/rider/live-trip"
+      : `/rider/history/${row.id}`;
+
   return (
     <Link
-      href={isOngoing ? "/rider/live-trip" : `/rider/history/${row.id}`}
+      href={href}
       className="group block rounded-2xl border border-line bg-surface p-5 transition-all hover:-translate-y-0.5 hover:border-rajlo-red/30 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${statusBadge.classes}`}
             >
               {statusBadge.label}
             </span>
+            {isRouteTaxi && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-rajlo-black px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                <Icon name="navigation" className="h-3 w-3" />
+                Route Taxi
+              </span>
+            )}
+            {row.concession && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 ring-1 ring-emerald-200">
+                Concession
+              </span>
+            )}
             {row.carpool && (
               <span className="inline-flex items-center gap-1 rounded-full bg-primary-soft px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
                 <Icon name="users" className="h-3 w-3" />

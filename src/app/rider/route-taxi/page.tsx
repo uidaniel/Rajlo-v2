@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
@@ -78,6 +79,7 @@ type ActiveHail = {
 };
 
 export default function RiderRouteTaxiPage() {
+  const router = useRouter();
   const [routes, setRoutes] = useState<RouteRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -97,22 +99,27 @@ export default function RiderRouteTaxiPage() {
   const VISIBLE_LIMIT = 15;
   const [visibleLimit, setVisibleLimit] = useState(VISIBLE_LIMIT);
 
-  // Pull the rider's in-flight hail (if any). Drives the live status
-  // banner at the top of the page and clears the local hail-success
-  // state once the trip settles on the driver side.
+  // Pull the rider's in-flight hail (if any). The catalogue is the
+  // wrong surface to look at while a hail is live — the dedicated
+  // /live page owns that. So when we detect an active hail, we
+  // bounce there instead of showing a banner here.
   const refreshActiveHail = useCallback(async () => {
     try {
       const res = await fetch("/api/rider/route-taxi/hails/active");
       if (!res.ok) return;
       const json = (await res.json()) as { hail: ActiveHail | null };
       setActiveHail(json.hail);
-      if (!json.hail) {
-        setHail((cur) => (cur.state === "success" ? { state: "idle" } : cur));
+      if (json.hail) {
+        router.replace(`/rider/route-taxi/live?id=${json.hail.id}`);
+        return;
       }
+      // Hail just settled (or never existed) — clear the local
+      // success-state pill from a previous flow.
+      setHail((cur) => (cur.state === "success" ? { state: "idle" } : cur));
     } catch {
       /* polling — next tick will catch up */
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     void refreshActiveHail();
