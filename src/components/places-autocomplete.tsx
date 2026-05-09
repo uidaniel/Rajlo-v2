@@ -300,9 +300,7 @@ export function PlacesAutocomplete({
           {suggestions.map((s, i) => {
             const pp = s.placePrediction as PredictionWithStructured | null;
             if (!pp) return null;
-            const sf = pp.structuredFormat;
-            const main = sf?.mainText?.toString() ?? pp.text?.toString() ?? "";
-            const sub = sf?.secondaryText?.toString() ?? "";
+            const { main, sub } = splitPredictionText(pp);
             const isActive = i === activeIndex;
             const key = pp.placeId ?? `${main}-${i}`;
             return (
@@ -335,7 +333,13 @@ export function PlacesAutocomplete({
                       {main}
                     </span>
                     {sub && (
-                      <span className="block truncate text-xs text-muted">
+                      // Don't truncate — the full street address is the
+                      // whole point of this row. line-clamp-2 lets it
+                      // wrap to a second line when needed (e.g. long
+                      // addresses with plaza name + street + city +
+                      // country) without ever bleeding into the next
+                      // suggestion.
+                      <span className="mt-0.5 block text-xs leading-snug text-muted line-clamp-2">
                         {sub}
                       </span>
                     )}
@@ -348,4 +352,47 @@ export function PlacesAutocomplete({
       )}
     </div>
   );
+}
+
+/**
+ * Pulls a clean { main, sub } pair out of an autocomplete prediction.
+ *
+ * Google's new Places API mostly returns `structuredFormat.mainText`
+ * (place name) + `structuredFormat.secondaryText` (street + city) —
+ * but for some predictions (notably newer business POIs and address-
+ * only suggestions) `structuredFormat` is missing or partially blank.
+ * In those cases the only field populated is `text`, which is the
+ * full one-liner like "Klean Skin, Constant Spring Road, Kingston
+ * Jamaica". If we just dumped that into the row it would render as a
+ * single truncated line — exactly the bug riders were seeing.
+ *
+ * Strategy: prefer `structuredFormat`, but if either side is missing,
+ * fall back to splitting the full text on the first comma. The first
+ * comma in a place prediction reliably separates the place name from
+ * the address ("BusinessName, 17 Street Rd, City, Country").
+ */
+function splitPredictionText(pp: PredictionWithStructured): {
+  main: string;
+  sub: string;
+} {
+  const sf = pp.structuredFormat;
+  const fullText = pp.text?.toString() ?? "";
+  const sfMain = sf?.mainText?.toString() ?? "";
+  const sfSub = sf?.secondaryText?.toString() ?? "";
+
+  let main = sfMain;
+  let sub = sfSub;
+
+  if (!main || !sub) {
+    const firstComma = fullText.indexOf(",");
+    if (firstComma > 0) {
+      if (!main) main = fullText.slice(0, firstComma).trim();
+      if (!sub) sub = fullText.slice(firstComma + 1).trim();
+    } else if (!main) {
+      // Single-token prediction — no comma to split on.
+      main = fullText.trim();
+    }
+  }
+
+  return { main, sub };
 }

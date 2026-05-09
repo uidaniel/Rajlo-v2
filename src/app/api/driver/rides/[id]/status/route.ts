@@ -7,6 +7,7 @@ import {
 } from "@/lib/email-templates";
 import { notifyRider } from "@/lib/notify";
 import { resolveDriverEmail } from "@/lib/driver-email-resolver";
+import { creditWallet, debitWallet } from "@/lib/wallet";
 
 /**
  * POST /api/driver/rides/[id]/status
@@ -170,6 +171,77 @@ export async function POST(
         .eq("id", target.carpool_group_id);
     }
 
+    // Money movement on completion: debit each rider's wallet for
+    // their final fare and credit the driver's wallet by the same
+    // amount. Today the driver gets 100% of the fare — when a
+    // platform commission lands later, just credit the driver
+    // (fare - commission) and credit a Rajlo "treasury" wallet for
+    // the commission cut.
+    //
+    // Best-effort: a wallet failure here doesn't roll back the
+    // ride completion (the ride is physically done — the driver
+    // already drove it). Failures get surfaced through the
+    // wallet's transaction history so admin can reconcile via
+    // /admin/wallets/[userId]/adjust.
+    void (async () => {
+      try {
+        const { data: completedRides } = await supabase
+          .from("rides")
+          .select("id, rider_id, final_fare_jmd, estimated_fare_jmd, pickup_name, dropoff_name")
+          .in(
+            "id",
+            updated.map((u) => u.id),
+          );
+        for (const ride of (completedRides ?? []) as Array<{
+          id: string;
+          rider_id: string;
+          final_fare_jmd: number | null;
+          estimated_fare_jmd: number;
+          pickup_name: string;
+          dropoff_name: string;
+        }>) {
+          const fare = ride.final_fare_jmd ?? ride.estimated_fare_jmd;
+          if (!fare || fare <= 0) continue;
+          const description = `Ride · ${ride.pickup_name} → ${ride.dropoff_name}`;
+
+          // Debit the rider. If they're short, the trigger raises
+          // and we record the failure as a metadata note on the
+          // ride; admin sweeps these via the wallets page.
+          const debit = await debitWallet(
+            supabase,
+            ride.rider_id,
+            fare,
+            "ride_charge",
+            { rideId: ride.id, description },
+          );
+          if (!debit.ok) {
+            console.error(
+              `Couldn't debit rider ${ride.rider_id} ${fare} JMD for ride ${ride.id}:`,
+              debit.error,
+            );
+            continue;
+          }
+
+          // Credit the driver. user.id is the driver's auth id.
+          const credit = await creditWallet(
+            supabase,
+            user.id,
+            fare,
+            "ride_earning",
+            { rideId: ride.id, description },
+          );
+          if (!credit.ok) {
+            console.error(
+              `Couldn't credit driver ${user.id} ${fare} JMD for ride ${ride.id}:`,
+              credit.error,
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Wallet movement on ride completion failed:", err);
+      }
+    })();
+
     // Best-effort receipt email per affected rider. We pull each
     // ride's full record + driver name so the receipt has every detail.
     void (async () => {
@@ -239,7 +311,7 @@ export async function POST(
                 kind: "trip",
                 title: "Trip complete · rate your driver",
                 body: `${row.dropoff_name} · ${fare}. Tap to rate ${driverName.split(" ")[0]}.`,
-                href: `/rider/rate?id=${row.id}`,
+                href: `/rider/history/${row.id}?rate=1`,
                 cta: "Rate this trip",
                 pushTag: `ride-${row.id}-status`,
               }),

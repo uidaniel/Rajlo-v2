@@ -41,8 +41,20 @@ type RideStatus =
 type RideDetail = {
   id: string;
   status: RideStatus;
-  pickup: { name: string; address: string; lat: number; lng: number };
-  dropoff: { name: string; address: string; lat: number; lng: number };
+  pickup: {
+    name: string;
+    address: string;
+    lat: number;
+    lng: number;
+    placeId: string | null;
+  };
+  dropoff: {
+    name: string;
+    address: string;
+    lat: number;
+    lng: number;
+    placeId: string | null;
+  };
   stops: {
     position: number;
     name: string;
@@ -83,6 +95,10 @@ type DriverInfo = {
 type DetailResponse = {
   ride: RideDetail;
   driver: DriverInfo | null;
+  /** This rider's existing rating for the trip, if they've already
+   *  rated. Lets the page hide the "Rate the driver" button on first
+   *  paint instead of showing it and blowing up with a 409 on submit. */
+  myRating: { stars: number; comment: string | null; createdAt: string } | null;
 };
 
 const STATUS_HERO: Record<
@@ -106,7 +122,15 @@ export default function RiderHistoryDetailPage({
   const [data, setData] = useState<DetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [rateOpen, setRateOpen] = useState(false);
+  // `?rate=1` arrives via the post-trip push notification + email.
+  // We open the dialog immediately so the rider lands on the rating
+  // surface, not on a generic detail page they then have to scan.
+  // Lazy initial state because reading window.location during render
+  // (or in a setState-inside-effect) trips the react-hooks rules.
+  const [rateOpen, setRateOpen] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("rate") === "1";
+  });
   const [myRating, setMyRating] = useState<number | null>(null);
 
   useEffect(() => {
@@ -118,6 +142,17 @@ export default function RiderHistoryDetailPage({
         const json = (await res.json()) as DetailResponse;
         if (cancelled) return;
         setData(json);
+        // Hydrate myRating from the API so the rate CTA is correctly
+        // hidden when the rider has already rated this trip — avoids
+        // the bad-UX path where they tap rate, fill out the dialog,
+        // and only then see the "already rated" 409 toast.
+        if (json.myRating) {
+          setMyRating(json.myRating.stars);
+          // If they were deep-linked to rate but already rated,
+          // close the dialog so we don't pop "you've already rated"
+          // immediately.
+          setRateOpen(false);
+        }
       } catch (e) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : "Couldn't load this ride.");
@@ -510,7 +545,7 @@ export default function RiderHistoryDetailPage({
           )}
           {isTerminal && (
             <Link
-              href="/rider/request"
+              href={buildBookAgainHref(ride.pickup, ride.dropoff)}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-line bg-surface px-6 py-3 text-sm font-bold text-foreground transition-all hover:bg-surface-soft"
             >
               Book again
@@ -573,4 +608,34 @@ function ReceiptRow({ label, value }: { label: string; value: string }) {
       <span className="font-semibold text-foreground">{value}</span>
     </li>
   );
+}
+
+/**
+ * Build the deep-link to /rider/request with both pickup AND dropoff
+ * pre-filled. The booking page reads `from_*` + `to_*` query params
+ * on mount and seeds its place state — same shape the autocomplete
+ * would produce, so the rider lands ready to confirm seats and tap
+ * Book.
+ *
+ * Multistops are deliberately NOT carried over — the rider asked for
+ * a clean A→B re-book; if they want stops, they add them on the
+ * request page.
+ */
+function buildBookAgainHref(
+  pickup: { name: string; address: string; lat: number; lng: number; placeId: string | null },
+  dropoff: { name: string; address: string; lat: number; lng: number; placeId: string | null },
+): string {
+  const params = new URLSearchParams({
+    from_name: pickup.name,
+    from_address: pickup.address,
+    from_lat: String(pickup.lat),
+    from_lng: String(pickup.lng),
+    to_name: dropoff.name,
+    to_address: dropoff.address,
+    to_lat: String(dropoff.lat),
+    to_lng: String(dropoff.lng),
+  });
+  if (pickup.placeId) params.set("from_place", pickup.placeId);
+  if (dropoff.placeId) params.set("to_place", dropoff.placeId);
+  return `/rider/request?${params.toString()}`;
 }

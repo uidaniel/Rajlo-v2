@@ -3,6 +3,7 @@ import { LogoIcon } from "@/components/logo";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { SiteHeader } from "@/components/site-header";
 import { SiteFooter } from "@/components/site-footer";
+import { getLandingCtaTargets } from "@/lib/landing-cta-targets";
 import {
   PhoneMockup,
   RiderRequestScreen,
@@ -20,11 +21,20 @@ import {
   ParallaxFloat,
 } from "@/components/anim";
 
-export default function Home() {
+export default async function Home() {
+  // Resolve where the "Book a ride" / "Drive with Rajlo" CTAs should
+  // point based on who's signed in. A returning rider lands straight
+  // on /rider; a returning driver lands straight on /driver. Visitors
+  // without a session see the regular signup / marketing pages.
+  const cta = await getLandingCtaTargets();
+
   return (
     <div className="min-h-screen bg-background">
       {/* ============== Header ============== */}
-      <SiteHeader />
+      <SiteHeader
+        bookHref={cta.riderHref}
+        bookLabel={cta.riderIsDashboard ? "Open dashboard" : "Book a ride"}
+      />
 
       {/* ============== Hero ============== */}
       <section className="relative overflow-hidden bg-rajlo-red text-white">
@@ -61,16 +71,20 @@ export default function Home() {
             <FadeUp delay={0.85}>
               <div className="mt-10 flex flex-col gap-3 sm:flex-row">
                 <Link
-                  href="/auth/rider/signup"
+                  href={cta.riderHref}
                   className="group rounded-full bg-rajlo-black px-8 py-4 text-center text-base font-bold text-white shadow-lg shadow-black/30 transition-all hover:-translate-y-0.5 hover:bg-black hover:shadow-xl"
                 >
-                  Book your first ride →
+                  {cta.riderIsDashboard
+                    ? "Open my dashboard →"
+                    : "Book your first ride →"}
                 </Link>
                 <Link
-                  href="/driver-join"
+                  href={cta.driverHref}
                   className="rounded-full border-2 border-white/80 px-8 py-4 text-center text-base font-bold text-white transition-colors hover:bg-white/10"
                 >
-                  Drive with Rajlo
+                  {cta.driverIsDashboard
+                    ? "Open driver dashboard"
+                    : "Drive with Rajlo"}
                 </Link>
               </div>
             </FadeUp>
@@ -577,16 +591,20 @@ export default function Home() {
           <FadeUp delay={0.3}>
             <div className="mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <Link
-                href="/auth/rider/signup"
+                href={cta.riderHref}
                 className="rounded-full bg-rajlo-red px-10 py-4 text-base font-bold text-white shadow-xl shadow-rajlo-red/40 transition-transform hover:-translate-y-0.5 hover:bg-primary-hover"
               >
-                Book a ride →
+                {cta.riderIsDashboard
+                  ? "Open my dashboard →"
+                  : "Book a ride →"}
               </Link>
               <Link
-                href="/driver-join"
+                href={cta.driverHref}
                 className="rounded-full border-2 border-white/40 px-10 py-4 text-base font-bold text-white transition-colors hover:bg-white/10"
               >
-                Drive with Rajlo
+                {cta.driverIsDashboard
+                  ? "Open driver dashboard"
+                  : "Drive with Rajlo"}
               </Link>
             </div>
           </FadeUp>

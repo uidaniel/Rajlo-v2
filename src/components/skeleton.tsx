@@ -158,29 +158,16 @@ export function MapSkeleton({
 }: {
   className?: string;
 }) {
+  // Plain shimmer — the route-line illustration that used to live
+  // here was distracting because it implied a route was already
+  // computed. A flat shimmer block reads correctly as "loading the
+  // map," matching every other skeleton in the app.
   return (
     <div
-      className={`relative overflow-hidden rounded-3xl border border-line bg-surface-soft ${className}`}
+      className={`relative overflow-hidden rounded-3xl ${className}`}
       aria-hidden
     >
-      <div className="absolute inset-0 shimmer" />
-      {/* Faint route hint so it reads as "a map is loading", not "an empty box". */}
-      <svg
-        className="absolute inset-0 h-full w-full opacity-30"
-        viewBox="0 0 100 60"
-        preserveAspectRatio="none"
-      >
-        <path
-          d="M 8 50 Q 30 32 40 36 T 70 22 T 92 14"
-          fill="none"
-          stroke="#f10100"
-          strokeWidth="1.4"
-          strokeLinecap="round"
-          strokeDasharray="3 3"
-        />
-        <circle cx="8" cy="50" r="2.4" fill="#10b981" />
-        <circle cx="92" cy="14" r="2.4" fill="#f10100" />
-      </svg>
+      <div className="shimmer h-full w-full" />
     </div>
   );
 }

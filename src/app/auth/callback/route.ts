@@ -5,6 +5,7 @@ import {
   sendWelcomeRiderEmail,
   sendWelcomeDriverEmail,
 } from "@/lib/email-templates";
+import { isBrandNewUser, markWelcomeSent } from "@/lib/welcome-gate";
 
 /**
  * Handles redirects from Supabase auth flows:
@@ -85,13 +86,24 @@ export async function GET(request: NextRequest) {
     .single();
   const role = profile?.role ?? "rider";
 
-  // First-time welcome email — gated by a flag stored in user_metadata so
-  // every subsequent callback (magic link, password reset, re-login) skips
-  // it. Best-effort: never block the redirect on email delivery.
-  const userMeta = (data.user.user_metadata ?? {}) as Record<string, unknown>;
-  if (!userMeta.welcome_sent_at && data.user.email) {
+  // First-time welcome email — fires only when this is a genuine
+  // brand-new sign-up. The `isBrandNewUser` helper combines two
+  // signals: the `welcome_sent_at` flag in user_metadata AND a
+  // created_at ≈ last_sign_in_at check. The second guard is what
+  // catches users who signed up before the flag existed in the
+  // codebase — without it they'd get a "welcome" every time they
+  // re-logged in.
+  if (isBrandNewUser(data.user)) {
+    const admin = getSupabaseServerClient();
     void (async () => {
       try {
+        // Mark the flag FIRST so a concurrent callback (e.g. user
+        // double-clicked the magic link) sees it on read and skips.
+        // Worst case if the email send then fails: we miss one welcome
+        // — better than sending two.
+        if (admin) {
+          await markWelcomeSent(admin, data.user!);
+        }
         if (role === "driver") {
           await sendWelcomeDriverEmail(data.user!.email!, {
             fullName: profile?.full_name ?? null,
@@ -99,15 +111,6 @@ export async function GET(request: NextRequest) {
         } else {
           await sendWelcomeRiderEmail(data.user!.email!, {
             fullName: profile?.full_name ?? null,
-          });
-        }
-        const admin = getSupabaseServerClient();
-        if (admin) {
-          await admin.auth.admin.updateUserById(data.user!.id, {
-            user_metadata: {
-              ...userMeta,
-              welcome_sent_at: new Date().toISOString(),
-            },
           });
         }
       } catch {

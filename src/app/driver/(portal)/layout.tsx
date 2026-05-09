@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { PortalLayout } from "@/components/portal-layout";
 import { SessionGuard } from "@/components/session-guard";
+import { DriverActivityTracker } from "@/components/driver-activity-tracker";
 import { driverNav } from "@/lib/mock-data";
 import { getDriverStatus } from "@/lib/driver-status";
 
@@ -36,6 +37,10 @@ export default async function DriverPortalLayout({
       nav={driverNav}
     >
       <SessionGuard />
+      {/* Pings /api/driver/heartbeat every 5 minutes while the
+         driver is interacting with the portal, and flips them
+         offline after 1hr of no interaction. Renders nothing. */}
+      <DriverActivityTracker />
       {children}
     </PortalLayout>
   );

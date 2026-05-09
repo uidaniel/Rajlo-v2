@@ -22,6 +22,7 @@ export const riderNav: NavItem[] = [
   { label: "Payments", labelKey: "nav.rider.payments", href: "/rider/payments", icon: "credit-card" },
   { label: "History", labelKey: "nav.rider.history", href: "/rider/history", icon: "clock" },
   { label: "Spending", labelKey: "nav.rider.spending", href: "/rider/analytics", icon: "bar-chart" },
+  { label: "Wallet", labelKey: "nav.rider.wallet", href: "/rider/wallet", icon: "wallet" },
   { label: "Ratings", labelKey: "nav.rider.ratings", href: "/rider/ratings", icon: "star" },
   { label: "Notifications", labelKey: "nav.rider.notifications", href: "/rider/notifications", icon: "bell" },
   { label: "Settings", labelKey: "nav.rider.settings", href: "/rider/settings", icon: "settings" },
@@ -44,6 +45,7 @@ export const riderNav: NavItem[] = [
  */
 export const driverNav: NavItem[] = [
   { label: "Dashboard", labelKey: "nav.driver.dashboard", href: "/driver", icon: "home" },
+  { label: "Live requests", labelKey: "nav.driver.liveRequests", href: "/driver/requests", icon: "inbox" },
   { label: "TA verification", labelKey: "nav.driver.verification", href: "/driver/verification", icon: "shield-check" },
   { label: "Active trip", labelKey: "nav.driver.activeTrip", href: "/driver/active-trip", icon: "navigation" },
   { label: "Earnings", labelKey: "nav.driver.earnings", href: "/driver/earnings", icon: "trending-up" },
@@ -52,7 +54,7 @@ export const driverNav: NavItem[] = [
   { label: "Notifications", labelKey: "nav.driver.notifications", href: "/driver/notifications", icon: "bell" },
   { label: "Profile", labelKey: "nav.driver.profile", href: "/driver/profile", icon: "user" },
   { label: "Help & safety", labelKey: "nav.driver.support", href: "/driver/help-safety", icon: "shield" },
-  { label: "Payouts", labelKey: "nav.driver.payouts", href: "/driver/payouts", icon: "wallet" },
+  { label: "Wallet", labelKey: "nav.driver.wallet", href: "/driver/wallet", icon: "wallet" },
 ];
 
 // Admin nav stays English-only — admin is internal ops staff who all
@@ -74,6 +76,8 @@ export const adminNav: NavItem[] = [
   { label: "Messaging", labelKey: "nav.admin.messages", href: "/admin/messages", icon: "mail" },
   { label: "Verification queue", labelKey: "nav.admin.verification", href: "/admin/verification-queue", icon: "clipboard-check" },
   { label: "Vehicle changes", labelKey: "nav.admin.vehicle", href: "/admin/vehicle-changes", icon: "car" },
+  { label: "Wallets", labelKey: "nav.admin.wallets", href: "/admin/wallets", icon: "wallet" },
+  { label: "Payouts", labelKey: "nav.admin.payouts", href: "/admin/wallet-withdrawals", icon: "trending-up" },
   { label: "Audit logs", labelKey: "nav.admin.audit", href: "/admin/audit-logs", icon: "history" },
 ];
 

@@ -15,8 +15,19 @@ const NAV_LINKS: { label: string; href: string }[] = [
  * Shared sticky header for all public pages (landing, how-it-works,
  * fare-estimator, driver-join, legal/*). Highlights the current route as
  * active using `usePathname()`.
+ *
+ * `bookHref` lets a server-component parent override where the
+ * primary "Book a ride" CTA points — used so that a signed-in rider
+ * lands on /rider instead of being asked to sign up again. Defaults
+ * to the signup path for unauthenticated visitors.
  */
-export function SiteHeader() {
+export function SiteHeader({
+  bookHref = "/auth/rider/signup",
+  bookLabel = "Book a ride",
+}: {
+  bookHref?: string;
+  bookLabel?: string;
+} = {}) {
   const pathname = usePathname();
 
   return (
@@ -52,10 +63,10 @@ export function SiteHeader() {
             Sign in
           </Link>
           <Link
-            href="/auth/rider/signup"
+            href={bookHref}
             className="rounded-full bg-rajlo-red px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary-hover"
           >
-            Book a ride
+            {bookLabel}
           </Link>
         </div>
       </div>

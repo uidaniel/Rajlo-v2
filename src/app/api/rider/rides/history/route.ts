@@ -58,7 +58,7 @@ export async function GET(request: Request) {
   const { data: rides, error } = await supabase
     .from("rides")
     .select(
-      "id, status, driver_id, pickup_name, pickup_address, dropoff_name, dropoff_address, seats, estimated_fare_jmd, final_fare_jmd, requested_at, accepted_at, arrived_at, started_at, completed_at, cancelled_at, cancellation_reason, carpool_group_id",
+      "id, status, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, pickup_place_id, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, dropoff_place_id, seats, estimated_fare_jmd, final_fare_jmd, requested_at, accepted_at, arrived_at, started_at, completed_at, cancelled_at, cancellation_reason, carpool_group_id",
     )
     .eq("rider_id", user.id)
     .in("status", statuses as unknown as string[])
@@ -138,8 +138,20 @@ export async function GET(request: Request) {
           | "in_progress"
           | "completed"
           | "cancelled",
-        pickup: { name: r.pickup_name, address: r.pickup_address },
-        dropoff: { name: r.dropoff_name, address: r.dropoff_address },
+        pickup: {
+          name: r.pickup_name,
+          address: r.pickup_address,
+          lat: r.pickup_lat,
+          lng: r.pickup_lng,
+          placeId: r.pickup_place_id,
+        },
+        dropoff: {
+          name: r.dropoff_name,
+          address: r.dropoff_address,
+          lat: r.dropoff_lat,
+          lng: r.dropoff_lng,
+          placeId: r.dropoff_place_id,
+        },
         seats: r.seats,
         // Use final fare when available (set on Complete), else fall back
         // to the estimate (the case for cancelled + in-flight rides).

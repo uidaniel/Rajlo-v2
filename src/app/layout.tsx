@@ -71,6 +71,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: "cover",
   themeColor: "#f10100",
+  // Tells Chrome / Edge on Android to resize the layout viewport
+  // when the on-screen keyboard appears. Combined with the
+  // VisualViewport API in the chat sheet, this keeps the message
+  // composer above the keyboard on every mobile browser instead of
+  // hiding behind it.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

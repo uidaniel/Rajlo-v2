@@ -100,7 +100,7 @@ export default function VerificationQueuePage() {
   }, [drivers]);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-2 py-6 md:px-3 md:py-8">
+    <div className="mx-auto max-w-6xl space-y-5 px-3 py-6 md:px-4 md:py-8">
       {/* ─── Hero ─── */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-7 text-white shadow-xl md:p-10">
@@ -286,19 +286,47 @@ function DriverCard({ driver }: { driver: Driver }) {
       ? "alert-triangle"
       : "clipboard-check";
 
+  // Status pill — broken out so we can place it inline with the
+  // name on mobile (where the third stats column doesn't fit) and
+  // as the third column on desktop. Same component, two slots.
+  const statusPill = (
+    <span
+      className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ${
+        isActive
+          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+          : isRejected
+            ? "bg-primary-soft text-rajlo-red ring-rajlo-red/30"
+            : "bg-amber-50 text-amber-800 ring-amber-200"
+      }`}
+    >
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${
+          isActive
+            ? "bg-emerald-500"
+            : isRejected
+              ? "bg-rajlo-red"
+              : "bg-amber-500"
+        }`}
+      />
+      {isActive ? "Active" : isRejected ? "Resubmit" : "Pending"}
+    </span>
+  );
+
   return (
     <Link
       href={`/admin/verification-detail?driverId=${encodeURIComponent(driver.externalId)}`}
-      className="group flex flex-col gap-4 rounded-2xl border border-line bg-surface p-5 transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-md md:flex-row md:items-center"
+      className="group block rounded-2xl border border-line bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-md md:flex md:items-center md:gap-5 md:p-5"
     >
-      {/* Avatar + name */}
+      {/* Top row: avatar + name on the left, status pill on the right.
+         On desktop this row is the leftmost column of the flex layout
+         and the status pill moves into the stats column below. */}
       <div className="flex items-start gap-3 md:min-w-[220px] md:flex-1">
         <span
           className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl text-white shadow-sm ${avatarBg}`}
         >
           <Icon name={avatarIcon} className="h-5 w-5" />
         </span>
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className="truncate text-base font-extrabold tracking-tight">
             {driver.name}
           </p>
@@ -306,10 +334,16 @@ function DriverCard({ driver }: { driver: Driver }) {
             {driver.externalId} · {driver.plateNumber ?? "no plate"}
           </p>
         </div>
+        {/* Mobile-only: the status pill rides up here so admins can
+           tell at a glance which queue a row belongs to without
+           scrolling sideways. Hidden on md+ where there's room for
+           a dedicated Status column. */}
+        <span className="md:hidden">{statusPill}</span>
       </div>
 
-      {/* Status + stats grid */}
-      <div className="grid flex-1 grid-cols-2 gap-3 md:grid-cols-3 md:gap-5">
+      {/* Stats — 2-col on mobile (Submitted + Documents), 3-col on
+         desktop (adds the Status column with the pill). */}
+      <div className="mt-4 grid flex-1 grid-cols-2 gap-3 md:mt-0 md:grid-cols-3 md:gap-5">
         <Stat
           label={isActive ? "Activated" : "Submitted"}
           value={ago}
@@ -324,31 +358,14 @@ function DriverCard({ driver }: { driver: Driver }) {
           <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
             Status
           </p>
-          <span
-            className={`mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ring-1 ${
-              isActive
-                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                : isRejected
-                  ? "bg-primary-soft text-rajlo-red ring-rajlo-red/30"
-                  : "bg-amber-50 text-amber-800 ring-amber-200"
-            }`}
-          >
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${
-                isActive
-                  ? "bg-emerald-500"
-                  : isRejected
-                    ? "bg-rajlo-red"
-                    : "bg-amber-500"
-              }`}
-            />
-            {isActive ? "Active" : isRejected ? "Resubmit" : "Pending"}
-          </span>
+          <div className="mt-1">{statusPill}</div>
         </div>
       </div>
 
-      {/* Chevron */}
-      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface-soft text-muted transition-all group-hover:bg-rajlo-red group-hover:text-white">
+      {/* Chevron is desktop-only — on mobile the entire card is the
+         tap target so an extra arrow at the bottom of the card just
+         eats vertical space without adding meaning. */}
+      <span className="hidden h-9 w-9 shrink-0 place-items-center rounded-full bg-surface-soft text-muted transition-all group-hover:bg-rajlo-red group-hover:text-white md:grid">
         <Icon name="chevron-right" className="h-4 w-4" />
       </span>
     </Link>

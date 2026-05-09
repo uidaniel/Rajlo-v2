@@ -39,6 +39,8 @@ export type IconName =
   | "x"
   | "chevron-right"
   | "chevron-left"
+  | "chevron-up"
+  | "chevron-down"
   | "arrow-right"
   | "upload"
   | "car"
@@ -256,6 +258,8 @@ const paths: Record<IconName, React.ReactNode> = {
   x: <path d="M18 6 6 18M6 6l12 12" />,
   "chevron-right": <polyline points="9 18 15 12 9 6" />,
   "chevron-left": <polyline points="15 18 9 12 15 6" />,
+  "chevron-up": <polyline points="18 15 12 9 6 15" />,
+  "chevron-down": <polyline points="6 9 12 15 18 9" />,
   "arrow-right": (
     <>
       <line x1="5" x2="19" y1="12" y2="12" />

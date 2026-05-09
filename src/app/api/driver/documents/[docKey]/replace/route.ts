@@ -30,6 +30,11 @@ import { requiredTADocuments } from "@/lib/mock-data";
 type Body = {
   fileName?: unknown;
   filePath?: unknown;
+  /** Optional ISO date (YYYY-MM-DD). When provided we persist it as
+   *  `expires_on` so the driver's compliance page + admin queue show
+   *  the real renewal date instead of an empty cell. Required for
+   *  every doc with `renewal_period_days > 0` enforced server-side. */
+  expiresOn?: unknown;
 };
 
 export async function POST(
@@ -67,6 +72,44 @@ export async function POST(
     );
   }
 
+  // Validate the expiry date. We accept YYYY-MM-DD only, must be in
+  // the future, and only required for docs that actually expire
+  // (renewal_period_days > 0 — the selfie has 0 since it never
+  // expires). Pass null to clear; omit to leave existing value alone.
+  const expiresOnRaw =
+    typeof body.expiresOn === "string" ? body.expiresOn.trim() : null;
+  let expiresOn: string | null | undefined; // undefined = "don't touch"
+  if (expiresOnRaw === "" || expiresOnRaw === null) {
+    if (docMeta.renewalPeriodDays > 0 && body.expiresOn !== undefined) {
+      return NextResponse.json(
+        { error: "Expiry date is required for this document type." },
+        { status: 400 },
+      );
+    }
+    expiresOn = body.expiresOn === undefined ? undefined : null;
+  } else {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(expiresOnRaw)) {
+      return NextResponse.json(
+        { error: "Expiry must be a date in YYYY-MM-DD format." },
+        { status: 400 },
+      );
+    }
+    const parsed = new Date(`${expiresOnRaw}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime())) {
+      return NextResponse.json(
+        { error: "Expiry date isn't valid." },
+        { status: 400 },
+      );
+    }
+    if (parsed.getTime() < Date.now() - 24 * 60 * 60 * 1000) {
+      return NextResponse.json(
+        { error: "Expiry date can't be in the past." },
+        { status: 400 },
+      );
+    }
+    expiresOn = expiresOnRaw;
+  }
+
   // Defense-in-depth path check. Storage RLS already enforces this on
   // upload, but we also confirm here so a forged path can't be
   // recorded against the row.
@@ -96,14 +139,23 @@ export async function POST(
 
   // Was this doc previously approved? If so, mark `previously_approved`
   // so the admin queue shows the "was approved · needs re-review"
-  // badge instead of treating it like a brand-new submission.
+  // badge instead of treating it like a brand-new submission. Also
+  // pull the prior `expires_on` so we don't clobber it when the
+  // driver leaves the date field blank.
   const { data: existing } = await supabase
     .from("driver_documents")
-    .select("status, previously_approved")
+    .select("status, previously_approved, expires_on")
     .eq("driver_id", driver.id)
     .eq("doc_key", docKey)
     .maybeSingle();
   const wasApproved = existing?.status === "approved";
+
+  // Resolve the final expires_on to write:
+  //   - undefined (driver didn't send the field): keep existing value
+  //   - null      (driver explicitly cleared):    null
+  //   - string    (driver provided new date):     the new date
+  const resolvedExpiresOn =
+    expiresOn === undefined ? existing?.expires_on ?? null : expiresOn;
 
   // Upsert. The renewal flow uses the same row keyed on
   // (driver_id, doc_key) — there's a unique constraint there from the
@@ -115,6 +167,7 @@ export async function POST(
       label: docMeta.label,
       description: docMeta.description,
       renewal_period_days: docMeta.renewalPeriodDays,
+      expires_on: resolvedExpiresOn,
       status: "pending",
       note:
         wasApproved

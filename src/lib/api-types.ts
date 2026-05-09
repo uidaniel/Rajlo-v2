@@ -32,6 +32,12 @@ export type AdminDecisionRequest = {
     id: string;
     status: "approved" | "pending" | "rejected" | "resubmit";
     note: string;
+    /** Optional ISO date (YYYY-MM-DD) the admin wants to stamp on the
+     *  doc — the canonical source of truth for renewal countdowns. When
+     *  omitted, the existing value on the row is preserved. Required by
+     *  the server when the doc has a renewal_period_days > 0 and the
+     *  admin is approving it. */
+    expiresOn?: string | null;
   }>;
   activateDriver: boolean;
 };

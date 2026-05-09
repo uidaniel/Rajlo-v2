@@ -11,6 +11,9 @@ const MOCK_FALLBACK_DOCS = requiredTADocuments.map((doc) => ({
   note: doc.note ?? "",
   fileName: null as string | null,
   filePath: null as string | null,
+  previouslyApproved: false,
+  expiresOn: null as string | null,
+  renewalPeriodDays: doc.renewalPeriodDays,
 }));
 
 export async function GET(request: NextRequest) {
@@ -88,7 +91,7 @@ export async function GET(request: NextRequest) {
   const { data: docs } = await supabase
     .from("driver_documents")
     .select(
-      "doc_key,label,description,status,note,file_name,file_path,previously_approved",
+      "doc_key,label,description,status,note,file_name,file_path,previously_approved,expires_on,renewal_period_days",
     )
     .eq("driver_id", driver.id)
     .in("doc_key", Array.from(validDocKeys))
@@ -127,19 +130,28 @@ export async function GET(request: NextRequest) {
       year: driver.vehicle_year,
     },
     docs:
-      docs?.map((doc) => ({
-        id: doc.doc_key,
-        label: doc.label,
-        description: doc.description,
-        status:
-          doc.status === "approved" || doc.status === "pending" || doc.status === "rejected"
-            ? doc.status
-            : "resubmit",
-        note: doc.note ?? "",
-        fileName: doc.file_name ?? null,
-        filePath: doc.file_path ?? null,
-        previouslyApproved: doc.previously_approved === true,
-      })) ?? [],
+      docs?.map((doc) => {
+        // Always trust the per-row renewal period. Fall back to the
+        // template constant for legacy rows where the column was nullable.
+        const meta = requiredTADocuments.find((r) => r.id === doc.doc_key);
+        const renewalPeriodDays =
+          (doc.renewal_period_days ?? meta?.renewalPeriodDays ?? 0) as number;
+        return {
+          id: doc.doc_key,
+          label: doc.label,
+          description: doc.description,
+          status:
+            doc.status === "approved" || doc.status === "pending" || doc.status === "rejected"
+              ? doc.status
+              : "resubmit",
+          note: doc.note ?? "",
+          fileName: doc.file_name ?? null,
+          filePath: doc.file_path ?? null,
+          previouslyApproved: doc.previously_approved === true,
+          expiresOn: (doc.expires_on ?? null) as string | null,
+          renewalPeriodDays,
+        };
+      }) ?? [],
     auditTrail:
       audit?.map((row) => {
         const timestamp = (row.created_at ?? "").replace("T", " ").slice(0, 16);

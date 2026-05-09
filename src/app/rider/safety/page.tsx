@@ -85,6 +85,48 @@ export default function RiderSafetyPage() {
   const [submitting, setSubmitting] = useState(false);
   const [removingId, setRemovingId] = useState<string | null>(null);
 
+  // Native Contact Picker support — only available on Chrome / Edge
+  // on Android. iOS Safari and desktop browsers don't ship this API,
+  // so we feature-detect at mount and only show the button where it
+  // actually works. iOS riders fall back to the manual form below.
+  const [contactPickerSupported, setContactPickerSupported] = useState(false);
+  const [pickingContact, setPickingContact] = useState(false);
+  useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    setContactPickerSupported(hasContactPicker(navigator));
+  }, []);
+
+  const pickFromContacts = async () => {
+    if (!hasContactPicker(navigator)) return;
+    setPickingContact(true);
+    setError(null);
+    try {
+      const results = await navigator.contacts!.select(["name", "tel"], {
+        multiple: false,
+      });
+      if (results.length === 0) return; // user cancelled the picker
+      const picked = results[0];
+      // The API returns each property as a string[] — take the first
+      // populated entry. Some contacts have multiple numbers; the
+      // rider can edit the field after if they want a different one.
+      const name = picked.name?.find((n) => n.trim()) ?? "";
+      const tel = picked.tel?.find((t) => t.trim()) ?? "";
+      if (name) setDraftName(name);
+      if (tel) setDraftPhone(tel);
+    } catch (err) {
+      // Most likely "permission denied" — show a one-liner so the
+      // rider knows why nothing happened, and they can fall back to
+      // typing manually.
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Couldn't open contacts — type the name + number instead.",
+      );
+    } finally {
+      setPickingContact(false);
+    }
+  };
+
   // Same debounced PATCH pattern as the settings page — toggles
   // optimistically update + queue a single API call.
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -333,6 +375,29 @@ export default function RiderSafetyPage() {
               onSubmit={addContact}
               className="space-y-3 rounded-xl border border-rajlo-red/30 bg-primary-soft/30 p-4"
             >
+              {contactPickerSupported && (
+                // One-tap import from the device's contact list. The
+                // rider gets a native picker (no scrolling through a
+                // list inside the app) and the form fields prefill
+                // with their selection — they only have to tap the
+                // relationship and Save. Falls through to the manual
+                // form below for fine-tuning.
+                <button
+                  type="button"
+                  onClick={pickFromContacts}
+                  disabled={pickingContact || submitting}
+                  className="group flex w-full items-center justify-center gap-2 rounded-xl bg-rajlo-red py-2.5 text-sm font-bold text-white shadow-md shadow-rajlo-red/20 transition-all hover:-translate-y-0.5 hover:bg-primary-hover disabled:cursor-wait disabled:opacity-60"
+                >
+                  {pickingContact ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border-[1.5px] border-white border-t-transparent" />
+                  ) : (
+                    <Icon name="user" className="h-4 w-4" />
+                  )}
+                  {pickingContact
+                    ? "Opening contacts…"
+                    : "Pick from my contacts"}
+                </button>
+              )}
               <div className="grid gap-3 sm:grid-cols-2">
                 <input
                   required
@@ -600,5 +665,45 @@ function ToggleRow({
         />
       </button>
     </div>
+  );
+}
+
+/* ─────────────── Web Contact Picker API typing + detection ───────────────
+ *
+ * The Contact Picker API (https://w3c.github.io/contact-api/) ships
+ * on Chrome / Edge on Android only — it's NOT in iOS Safari, NOT in
+ * desktop browsers, and NOT in `lib.dom.d.ts` yet. We add minimal
+ * type declarations here just for what we use, and feature-detect at
+ * runtime so the "Pick from contacts" button only appears where the
+ * API actually exists.
+ */
+type ContactInfo = {
+  name?: string[];
+  tel?: string[];
+  email?: string[];
+};
+
+type ContactsManagerLike = {
+  select(
+    properties: Array<"name" | "tel" | "email" | "address" | "icon">,
+    options?: { multiple?: boolean },
+  ): Promise<ContactInfo[]>;
+};
+
+type NavigatorWithContacts = Navigator & {
+  contacts?: ContactsManagerLike;
+};
+
+function hasContactPicker(nav: Navigator): nav is NavigatorWithContacts & {
+  contacts: ContactsManagerLike;
+} {
+  // The spec requires both `navigator.contacts` AND a global
+  // `ContactsManager` constructor. Checking both avoids false
+  // positives on browsers that polyfill one without the other.
+  return (
+    "contacts" in nav &&
+    typeof (nav as NavigatorWithContacts).contacts?.select === "function" &&
+    typeof window !== "undefined" &&
+    "ContactsManager" in window
   );
 }

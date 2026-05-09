@@ -9,6 +9,17 @@ import { notifyDriver } from "@/lib/notify";
 import { resolveDriverEmail } from "@/lib/driver-email-resolver";
 import type { AdminDecisionRequest } from "@/lib/api-types";
 
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function isValidFutureIsoDate(value: string): boolean {
+  if (!ISO_DATE.test(value)) return false;
+  const ts = new Date(`${value}T00:00:00Z`).getTime();
+  if (Number.isNaN(ts)) return false;
+  // Same 24-hour grace as the driver-side validators so the admin can
+  // type the date as printed on the document even if it's already today.
+  return ts >= Date.now() - 24 * 60 * 60 * 1000;
+}
+
 export async function POST(request: Request) {
   // Admin-only
   const auth = await createSupabaseAuthServerClient();
@@ -53,6 +64,21 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Driver record not found" }, { status: 404 });
   }
 
+  // Pull current rows so we know each doc's renewal_period_days. Drives
+  // whether `expiresOn` is mandatory on approval.
+  const docKeys = body.docs.map((d) => d.id);
+  const { data: existingRows } = await supabase
+    .from("driver_documents")
+    .select("doc_key, renewal_period_days")
+    .eq("driver_id", driver.id)
+    .in("doc_key", docKeys);
+  const renewalByKey = new Map(
+    ((existingRows ?? []) as Array<{
+      doc_key: string;
+      renewal_period_days: number | null;
+    }>).map((r) => [r.doc_key, r.renewal_period_days ?? 0]),
+  );
+
   // Update documents one-at-a-time using `update().eq()` instead of upsert.
   // Upsert was attempting INSERTs when its conflict resolution didn't match,
   // which violated the NOT NULL constraints on `label`/`description` (those
@@ -60,6 +86,40 @@ export async function POST(request: Request) {
   // correct semantic anyway: admin decisions only mutate existing rows.
   for (const doc of body.docs) {
     const targetStatus = doc.status === "resubmit" ? "rejected" : doc.status;
+    const renewalPeriod = renewalByKey.get(doc.id) ?? 0;
+
+    // Resolve the expiry write:
+    //   - undefined: don't touch the column
+    //   - null/"":   clear (only valid for non-renewing docs)
+    //   - string:    validate + use
+    let expiresUpdate: { expires_on: string | null } | null = null;
+    if (doc.expiresOn !== undefined) {
+      if (doc.expiresOn === null || doc.expiresOn === "") {
+        if (renewalPeriod > 0 && targetStatus === "approved") {
+          return NextResponse.json(
+            { error: `Expiry date is required to approve ${doc.id}.` },
+            { status: 400 },
+          );
+        }
+        expiresUpdate = { expires_on: null };
+      } else if (typeof doc.expiresOn === "string") {
+        if (!isValidFutureIsoDate(doc.expiresOn)) {
+          return NextResponse.json(
+            {
+              error: `Expiry date for ${doc.id} must be a valid future YYYY-MM-DD.`,
+            },
+            { status: 400 },
+          );
+        }
+        expiresUpdate = { expires_on: doc.expiresOn };
+      } else {
+        return NextResponse.json(
+          { error: `Expiry date for ${doc.id} must be a string or null.` },
+          { status: 400 },
+        );
+      }
+    }
+
     // Clear `previously_approved` once the admin re-approves — it's purely
     // an "attention needed" marker for pending docs that came from a prior
     // approval. After re-approval the doc is back to a clean approved state.
@@ -68,6 +128,7 @@ export async function POST(request: Request) {
       note: doc.note || null,
       reviewed_by: "admin-web",
       reviewed_at: new Date().toISOString(),
+      ...(expiresUpdate ?? {}),
     };
     if (targetStatus === "approved") {
       updateFields.previously_approved = false;

@@ -6,9 +6,10 @@ import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { MapView } from "@/components/map-view";
-import { ChatSheet } from "@/components/chat-sheet";
+import { ChatLauncher } from "@/components/chat-launcher";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRidePosition } from "@/lib/use-ride-position";
+import { useBackgroundRefresh } from "@/lib/use-background-refresh";
 import { formatJMD, type Place } from "@/lib/jamaica";
 import { HeroSkeleton, MapSkeleton, Skeleton } from "@/components/skeleton";
 
@@ -86,7 +87,6 @@ export default function DriverActiveTripPage() {
   const [loading, setLoading] = useState(true);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [chatOpen, setChatOpen] = useState(false);
   // Snapshot of the just-completed trip so the completion flash can
   // show the rider's name + offer a star rating. We capture this at
   // tap-time because by the time the flash renders, `data.ride` has
@@ -151,6 +151,16 @@ export default function DriverActiveTripPage() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // Belt-and-braces backup poll. Realtime is the fast path, but a
+  // websocket can drop silently while the driver is mid-trip — phone
+  // backgrounds the tab, mobile OS sleeps the radio, network blips.
+  // Without this the driver could come back to a stale "in progress"
+  // screen even after the rider cancelled, or miss the rider→driver
+  // status change that should have re-enabled an action button.
+  // Hook pauses while the tab is hidden and re-fetches the moment it
+  // comes back into focus, so the cost is bounded.
+  useBackgroundRefresh(refresh, 5_000);
 
   const handleAction = async (
     rideId: string,
@@ -543,14 +553,22 @@ export default function DriverActiveTripPage() {
                     : ""}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setChatOpen(true)}
-                aria-label={`Message ${rider.name.split(" ")[0]}`}
-                className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-rajlo-red text-white shadow-md transition-transform hover:-translate-y-0.5 active:translate-y-0"
-              >
-                <span aria-hidden className="text-lg leading-none">💬</span>
-              </button>
+              {/* Chat icon — loads + subscribes from this point on
+                 via the ChatLauncher's hook, so messages are already
+                 in memory when the driver taps it. Unread badge +
+                 toast appear automatically when the rider sends. */}
+              <ChatLauncher
+                rideId={ride.id}
+                myRole="driver"
+                peerName={rider.name}
+                peerAvatarUrl={null}
+                /* Driver doesn't get a tap-to-call to the rider —
+                   privacy by default; rider phone isn't surfaced. */
+                peerPhone={null}
+                rideActive
+                variant="dark"
+                iconSize={44}
+              />
             </div>
           </div>
         </FadeUp>
@@ -717,20 +735,8 @@ export default function DriverActiveTripPage() {
         </div>
       </FadeUp>
 
-      {rider && (
-        <ChatSheet
-          open={chatOpen}
-          onClose={() => setChatOpen(false)}
-          rideId={ride.id}
-          myRole="driver"
-          peerName={rider.name}
-          peerAvatarUrl={rider.avatarUrl}
-          // Driver doesn't get a tap-to-call to the rider — privacy
-          // by default. Chat is the channel.
-          peerPhone={null}
-          rideActive
-        />
-      )}
+      {/* The chat launcher (icon + sheet + toast) lives inside the
+         rider card above. Nothing more to mount here. */}
     </div>
   );
 }

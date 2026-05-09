@@ -28,6 +28,7 @@ export function DriverVehicleCard({
   vehicleYear,
   vehicleColor,
   phone,
+  extraAction,
 }: {
   name: string;
   avatarUrl: string | null;
@@ -41,6 +42,10 @@ export function DriverVehicleCard({
   vehicleColor: string | null;
   /** When provided, renders a tap-to-call button next to the name. */
   phone?: string | null;
+  /** Optional secondary action rendered next to the call button —
+   *  used by the rider live-trip page to surface the chat icon
+   *  alongside the call icon so both fit at the same eye level. */
+  extraAction?: React.ReactNode;
 }) {
   const initials = name
     .split(" ")
@@ -100,16 +105,23 @@ export function DriverVehicleCard({
             ))}
         </div>
 
-        {/* Tap-to-call — masked through Rajlo's call routing in
-           production. For now just a tel: link. */}
-        {phone && (
-          <a
-            href={`tel:${phone.replace(/\s+/g, "")}`}
-            aria-label={`Call ${name}`}
-            className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-rajlo-red text-white shadow-md transition-transform hover:-translate-y-0.5"
-          >
-            <Icon name="phone" className="h-4 w-4" />
-          </a>
+        {/* Action group — call (tel: link) + any extra action passed
+           in by the parent (e.g. the chat launcher). They sit
+           side-by-side at the same height so the rider doesn't have
+           to look twice to know which icon does what. */}
+        {(phone || extraAction) && (
+          <div className="flex shrink-0 items-center gap-2">
+            {phone && (
+              <a
+                href={`tel:${phone.replace(/\s+/g, "")}`}
+                aria-label={`Call ${name}`}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-rajlo-red text-white shadow-md transition-transform hover:-translate-y-0.5"
+              >
+                <Icon name="phone" className="h-4 w-4" />
+              </a>
+            )}
+            {extraAction}
+          </div>
         )}
       </div>
 

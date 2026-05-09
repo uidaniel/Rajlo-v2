@@ -80,6 +80,55 @@ export default function RiderRequestPage() {
     };
   }, [router]);
 
+  // Pre-fill pickup + dropoff from URL params — used by:
+  //   - The dashboard's "Where you go most" cards (dropoff only,
+  //     via `to_*` params)
+  //   - The history detail's "Book again" button (BOTH pickup +
+  //     dropoff, via `from_*` AND `to_*`)
+  //
+  // Multistops are deliberately not deep-linked — the booking page
+  // starts with a clean A → B route and the rider can add stops
+  // manually if they want them. Mount-only read; we don't react to
+  // URL changes after this since the rider would then see their
+  // typed locations get overwritten on a back-nav.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+
+    // Dropoff (`to_*`)
+    const toName = params.get("to_name");
+    const toLat = parseFloat(params.get("to_lat") ?? "");
+    const toLng = parseFloat(params.get("to_lng") ?? "");
+    if (toName && Number.isFinite(toLat) && Number.isFinite(toLng)) {
+      setDropoff({
+        placeId: params.get("to_place") ?? "",
+        name: toName,
+        address: params.get("to_address") ?? "",
+        lat: toLat,
+        lng: toLng,
+        // Parish gets re-detected the next time the rider edits the
+        // field. The fare estimate works off lat/lng, so a missing
+        // parish here is fine.
+        parish: null,
+      });
+    }
+
+    // Pickup (`from_*`)
+    const fromName = params.get("from_name");
+    const fromLat = parseFloat(params.get("from_lat") ?? "");
+    const fromLng = parseFloat(params.get("from_lng") ?? "");
+    if (fromName && Number.isFinite(fromLat) && Number.isFinite(fromLng)) {
+      setPickup({
+        placeId: params.get("from_place") ?? "",
+        name: fromName,
+        address: params.get("from_address") ?? "",
+        lat: fromLat,
+        lng: fromLng,
+        parish: null,
+      });
+    }
+  }, []);
+
   const filledStops = useMemo(
     () => stops.filter((s): s is Place => s !== null),
     [stops],
@@ -120,6 +169,22 @@ export default function RiderRequestPage() {
 
   const removeStop = (index: number) => {
     setStops((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // Swap a stop with its neighbour. Riders use this to reorder the
+  // route after dropping pins — e.g. they realise stop 3 should come
+  // first, or want to put the pharmacy stop ahead of the supermarket
+  // one. We only allow neighbour-swapping (not jump-to-position) so
+  // each tap moves the row visibly by one slot — easy to undo, easy
+  // to follow, no drag-and-drop accessibility tax.
+  const moveStop = (index: number, direction: "up" | "down") => {
+    setStops((prev) => {
+      const target = direction === "up" ? index - 1 : index + 1;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
   };
 
   const handleSubmit = async () => {
@@ -262,6 +327,10 @@ export default function RiderRequestPage() {
               place={stop}
               onSelect={(p) => updateStop(i, p)}
               onRemove={() => removeStop(i)}
+              onMoveUp={i > 0 ? () => moveStop(i, "up") : undefined}
+              onMoveDown={
+                i < stops.length - 1 ? () => moveStop(i, "down") : undefined
+              }
             />
           ))}
 
@@ -557,6 +626,8 @@ function WaypointSlot({
   onSelect,
   onClear,
   onRemove,
+  onMoveUp,
+  onMoveDown,
 }: {
   kind: "pickup" | "stop" | "dropoff";
   label: string;
@@ -564,6 +635,11 @@ function WaypointSlot({
   onSelect: (p: Place) => void;
   onClear?: () => void;
   onRemove?: () => void;
+  /** Reorder controls — undefined when this stop can't move further
+   *  in that direction (top stop has no onMoveUp, last stop has no
+   *  onMoveDown). Only ever passed for kind="stop". */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }) {
   const tone =
     kind === "pickup"
@@ -737,15 +813,42 @@ function WaypointSlot({
           </p>
         )}
       </div>
-      {kind === "stop" && onRemove && (
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label="Remove stop"
-          className="mt-1 grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted transition-colors hover:bg-primary-soft hover:text-rajlo-red"
-        >
-          <Icon name="x" className="h-4 w-4" />
-        </button>
+      {kind === "stop" && (onMoveUp || onMoveDown || onRemove) && (
+        // Reorder + remove controls. The up/down buttons swap this
+        // stop with its neighbour so a rider can change "B → C → D"
+        // into "B → D → C" with one tap. Each button is disabled (not
+        // hidden) when at a boundary so the column width stays
+        // constant — rows don't reflow when you tap the last move.
+        <div className="mt-1 flex shrink-0 flex-col items-center gap-1">
+          <button
+            type="button"
+            onClick={onMoveUp}
+            disabled={!onMoveUp}
+            aria-label="Move stop earlier"
+            className="grid h-7 w-7 place-items-center rounded-lg text-muted transition-colors hover:bg-primary-soft hover:text-rajlo-red disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted"
+          >
+            <Icon name="chevron-up" className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={onMoveDown}
+            disabled={!onMoveDown}
+            aria-label="Move stop later"
+            className="grid h-7 w-7 place-items-center rounded-lg text-muted transition-colors hover:bg-primary-soft hover:text-rajlo-red disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-muted"
+          >
+            <Icon name="chevron-down" className="h-4 w-4" />
+          </button>
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              aria-label="Remove stop"
+              className="grid h-7 w-7 place-items-center rounded-lg text-muted transition-colors hover:bg-primary-soft hover:text-rajlo-red"
+            >
+              <Icon name="x" className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       )}
     </div>
   );

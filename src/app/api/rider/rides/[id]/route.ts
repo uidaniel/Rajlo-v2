@@ -40,7 +40,7 @@ export async function GET(
   const { data: ride, error: rideError } = await supabase
     .from("rides")
     .select(
-      "id, status, rider_id, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, accepted_at, arrived_at, started_at, completed_at, cancelled_at, cancellation_reason",
+      "id, status, rider_id, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, pickup_place_id, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, dropoff_place_id, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, accepted_at, arrived_at, started_at, completed_at, cancelled_at, cancellation_reason",
     )
     .eq("id", id)
     .eq("rider_id", user.id)
@@ -76,6 +76,31 @@ export async function GET(
     ratingCount: number;
     avatarUrl: string | null;
   } | null = null;
+
+  // Did this rider already rate this trip? Surface it so the detail
+  // page can hide the "Rate the driver" CTA and instead show the
+  // existing rating. The DB unique constraint on (ride_id, rater_role)
+  // already blocks a second insert; this lookup is so the UI doesn't
+  // even let the rider try (and avoids the 409 round-trip).
+  let myRating: {
+    stars: number;
+    comment: string | null;
+    createdAt: string;
+  } | null = null;
+  const { data: existingRating } = await supabase
+    .from("ride_ratings")
+    .select("stars, comment, created_at")
+    .eq("ride_id", id)
+    .eq("rater_id", user.id)
+    .eq("rater_role", "rider")
+    .maybeSingle();
+  if (existingRating) {
+    myRating = {
+      stars: existingRating.stars,
+      comment: existingRating.comment,
+      createdAt: existingRating.created_at,
+    };
+  }
 
   if (ride.driver_id) {
     const { data: d } = await supabase
@@ -132,12 +157,14 @@ export async function GET(
         address: ride.pickup_address,
         lat: ride.pickup_lat,
         lng: ride.pickup_lng,
+        placeId: ride.pickup_place_id,
       },
       dropoff: {
         name: ride.dropoff_name,
         address: ride.dropoff_address,
         lat: ride.dropoff_lat,
         lng: ride.dropoff_lng,
+        placeId: ride.dropoff_place_id,
       },
       stops: stops ?? [],
       seats: ride.seats,
@@ -156,5 +183,6 @@ export async function GET(
       cancellationReason: ride.cancellation_reason,
     },
     driver,
+    myRating,
   });
 }

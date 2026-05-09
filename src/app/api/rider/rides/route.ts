@@ -124,6 +124,31 @@ export async function POST(request: Request) {
     );
   }
 
+  // Wallet booking gate: a rider can't book a trip if their wallet
+  // can't cover the estimated fare. We don't actually move money
+  // here — that happens at completion when the final fare is known.
+  // Booking is rejected with 402 Payment Required so the client can
+  // route the rider to /rider/wallet to top up.
+  const estimatedFareJmd = Math.round(body.fare.fareJMD);
+  const { data: wallet } = await supabase
+    .from("wallets")
+    .select("balance_jmd")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const balanceJmd =
+    (wallet as { balance_jmd: number } | null)?.balance_jmd ?? 0;
+  if (balanceJmd < estimatedFareJmd) {
+    return NextResponse.json(
+      {
+        error: `Top up your wallet to book this trip — fare is JMD ${estimatedFareJmd.toLocaleString("en-JM")}, you have JMD ${balanceJmd.toLocaleString("en-JM")} available.`,
+        insufficientFunds: true,
+        balanceJmd,
+        requiredJmd: estimatedFareJmd,
+      },
+      { status: 402 },
+    );
+  }
+
   const allowCarpool = body.allowCarpool === true;
 
   // Insert the ride row.

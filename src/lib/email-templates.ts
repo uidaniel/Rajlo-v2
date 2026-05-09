@@ -546,7 +546,7 @@ export function tripCompletedTemplate(args: {
       eyebrow: "Rate your trip",
       text: "Your rating helps keep the network safe and reliable for everyone. It takes 5 seconds.",
     },
-    { type: "cta", href: `${APP_URL}/rider/rate?id=${args.rideId}`, label: "Rate this trip" },
+    { type: "cta", href: `${APP_URL}/rider/history/${args.rideId}?rate=1`, label: "Rate this trip" },
     { type: "footnote", text: `Need a corrected receipt for expenses? Reply with trip ID ${args.rideId}.` },
   ];
 
@@ -561,7 +561,7 @@ export function tripCompletedTemplate(args: {
     `Thanks ${first}.`,
     `${args.pickup} → ${args.dropoff}`,
     `Total: ${JMD(args.fareJMD)}`,
-    `Rate trip: ${APP_URL}/rider/rate?id=${args.rideId}`,
+    `Rate trip: ${APP_URL}/rider/history/${args.rideId}?rate=1`,
   ]);
 
   return { subject, html, text };
@@ -1020,5 +1020,66 @@ export async function sendDriverTripCompletedEmail(
   args: Parameters<typeof driverTripCompletedTemplate>[0],
 ) {
   const t = driverTripCompletedTemplate(args);
+  return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
+}
+
+/* ──────────────────────────────────────────────────────────────────────
+   N. Wallet transfer OTP
+   ────────────────────────────────────────────────────────────────────── */
+
+export function walletTransferOtpTemplate(args: {
+  code: string;
+  amountJmd: number;
+  recipientLabel: string;
+  expiresInMinutes: number;
+  senderName?: string | null;
+}) {
+  const first = firstNameOf(args.senderName);
+  const subject = `Your Rajlo wallet code: ${args.code}`;
+
+  const sections: EmailSection[] = [
+    {
+      type: "intro",
+      text: `Hi ${first}, you're sending JMD ${args.amountJmd.toLocaleString("en-JM")} to ${args.recipientLabel} from your Rajlo wallet. Use the code below to confirm.`,
+    },
+    {
+      type: "code",
+      value: args.code,
+      description: `Expires in ${args.expiresInMinutes} minutes.`,
+    },
+    {
+      type: "highlight",
+      tone: "warning",
+      eyebrow: "Didn't try to send money?",
+      text: "Don't share this code with anyone. Cancel the transfer from your Rajlo wallet immediately, and reply to this email so our team can check the activity on your account.",
+    },
+    {
+      type: "footnote",
+      text: "Rajlo will never ask you to read out a code over the phone. If anyone — including someone claiming to be Rajlo support — does, end the call.",
+    },
+  ];
+
+  const html = renderEmail({
+    preheader: `Confirm sending JMD ${args.amountJmd.toLocaleString("en-JM")} to ${args.recipientLabel}.`,
+    eyebrow: "Wallet transfer",
+    title: "Confirm your transfer",
+    sections,
+  });
+
+  const text = plaintext([
+    `Hi ${first}, your Rajlo wallet transfer code is: ${args.code}`,
+    `Sending JMD ${args.amountJmd.toLocaleString("en-JM")} to ${args.recipientLabel}.`,
+    `This code expires in ${args.expiresInMinutes} minutes.`,
+    "If you didn't try to send money, do not share this code. Cancel from your Rajlo wallet and contact support.",
+  ]);
+
+  return { subject, html, text };
+}
+
+export async function sendWalletTransferOtpEmail(
+  to: string,
+  args: Parameters<typeof walletTransferOtpTemplate>[0],
+) {
+  const t = walletTransferOtpTemplate(args);
   return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
 }

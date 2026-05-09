@@ -156,7 +156,11 @@ export async function POST(request: Request) {
       label: doc.label,
       description: doc.description,
       renewal_period_days: doc.renewalPeriodDays,
-      expires_on: doc.expiryDate ?? null,
+      // Expiry date is unknown at onboarding time — the template's
+      // mock `expiryDate` is example data for the marketing surfaces,
+      // not a real driver expiry. Admin sets the actual date during
+      // verification (or the driver supplies it when they renew).
+      expires_on: null,
     };
 
     if (!existing) {
@@ -208,6 +212,33 @@ export async function POST(request: Request) {
         { error: "Failed to upsert driver documents" },
         { status: 500 },
       );
+    }
+  }
+
+  // Sync the user's profile display name to the name they typed on
+  // the onboarding form. Drivers who signed up via Google OAuth have
+  // their full_name pre-populated from their Google account, but the
+  // TA-badge name (what they typed here) is what should appear on
+  // their account, what riders see in chat, and what shows up across
+  // every admin surface. Same name across the app, no surprises.
+  //
+  // We use service-role here so RLS can't block the write. The user's
+  // own RLS policy lets them PATCH their own profile via /api/me, but
+  // they don't necessarily have a session refresh after this submit
+  // either way it's a server-internal sync, not a user action.
+  const trimmedFirst = body.form.firstName.trim();
+  const trimmedLast = body.form.lastName.trim();
+  const composedName = [trimmedFirst, trimmedLast].filter(Boolean).join(" ");
+  if (composedName) {
+    const { error: profileError } = await supabase
+      .from("profiles")
+      .update({ full_name: composedName })
+      .eq("id", user.id);
+    if (profileError) {
+      // Non-fatal — the driver row + docs were saved successfully and
+      // the admin queue will still surface them. Log so we can spot
+      // a pattern of failures.
+      console.error("Profile name sync failed:", profileError.message);
     }
   }
 

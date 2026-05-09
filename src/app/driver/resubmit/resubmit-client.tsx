@@ -17,7 +17,42 @@ export type RejectedDocCard = {
   label: string;
   description: string;
   adminNote: string | null;
+  /** > 0 → driver must pick a fresh expiry on re-upload (TA renewal docs).
+   *  0   → permanent doc (e.g. selfie); no date input shown. */
+  renewalPeriodDays: number;
+  /** Whatever was on the row before. Used as the default for the date
+   *  picker so the driver can confirm/keep it instead of retyping. */
+  currentExpiresOn: string | null;
 };
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function todayIso(): string {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function defaultExpiryFor(doc: RejectedDocCard): string {
+  // Prefer whatever was previously on the row (so the driver only needs
+  // to confirm). If that's missing or already in the past, suggest
+  // today + the renewal window.
+  const today = todayIso();
+  if (doc.currentExpiresOn && doc.currentExpiresOn >= today) {
+    return doc.currentExpiresOn;
+  }
+  if (doc.renewalPeriodDays > 0) {
+    const t = new Date();
+    t.setDate(t.getDate() + doc.renewalPeriodDays);
+    const y = t.getFullYear();
+    const m = String(t.getMonth() + 1).padStart(2, "0");
+    const d = String(t.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  return "";
+}
 
 const DRAFT_KEY = "rajlo-driver-onboarding-draft";
 
@@ -31,9 +66,20 @@ export function ResubmitClient({
   const router = useRouter();
   const [userId, setUserId] = useState<string | null>(null);
   const [files, setFiles] = useState<FileState>({});
+  const [expiries, setExpiries] = useState<Record<string, string>>(() => {
+    // Seed each renewable doc's expiry input from its current value
+    // (or a sensible default). Permanent docs stay out of the map.
+    const seed: Record<string, string> = {};
+    for (const d of rejectedDocs) {
+      if (d.renewalPeriodDays > 0) seed[d.id] = defaultExpiryFor(d);
+    }
+    return seed;
+  });
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  const minExpiry = todayIso();
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -153,6 +199,14 @@ export function ResubmitClient({
   const uploadedCount = rejectedDocs.filter((d) =>
     Boolean(files[d.id]?.path),
   ).length;
+  // Every renewable doc needs a valid future expiry before we let the
+  // driver submit. Mirrors the server-side check in /api/driver/resubmit
+  // so they get instant feedback rather than a round-trip error.
+  const allExpiriesReady = rejectedDocs.every((d) => {
+    if (d.renewalPeriodDays <= 0) return true;
+    const v = expiries[d.id] ?? "";
+    return ISO_DATE.test(v) && v >= minExpiry;
+  });
 
   const submit = async () => {
     setSubmitting(true);
@@ -166,11 +220,22 @@ export function ResubmitClient({
 
       const uploadedDocs = Object.entries(files)
         .filter(([, file]) => file?.path)
-        .map(([id, file]) => ({
-          id,
-          fileName: file!.name,
-          filePath: file!.path,
-        }));
+        .map(([id, file]) => {
+          const meta = rejectedDocs.find((d) => d.id === id);
+          // Only attach `expiresOn` when the doc actually has a renewal
+          // window. For permanent docs (selfie etc.) we omit it so the
+          // server keeps `expires_on` as NULL.
+          const expiresOn =
+            meta && meta.renewalPeriodDays > 0
+              ? expiries[id] ?? null
+              : undefined;
+          return {
+            id,
+            fileName: file!.name,
+            filePath: file!.path,
+            ...(expiresOn !== undefined ? { expiresOn } : {}),
+          };
+        });
 
       const res = await fetch("/api/driver/resubmit", {
         method: "POST",
@@ -237,21 +302,29 @@ export function ResubmitClient({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-surface-soft">
+    // `overflow-x-hidden` on the page wrapper is the belt-and-braces
+    // fix: even if any child element (the ArcWatermark below most
+    // notoriously) extends past the viewport, the page never scrolls
+    // sideways. Without this, phones < ~520px would horizontal-scroll
+    // because the watermark SVG is 520px wide and offset off the
+    // right edge.
+    <div className="flex min-h-screen flex-col overflow-x-hidden bg-surface-soft">
       {/* ────── Top bar ────── */}
       <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-2 py-3 md:px-3 md:py-4">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-4 px-4 py-3 md:px-6 md:py-4">
           <Logo size="sm" tagline />
           <SignOutButton />
         </div>
       </header>
 
       {/* ────── Body ────── */}
-      <div className="relative mx-auto w-full max-w-3xl flex-1 px-2 py-8 md:px-3 md:py-12">
+      <div className="relative mx-auto w-full max-w-3xl flex-1 overflow-hidden px-4 py-8 md:px-6 md:py-12">
         <ArcWatermark
           size={520}
           variant="red"
-          className="absolute -right-32 -top-10 opacity-[0.04]"
+          // `pointer-events-none` so the invisible watermark never
+          // catches taps on top of the file-upload tiles below it.
+          className="pointer-events-none absolute -right-32 -top-10 opacity-[0.04]"
         />
 
         {/* Hero */}
@@ -316,15 +389,44 @@ export function ResubmitClient({
                   onPick={handlePickFile}
                   onRemove={handleRemoveFile}
                 />
+
+                {doc.renewalPeriodDays > 0 && (
+                  <div className="mt-4">
+                    <label
+                      htmlFor={`expiry-${doc.id}`}
+                      className="font-secondary block text-[11px] font-bold uppercase tracking-wider text-muted"
+                    >
+                      New expiry date
+                    </label>
+                    <input
+                      id={`expiry-${doc.id}`}
+                      type="date"
+                      min={minExpiry}
+                      value={expiries[doc.id] ?? ""}
+                      onChange={(e) =>
+                        setExpiries((prev) => ({
+                          ...prev,
+                          [doc.id]: e.target.value,
+                        }))
+                      }
+                      className="mt-1.5 block w-full rounded-xl border border-line bg-surface px-3 py-2.5 text-sm font-medium text-foreground focus:border-rajlo-red focus:outline-none focus:ring-2 focus:ring-rajlo-red/20"
+                    />
+                    <p className="mt-1.5 text-[11px] text-muted">
+                      Match the date printed on the document. Must be in the
+                      future.
+                    </p>
+                  </div>
+                )}
               </div>
             </FadeUp>
           ))}
         </div>
 
-        {/* Edit my details escape hatch */}
+        {/* Edit my details escape hatch — stacks vertically on mobile
+           so the description text and the action pill never collide. */}
         <FadeUp delay={0.15}>
-          <div className="mt-6 flex items-center justify-between rounded-2xl border border-line bg-surface px-5 py-4">
-            <div>
+          <div className="mt-6 flex flex-col gap-3 rounded-2xl border border-line bg-surface px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
               <p className="text-sm font-bold">Need to fix something else?</p>
               <p className="mt-0.5 text-xs text-muted">
                 Open the full application to edit personal details or vehicle
@@ -333,7 +435,7 @@ export function ResubmitClient({
             </div>
             <Link
               href="/driver/onboarding?edit=1"
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-line bg-surface-soft px-4 py-2 text-xs font-bold text-foreground hover:border-rajlo-red hover:bg-primary-soft hover:text-rajlo-red"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 self-start rounded-full border border-line bg-surface-soft px-4 py-2 text-xs font-bold text-foreground hover:border-rajlo-red hover:bg-primary-soft hover:text-rajlo-red sm:self-auto"
             >
               Edit my details
               <Icon name="arrow-right" className="h-3.5 w-3.5" />
@@ -350,18 +452,22 @@ export function ResubmitClient({
 
       {/* ────── Sticky action bar ────── */}
       <footer className="sticky bottom-0 z-20 border-t border-line bg-surface/90 backdrop-blur">
-        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-2 py-3 md:px-3 md:py-4">
+        <div className="mx-auto flex max-w-3xl items-center justify-between gap-3 px-4 py-3 md:px-6 md:py-4">
           <p className="text-xs font-semibold text-muted">
             {uploadedCount} of {rejectedDocs.length} uploaded
           </p>
           <button
             type="button"
             onClick={submit}
-            disabled={submitting || !allUploaded || anyUploading}
+            disabled={
+              submitting || !allUploaded || anyUploading || !allExpiriesReady
+            }
             title={
               !allUploaded
                 ? "Re-upload every flagged document to continue"
-                : undefined
+                : !allExpiriesReady
+                  ? "Add a future expiry date to every renewable document"
+                  : undefined
             }
             className="inline-flex items-center gap-1.5 rounded-full bg-rajlo-red px-6 py-2.5 text-sm font-semibold text-white shadow-md shadow-rajlo-red/20 transition-all hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none disabled:hover:-translate-y-0"
           >

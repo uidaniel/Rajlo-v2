@@ -32,7 +32,7 @@ export default async function DriverResubmitPage() {
   if (admin) {
     const { data: docs } = await admin
       .from("driver_documents")
-      .select("doc_key, status, note")
+      .select("doc_key, status, note, expires_on, renewal_period_days")
       .eq("driver_id", driver.id)
       .eq("status", "rejected");
 
@@ -43,6 +43,12 @@ export default async function DriverResubmitPage() {
         label: meta?.label ?? humanizeDocKey(d.doc_key),
         description: meta?.description ?? "",
         adminNote: d.note,
+        // Renewal period drives whether the resubmit UI requires a fresh
+        // expiry date. Prefer the row value (admin may have set a custom
+        // period); fall back to the template constant.
+        renewalPeriodDays:
+          (d.renewal_period_days ?? meta?.renewalPeriodDays ?? 0) as number,
+        currentExpiresOn: (d.expires_on ?? null) as string | null,
       };
     });
   }

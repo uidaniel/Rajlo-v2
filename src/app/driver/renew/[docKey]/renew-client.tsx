@@ -41,6 +41,27 @@ export function RenewClient({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
 
+  // Expiry date the driver reads off their physical document.
+  // Initial value chain (best signal first):
+  //   - the existing expiry on file (so a quick "I uploaded the
+  //     wrong photo" doesn't lose the date the admin already
+  //     verified)
+  //   - today + renewal period (so a real renewal pre-fills a
+  //     sensible default — driver only adjusts if the printed
+  //     date differs)
+  //   - empty string for permanent docs (selfie has period=0;
+  //     the date input is hidden anyway)
+  const requiresExpiry = renewalPeriodDays > 0;
+  const [expiresOn, setExpiresOn] = useState<string>(() => {
+    if (!requiresExpiry) return "";
+    if (current.expiresOn) return current.expiresOn.slice(0, 10);
+    const d = new Date(Date.now() + renewalPeriodDays * 24 * 60 * 60 * 1000);
+    return d.toISOString().slice(0, 10);
+  });
+  // Floor for the date picker so the OS-level date pickers (iOS,
+  // Android) can't easily land on a past date.
+  const minExpiryDate = new Date().toISOString().slice(0, 10);
+
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
     (async () => {
@@ -98,11 +119,17 @@ export function RenewClient({
   };
 
   const uploaded = files[docKey];
-  const ready = Boolean(uploaded?.path);
+  const fileReady = Boolean(uploaded?.path);
+  const expiryReady = !requiresExpiry || Boolean(expiresOn);
+  const ready = fileReady && expiryReady;
   const uploading = Boolean(uploaded?.uploading);
 
   const submit = async () => {
     if (!ready || !uploaded?.path) return;
+    if (requiresExpiry && !expiresOn) {
+      setSubmitError("Pick the expiry date printed on your document.");
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -112,6 +139,10 @@ export function RenewClient({
         body: JSON.stringify({
           fileName: uploaded.name,
           filePath: uploaded.path,
+          // Send `null` for permanent docs so the server doesn't
+          // hold onto a stale date from an earlier upload (rare,
+          // but safer than omitting and letting it persist).
+          expiresOn: requiresExpiry ? expiresOn : null,
         }),
       });
       if (!res.ok) {
@@ -294,11 +325,38 @@ export function RenewClient({
               onPick={handlePickFile}
               onRemove={handleRemoveFile}
             />
+
+            {/* Expiry date — required for any doc with a renewal
+               period. Hidden for permanent docs (the selfie). The
+               value pre-fills to today + the standard renewal period
+               so the driver can usually just confirm the default
+               instead of typing it from scratch. */}
+            {requiresExpiry && (
+              <label className="mt-5 block">
+                <p className="text-sm font-semibold">
+                  Expiry date on this document
+                  <span className="ml-1 text-rajlo-red">*</span>
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  Read the date directly from the document. We use it to
+                  remind you before it expires.
+                </p>
+                <input
+                  type="date"
+                  value={expiresOn}
+                  min={minExpiryDate}
+                  onChange={(e) => setExpiresOn(e.target.value)}
+                  className="mt-2 w-full rounded-xl border border-line bg-surface-soft px-3 py-2.5 text-sm font-bold focus:border-rajlo-red focus:outline-none"
+                />
+              </label>
+            )}
+
             <ul className="mt-5 space-y-2 text-xs text-muted">
               <Tip>Use a clear, in-focus photo or scan — no glare or cropping.</Tip>
               <Tip>PDF, JPG or PNG, up to 10MB.</Tip>
               <Tip>
-                Make sure the expiry date and your full name are clearly visible.
+                Make sure your full name is clearly visible alongside the
+                expiry date.
               </Tip>
             </ul>
           </div>
@@ -319,7 +377,9 @@ export function RenewClient({
               ? "Ready to submit for review"
               : uploading
                 ? "Uploading…"
-                : "Pick a file to continue"}
+                : !fileReady
+                  ? "Pick a file to continue"
+                  : "Add the expiry date to continue"}
           </p>
           <button
             type="button"

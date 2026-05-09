@@ -52,8 +52,20 @@ type HistoryRow = {
     | "in_progress"
     | "completed"
     | "cancelled";
-  pickup: { name: string; address: string };
-  dropoff: { name: string; address: string };
+  pickup: {
+    name: string;
+    address: string;
+    lat: number;
+    lng: number;
+    placeId: string | null;
+  };
+  dropoff: {
+    name: string;
+    address: string;
+    lat: number;
+    lng: number;
+    placeId: string | null;
+  };
   fareJMD: number;
   endedAt: string | null;
   driverName: string | null;
@@ -147,10 +159,16 @@ export default function RiderDashboardPage() {
    */
   const topDestinations = useMemo(() => {
     if (history.length === 0) return [];
-    const buckets = new Map<
-      string,
-      { label: string; address: string; count: number; totalFare: number }
-    >();
+    type Bucket = {
+      label: string;
+      address: string;
+      lat: number;
+      lng: number;
+      placeId: string | null;
+      count: number;
+      totalFare: number;
+    };
+    const buckets = new Map<string, Bucket>();
     for (const r of history) {
       if (r.status !== "completed") continue;
       const key = r.dropoff.name.trim().toLowerCase();
@@ -160,9 +178,17 @@ export default function RiderDashboardPage() {
         existing.count += 1;
         existing.totalFare += r.fareJMD;
       } else {
+        // Capture the dropoff coordinates from the most recent trip to
+        // this destination — history is ordered newest-first, so the
+        // first time we see a key is the freshest record. That makes
+        // the deep-link to /rider/request lat/lng-accurate even if the
+        // place's name moved between visits.
         buckets.set(key, {
           label: r.dropoff.name,
           address: r.dropoff.address,
+          lat: r.dropoff.lat,
+          lng: r.dropoff.lng,
+          placeId: r.dropoff.placeId,
           count: 1,
           totalFare: r.fareJMD,
         });
@@ -174,6 +200,9 @@ export default function RiderDashboardPage() {
       .map((b) => ({
         label: b.label,
         address: b.address,
+        lat: b.lat,
+        lng: b.lng,
+        placeId: b.placeId,
         count: b.count,
         avgFareJMD: Math.round(b.totalFare / b.count / 50) * 50,
       }));
@@ -417,7 +446,7 @@ export default function RiderDashboardPage() {
             {topDestinations.map((dest) => (
               <StaggerItem key={dest.label}>
                 <Link
-                  href="/rider/request"
+                  href={buildRequestHrefWithDropoff(dest)}
                   className="group relative flex h-full items-stretch overflow-hidden rounded-2xl border border-line bg-surface transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-lg hover:shadow-rajlo-red/10"
                 >
                   <span
@@ -741,4 +770,30 @@ function friendlyDate(iso: string): string {
       month: "short",
     }) + ` · ${time}`
   );
+}
+
+/**
+ * Builds the deep-link URL that lands on /rider/request with the
+ * dropoff field pre-filled. The booking page reads these query params
+ * on mount and seeds its `dropoff` Place state — exactly the same
+ * shape the autocomplete would produce, so no extra fetch needed.
+ *
+ * Skips the placeId param when null/empty rather than sending an
+ * explicit empty string — keeps the URL tidy.
+ */
+function buildRequestHrefWithDropoff(dest: {
+  label: string;
+  address: string;
+  lat: number;
+  lng: number;
+  placeId: string | null;
+}): string {
+  const params = new URLSearchParams({
+    to_name: dest.label,
+    to_address: dest.address,
+    to_lat: String(dest.lat),
+    to_lng: String(dest.lng),
+  });
+  if (dest.placeId) params.set("to_place", dest.placeId);
+  return `/rider/request?${params.toString()}`;
 }

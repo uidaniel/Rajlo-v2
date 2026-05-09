@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  useCallback,
   useEffect,
   useRef,
   useState,
@@ -9,6 +8,7 @@ import {
 import { Icon } from "./icons";
 import { Skeleton } from "./skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import type { ChatMessage } from "@/lib/use-ride-chat";
 
 /**
  * Real-time driver ↔ rider chat panel. Slides in from the right on
@@ -30,18 +30,6 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
  * archived" notice instead of the composer.
  */
 
-type ChatMessage = {
-  id: string;
-  rideId: string;
-  senderId: string;
-  senderRole: "rider" | "driver";
-  kind: "text" | "image" | "voice";
-  body: string;
-  durationMs: number | null;
-  readAt: string | null;
-  createdAt: string;
-};
-
 type Props = {
   open: boolean;
   onClose: () => void;
@@ -52,8 +40,17 @@ type Props = {
   /** When provided, the call icon turns into a real `tel:` link. */
   peerPhone?: string | null;
   /** False when the ride is in a terminal status. The composer is
-   *  swapped for an "archived" banner and Realtime is disconnected. */
+   *  swapped for an "archived" banner. */
   rideActive: boolean;
+  /** Owned by the parent via `useRideChat` — the chat sheet no longer
+   *  fetches or subscribes itself. Sheet pushes optimistic messages
+   *  back through `setMessages`; realtime echoes are deduped by id. */
+  messages: ChatMessage[];
+  setMessages: React.Dispatch<React.SetStateAction<ChatMessage[]>>;
+  loading: boolean;
+  /** Called when the sheet opens so the parent can clear its unread
+   *  badge / dismiss the new-message toast. */
+  markAllRead?: () => void;
 };
 
 const RIDE_CHAT_BUCKET = "ride-chat";
@@ -69,9 +66,16 @@ export function ChatSheet({
   peerAvatarUrl,
   peerPhone,
   rideActive,
+  messages,
+  setMessages,
+  loading,
+  markAllRead,
 }: Props) {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true);
+  // myRole isn't read inside the sheet today (the chat row knows its
+  // own sender_role), but it's part of the contract so callers can't
+  // pass mismatched data. Reference it once to keep ESLint happy
+  // without changing behaviour.
+  void myRole;
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
@@ -98,54 +102,59 @@ export function ChatSheet({
     };
   }, [open]);
 
-  /* ─── Load + subscribe ─── */
-  const refresh = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/rides/${rideId}/messages`);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = (await res.json()) as { messages: ChatMessage[] };
-      setMessages(json.messages);
-      setError(null);
-    } catch (e) {
-      setError(
-        e instanceof Error ? e.message : "Couldn't load messages.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  }, [rideId]);
-
+  /* ─── Visual viewport tracking ───
+   *
+   * Mobile keyboards on iOS Safari (and even some Android browsers
+   * before `interactive-widget=resizes-content`) overlay the layout
+   * viewport without resizing it. That meant the chat panel's
+   * `100dvh` height stayed equal to the full screen, so the composer
+   * slid behind the keyboard the moment the rider tapped the input.
+   *
+   * The fix: ask the VisualViewport API for the actual visible
+   * height and apply it inline on the panel. Whenever the keyboard
+   * opens/closes, the panel snaps to fit the visible window and the
+   * composer ends up sitting just above the keyboard. The
+   * `100dvh` CSS fallback below covers browsers that don't support
+   * VisualViewport (very old Safari, Firefox on Android < 79).
+   */
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
   useEffect(() => {
     if (!open) return;
-    setLoading(true);
-    void refresh();
-
-    const supabase = createSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`ride-chat-${rideId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "ride_messages",
-          filter: `ride_id=eq.${rideId}`,
-        },
-        () => void refresh(),
-      )
-      .subscribe();
-
+    const vv =
+      typeof window !== "undefined" ? window.visualViewport : null;
+    if (!vv) return;
+    const apply = () => setViewportHeight(vv.height);
+    apply();
+    vv.addEventListener("resize", apply);
+    vv.addEventListener("scroll", apply);
     return () => {
-      supabase.removeChannel(channel);
+      vv.removeEventListener("resize", apply);
+      vv.removeEventListener("scroll", apply);
     };
-  }, [open, rideId, refresh]);
+  }, [open]);
 
-  /* ─── Auto-scroll to bottom on new messages ─── */
+  /* ─── Mark messages read on open ─── */
+  // Loading + subscribing is the parent's job (via `useRideChat`) so
+  // the icon's unread badge updates regardless of whether this sheet
+  // is mounted. All we do here is tell the parent "the user is now
+  // looking at the chat" so the badge clears.
+  useEffect(() => {
+    if (!open) return;
+    markAllRead?.();
+  }, [open, markAllRead]);
+
+  /* ─── Auto-scroll to bottom on new messages + keyboard resize ───
+   *
+   * Re-pinning to the bottom on `viewportHeight` change keeps the
+   * latest message visible the moment the keyboard opens — without
+   * this, the messages container shrinks but the scroll position
+   * stays fixed, so the user sees old messages while typing.
+   */
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages, loading]);
+  }, [messages, loading, viewportHeight]);
 
   /* ─── Send text ─── */
   const sendText = async () => {
@@ -347,10 +356,21 @@ export function ChatSheet({
         aria-hidden
       />
 
-      {/* Panel — full-screen on mobile, right-edge sheet on desktop. */}
-      <div className="relative ml-auto flex h-full w-full flex-col bg-surface shadow-2xl md:max-w-md">
-        {/* Header */}
-        <header className="flex items-center gap-3 border-b border-line bg-rajlo-black px-4 py-3 text-white">
+      {/* Panel — full-screen on mobile, right-edge sheet on desktop.
+         The inline `height` style overrides the `h-[100dvh]` fallback
+         when the VisualViewport API is available (every modern mobile
+         browser). That's what keeps the composer above the keyboard
+         instead of getting hidden underneath it. */}
+      <div
+        className="relative ml-auto flex h-[100dvh] w-full flex-col bg-surface shadow-2xl md:max-w-md"
+        style={
+          viewportHeight !== null ? { height: viewportHeight } : undefined
+        }
+      >
+        {/* Header — sticky at the top of the flex column. flex-shrink-0
+           prevents it from compressing when the messages area is
+           crowded. */}
+        <header className="flex shrink-0 items-center gap-3 border-b border-line bg-rajlo-black px-4 py-3 text-white">
           <button
             type="button"
             onClick={onClose}
@@ -394,10 +414,14 @@ export function ChatSheet({
           )}
         </header>
 
-        {/* Message stream */}
+        {/* Message stream — the only scrollable region. `min-h-0` is
+           critical: without it the flex item refuses to shrink below
+           its intrinsic content size and would push the composer off
+           the bottom of the panel. With it, this row absorbs whatever
+           height is left over after the header + composer take theirs. */}
         <div
           ref={scrollRef}
-          className="relative flex-1 overflow-y-auto bg-surface-soft px-4 py-4"
+          className="relative min-h-0 flex-1 overflow-y-auto bg-surface-soft px-4 py-4"
         >
           {loading ? (
             // Stagger left/right bubbles to mirror real chat shape so
@@ -453,14 +477,18 @@ export function ChatSheet({
         </div>
 
         {error && (
-          <div className="border-t border-rajlo-red/20 bg-primary-soft px-4 py-2 text-xs font-semibold text-rajlo-red">
+          <div className="shrink-0 border-t border-rajlo-red/20 bg-primary-soft px-4 py-2 text-xs font-semibold text-rajlo-red">
             {error}
           </div>
         )}
 
-        {/* Composer / archived banner */}
+        {/* Composer / archived banner — sticky at the bottom of the
+           flex column. `shrink-0` keeps it at full height even when
+           the keyboard is up; `pb-[env(safe-area-inset-bottom)]`
+           adds the iPhone home-indicator gap so the send button
+           doesn't sit under the OS gesture bar. */}
         {rideActive ? (
-          <footer className="border-t border-line bg-surface px-3 py-2.5">
+          <footer className="shrink-0 border-t border-line bg-surface px-3 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))]">
             {recording ? (
               <RecordingBar
                 seconds={recordSeconds}
@@ -547,7 +575,7 @@ export function ChatSheet({
             </p>
           </footer>
         ) : (
-          <footer className="border-t border-line bg-surface-soft px-4 py-4 text-center">
+          <footer className="shrink-0 border-t border-line bg-surface-soft px-4 py-4 text-center pb-[max(1rem,env(safe-area-inset-bottom))]">
             <p className="text-sm font-bold">Chat archived</p>
             <p className="mt-1 text-xs text-muted">
               The trip has ended. For your safety, the conversation is

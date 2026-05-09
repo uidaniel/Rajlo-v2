@@ -9,8 +9,9 @@ import { FadeUp } from "@/components/anim";
 import { MapView } from "@/components/map-view";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRidePosition } from "@/lib/use-ride-position";
+import { useBackgroundRefresh } from "@/lib/use-background-refresh";
 import { SafetySheet } from "@/components/safety-sheet";
-import { ChatSheet } from "@/components/chat-sheet";
+import { ChatLauncher } from "@/components/chat-launcher";
 import { DriverVehicleCard } from "@/components/driver-vehicle-card";
 import {
   DriverVehicleCardSkeleton,
@@ -158,7 +159,6 @@ export default function RiderLiveTripPage() {
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [safetyOpen, setSafetyOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
   const [completed, setCompleted] = useState<CompletedSnapshot | null>(null);
   // Tracks the most recent active-ride snapshot we saw, so when
   // refresh() returns `{ ride: null }` we can detect the active → done
@@ -264,6 +264,15 @@ export default function RiderLiveTripPage() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // Belt-and-braces backup poll. Realtime is the fast path, but a
+  // websocket can drop silently — phone backgrounds the tab, mobile
+  // OS sleeps the radio, network blips, browser disconnects after a
+  // long idle. Without this, the rider could come back to a stale
+  // "looking for a driver" screen even after the driver accepted.
+  // Hook pauses while the tab is hidden and re-fetches the moment
+  // it comes back into focus, so the cost is bounded.
+  useBackgroundRefresh(() => refresh(), 5_000);
 
   // Expiry trigger — when a `requested` ride's countdown hits zero, no
   // postgres_changes row event fires (the row hasn't actually changed
@@ -559,6 +568,11 @@ export default function RiderLiveTripPage() {
 
       {driver && (
         <FadeUp delay={0.1}>
+          {/* Chat icon sits next to the call icon inside the driver
+             card. The launcher loads + subscribes to messages from
+             this point on, so tapping the icon shows the conversation
+             instantly — no spinner. New messages bump an unread badge
+             on the icon and pop a transient toast. */}
           <DriverVehicleCard
             name={driver.name}
             avatarUrl={driver.avatarUrl}
@@ -570,33 +584,18 @@ export default function RiderLiveTripPage() {
             vehicleModel={driver.vehicleModel}
             vehicleYear={driver.vehicleYear}
             vehicleColor={driver.vehicleColor}
+            extraAction={
+              <ChatLauncher
+                rideId={ride.id}
+                myRole="rider"
+                peerName={driver.name}
+                peerAvatarUrl={driver.avatarUrl}
+                peerPhone={driver.phone}
+                rideActive
+                variant="soft"
+              />
+            }
           />
-          {/* Chat with driver — opens the in-app chat sheet. The
-             phone icon inside the sheet is a `tel:` link, not an
-             in-app call. */}
-          <button
-            type="button"
-            onClick={() => setChatOpen(true)}
-            className="mt-3 flex w-full items-center justify-between gap-3 rounded-2xl border border-line bg-surface px-4 py-3 text-left transition-all hover:border-rajlo-red hover:bg-primary-soft/40"
-          >
-            <span className="flex items-center gap-3">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-rajlo-red text-white">
-                <span aria-hidden className="text-lg leading-none">💬</span>
-              </span>
-              <span>
-                <span className="block text-sm font-extrabold tracking-tight">
-                  Message {driver.name.split(" ")[0]}
-                </span>
-                <span className="block text-[11px] text-muted">
-                  Photos · voice notes · tap-to-call. Private to this trip.
-                </span>
-              </span>
-            </span>
-            <Icon
-              name="chevron-right"
-              className="h-4 w-4 shrink-0 text-muted"
-            />
-          </button>
         </FadeUp>
       )}
 
@@ -714,27 +713,8 @@ export default function RiderLiveTripPage() {
         />
       )}
 
-      {driver && (
-        <ChatSheet
-          open={chatOpen}
-          onClose={() => setChatOpen(false)}
-          rideId={ride.id}
-          myRole="rider"
-          peerName={driver.name}
-          peerAvatarUrl={driver.avatarUrl}
-          peerPhone={driver.phone}
-          // Chat composer + read access only while ride is in flight.
-          // After completed/cancelled, RLS already shuts off the
-          // server side; we mirror the rule client-side so the UI is
-          // explicit about why messages stop coming through.
-          rideActive={
-            ride.status === "accepted" ||
-            ride.status === "arrived" ||
-            ride.status === "in_progress" ||
-            ride.status === "requested"
-          }
-        />
-      )}
+      {/* The chat launcher (icon + sheet + toast) lives inside the
+         driver card above. Nothing more to mount here. */}
     </div>
   );
 }
