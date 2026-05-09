@@ -306,7 +306,7 @@ export default function DriverNotificationsPage() {
                 <button
                   type="button"
                   onClick={markAllRead}
-                  className="rounded-full bg-white px-4 py-2 text-xs font-bold text-rajlo-black transition-all hover:-translate-y-0.5"
+                  className="rounded-full bg-white px-4 py-2 text-xs font-bold text-foreground transition-all hover:-translate-y-0.5"
                 >
                   Mark all read
                 </button>
@@ -595,7 +595,7 @@ function NotificationCard({
           <div className="min-w-0">
             <p
               className={`text-sm font-extrabold tracking-tight ${
-                n.read ? "text-foreground" : "text-rajlo-black"
+                n.read ? "text-foreground" : "text-foreground"
               }`}
             >
               {n.title}

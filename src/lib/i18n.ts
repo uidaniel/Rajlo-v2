@@ -34,7 +34,138 @@ type Dict = Record<string, string>;
    ────────────────────────────────────────────────────────────────────── */
 
 const PATOIS: Dict = {
-  // Settings page chrome
+  /* ─── Common UI words used across the app ─── */
+  "common.loading": "A load up…",
+  "common.save": "Save",
+  "common.saving": "A save…",
+  "common.saved": "Save",
+  "common.cancel": "Cancel",
+  "common.confirm": "Confirm",
+  "common.continue": "Continue",
+  "common.back": "Back",
+  "common.close": "Close",
+  "common.signin": "Sign in",
+  "common.signout": "Sign out",
+  "common.signup": "Sign up",
+  "common.tryAgain": "Try again",
+  "common.search": "Search",
+  "common.empty": "Notn here yet",
+  "common.error": "Sup'n gwaan wrong",
+
+  /* ─── Rider sidebar nav ─── */
+  "nav.rider.dashboard": "Yaad",
+  "nav.rider.request": "Hail a ride",
+  "nav.rider.liveTrip": "Live trip",
+  "nav.rider.fare": "Fare breakdown",
+  "nav.rider.payments": "Payment dem",
+  "nav.rider.history": "History",
+  "nav.rider.spending": "Spending",
+  "nav.rider.ratings": "Rating dem",
+  "nav.rider.notifications": "Notification",
+  "nav.rider.settings": "Setting dem",
+  "nav.rider.support": "Help",
+  "nav.rider.safety": "Safety",
+
+  /* ─── Driver sidebar nav ─── */
+  "nav.driver.dashboard": "Yaad",
+  "nav.driver.documents": "Document dem",
+  "nav.driver.verification": "TA verify",
+  "nav.driver.requests": "Ride request dem",
+  "nav.driver.activeTrip": "Active trip",
+  "nav.driver.seats": "Seat dem",
+  "nav.driver.earnings": "Money mek",
+  "nav.driver.payouts": "Payout dem",
+  "nav.driver.history": "History",
+  "nav.driver.ratings": "Rating dem",
+  "nav.driver.notifications": "Notification",
+  "nav.driver.profile": "Profile",
+  "nav.driver.support": "Help & safety",
+
+  /* ─── Rider home / dashboard ─── */
+  "rider.home.eyebrow": "Welkom back",
+  "rider.home.title": "Weh yuh ago today?",
+  "rider.home.subtitle":
+    "Hail a verify red-plate driver. Fare set by parish.",
+  "rider.home.cta.request": "Hail a ride",
+  "rider.home.cta.live": "View active trip",
+  "rider.home.recent": "Recent trip dem",
+  "rider.home.viewAll": "See all",
+  "rider.home.empty": "Yuh nuh tek a ride yet — book yuh first one.",
+
+  /* ─── Rider notifications ─── */
+  "notifications.eyebrow": "Inbox",
+  "notifications.title": "Notification",
+  "notifications.subtitle":
+    "Trip update, promo, an safety tip — all inna one place.",
+  "notifications.unread": "Unread",
+  "notifications.markAllRead": "Mark all read",
+  "notifications.tab.all": "All",
+  "notifications.tab.trips": "Trip dem",
+  "notifications.tab.promos": "Promo dem",
+  "notifications.tab.system": "System",
+  "notifications.empty.fresh": "Notn here yet",
+  "notifications.empty.fresh.desc":
+    "Once yuh book or tek ride, di update dem land here.",
+  "notifications.empty.allRead": "Yuh all caught up",
+  "notifications.empty.allRead.desc":
+    "Notn fi dis filter. Switch tab dem above.",
+  "notifications.prefs.title": "Notification preference",
+  "notifications.prefs.desc":
+    "Pick weh alert dem yuh want — push, email, or in-app.",
+
+  /* ─── Rider history ─── */
+  "history.eyebrow": "Trip history",
+  "history.title": "Yuh past ride dem",
+  "history.subtitle":
+    "Receipt, rating, and re-book — everyting yuh do wid Rajlo.",
+  "history.stat.completed": "Trip complete",
+  "history.stat.spent": "Total spend",
+  "history.stat.seeBreakdown": "See breakdown",
+  "history.tab.all": "All",
+  "history.tab.ongoing": "Goin on",
+  "history.tab.cancelled": "Cancel",
+
+  /* ─── Rider analytics / spending ─── */
+  "analytics.eyebrow": "Spending",
+  "analytics.thisMonth": "Dis month",
+  "analytics.last7": "Last 7 day",
+  "analytics.longestTrip": "Longest trip",
+  "analytics.allTime": "All time",
+  "analytics.last30": "Last 30 day",
+  "analytics.trips30": "Trip · 30d",
+  "analytics.avgFare": "Average fare",
+  "analytics.saved": "Save",
+  "analytics.monthly": "Monthly spend",
+  "analytics.byParish": "Spend by parish",
+  "analytics.topRoutes": "Top route dem",
+  "analytics.cancelled": "Cancel trip",
+  "analytics.carpool": "Carpool trip",
+  "analytics.empty": "Nuh spending yet",
+  "analytics.empty.desc":
+    "Tek yuh first ride an di breakdown ago show up here.",
+  "analytics.empty.cta": "Book a ride",
+
+  /* ─── Rider safety ─── */
+  "safety.eyebrow": "Safety toolkit",
+  "safety.title": "Yuh in control",
+  "safety.subtitle":
+    "Trusted contact, share trip, an SOS — alla so it run.",
+
+  /* ─── Rider support ─── */
+  "support.eyebrow": "Help centre",
+  "support.title": "How wi can help?",
+  "support.subtitle":
+    "Search di FAQ, or pick a quick action below fi go straight to di right place.",
+  "support.searchPlaceholder": "Search help article…",
+  "support.cat.trips": "Trip dem",
+  "support.cat.payments": "Payment",
+  "support.cat.safety": "Safety",
+  "support.cat.account": "Account",
+  "support.contact.title": "Talk to wi support team",
+  "support.contact.subtitle":
+    "Real people inna Kingston — answer wi within a few hour.",
+
+  /* ─── Settings page chrome (existing) ─── */
   "settings.eyebrow": "Account",
   "settings.title": "Setting dem",
   "settings.subtitle":

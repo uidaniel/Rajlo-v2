@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <!-- Full circle background. Browsers render the favicon image as-is
+       (no auto-mask), so the rounding has to live in the artwork itself. -->
+  <circle cx="50" cy="50" r="50" fill="#f10100"/>
+  <!-- Brand "o" + arc mark from the canonical Rajlo SVG, scaled and
+       centred inside the circle. White on red, same composition as
+       the original square favicon. -->
+  <g transform="translate(10 14) scale(0.62) translate(-349 -339)">
+    <path fill="#ffffff" d="M413.75,363.1c24.55,0,43.87,19.32,43.87,43.34s-19.32,43.34-43.87,43.34-43.86-19.32-43.86-43.34S389.21,363.1,413.75,363.1Zm0,72.06c16.71,0,27.16-12,27.16-28.72s-10.45-28.72-27.16-28.72-27.15,12-27.15,28.72S397,435.16,413.75,435.16Z"/>
+    <path fill="#ffffff" d="M413.53,339.93a64.37,64.37,0,0,0-63.7,55.7H365a49.27,49.27,0,0,1,97,0h15.18A64.37,64.37,0,0,0,413.53,339.93Z"/>
+  </g>
+</svg>

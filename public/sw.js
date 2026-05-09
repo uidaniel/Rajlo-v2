@@ -42,8 +42,11 @@ self.addEventListener("push", (event) => {
   const title = payload.title || "Rajlo";
   const options = {
     body: payload.body || "",
-    icon: payload.icon || "/icon.png",
-    badge: payload.badge || "/icon.png",
+    // PNG fallback for notification icons — OS notification panels
+    // sometimes render PNG more reliably than SVG. The `/rajlo
+    // favicon.png` file is served from the public folder.
+    icon: payload.icon || "/rajlo%20favicon.png",
+    badge: payload.badge || "/rajlo%20favicon.png",
     image: payload.image,
     tag: payload.tag,
     renotify: !!payload.renotify,

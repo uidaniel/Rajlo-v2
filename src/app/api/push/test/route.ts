@@ -26,8 +26,8 @@ export async function POST() {
     body: "You'll get pings the moment your driver matches, arrives, and finishes the trip. Let's go!",
     url: "/rider",
     tag: "rajlo-test",
-    icon: "/icon.png",
-    badge: "/icon.png",
+    icon: "/rajlo%20favicon.png",
+    badge: "/rajlo%20favicon.png",
     requireInteraction: false,
   });
 

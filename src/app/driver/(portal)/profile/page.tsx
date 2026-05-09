@@ -298,7 +298,7 @@ export default function DriverProfilePage() {
                   ? "This photo identifies you to riders, fellow drivers, and operations. It's the same selfie the Transport Authority verified during onboarding."
                   : "Once your verification is approved, your TA selfie will become your profile picture across the app."}
               </p>
-              <p className="rounded-xl bg-primary-soft px-3 py-2 text-[11px] leading-relaxed text-rajlo-black">
+              <p className="rounded-xl bg-primary-soft px-3 py-2 text-[11px] leading-relaxed text-foreground">
                 <span className="font-bold text-rajlo-red">
                   Need to change it?
                 </span>{" "}

@@ -271,7 +271,7 @@ function DriverHistoryCard({
             <span
               className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
                 cancelled
-                  ? "bg-rajlo-black/10 text-rajlo-black"
+                  ? "bg-rajlo-black/10 text-foreground"
                   : "bg-emerald-100 text-emerald-700"
               }`}
             >

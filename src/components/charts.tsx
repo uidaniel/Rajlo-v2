@@ -52,7 +52,7 @@ export function MonthlyBars({ data }: { data: BarPoint[] }) {
                   className={`absolute -top-5 whitespace-nowrap text-[9px] font-bold transition-opacity ${
                     isLast
                       ? "text-rajlo-red opacity-100"
-                      : "text-rajlo-black opacity-0 group-hover:opacity-100"
+                      : "text-foreground opacity-0 group-hover:opacity-100"
                   }`}
                 >
                   {d.spendJMD > 0 ? formatJMD(d.spendJMD) : ""}

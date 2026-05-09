@@ -176,7 +176,7 @@ function ColourSwatch({ colorName }: { colorName: string | null }) {
           // White / yellow / silver swatches need a dark icon to be
           // visible; everything else uses white for contrast.
           ["white", "silver", "yellow", "beige", "gold"].includes(key)
-            ? "text-rajlo-black"
+            ? "text-foreground"
             : "text-white"
         }`}
       />

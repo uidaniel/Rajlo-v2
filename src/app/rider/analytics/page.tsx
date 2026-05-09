@@ -8,6 +8,7 @@ import { FadeUp } from "@/components/anim";
 import { Skeleton } from "@/components/skeleton";
 import { MonthlyBars, ProgressRow, StatNumber } from "@/components/charts";
 import { formatJMD } from "@/lib/jamaica";
+import { useT } from "@/lib/i18n";
 
 /**
  * Rider spending analytics. Loads /api/rider/analytics once and
@@ -56,6 +57,7 @@ type Analytics = {
 };
 
 export default function RiderAnalyticsPage() {
+  const { t } = useT();
   const [data, setData] = useState<Analytics | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -128,20 +130,20 @@ export default function RiderAnalyticsPage() {
           />
           <div className="relative">
             <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-              Spending
+              {t("analytics.eyebrow", "Spending")}
             </p>
             <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
               {formatJMD(data.totals.lifetime.spendJMD)}
             </h1>
             <p className="mt-1 text-sm text-white/75">
-              Lifetime · {data.totals.lifetime.trips} trip
+              {t("analytics.allTime", "Lifetime")} · {data.totals.lifetime.trips} trip
               {data.totals.lifetime.trips === 1 ? "" : "s"} on Rajlo
             </p>
 
             <div className="mt-5 flex flex-wrap items-end gap-x-6 gap-y-2 border-t border-white/15 pt-4">
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-white/55">
-                  This month
+                  {t("analytics.thisMonth", "This month")}
                 </p>
                 <p className="mt-1 text-xl font-extrabold tracking-tight">
                   {formatJMD(data.totals.thisMonth.spendJMD)}
@@ -153,7 +155,7 @@ export default function RiderAnalyticsPage() {
               </div>
               <div>
                 <p className="text-[10px] font-bold uppercase tracking-wider text-white/55">
-                  Last 7 days
+                  {t("analytics.last7", "Last 7 days")}
                 </p>
                 <p className="mt-1 text-xl font-extrabold tracking-tight">
                   {formatJMD(data.totals.last7Days.spendJMD)}
@@ -376,7 +378,7 @@ function FootnoteCard({
   const toneClass =
     tone === "positive"
       ? "bg-emerald-50 text-emerald-700"
-      : "bg-surface-soft text-rajlo-black";
+      : "bg-surface-soft text-foreground";
   return (
     <div className="rounded-2xl border border-line bg-surface p-4">
       <div className="flex items-center gap-2">

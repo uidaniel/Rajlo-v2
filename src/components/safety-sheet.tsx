@@ -310,7 +310,7 @@ function ShareLinkPanel({
         <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
           Live trip share ready
         </p>
-        <p className="mt-2 break-all rounded-xl bg-white px-3 py-2 font-mono text-xs text-rajlo-black ring-1 ring-line">
+        <p className="mt-2 break-all rounded-xl bg-white px-3 py-2 font-mono text-xs text-foreground ring-1 ring-line">
           {shareUrl}
         </p>
       </div>

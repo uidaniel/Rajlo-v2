@@ -7,6 +7,7 @@ import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { NotificationSkeleton, Skeleton } from "@/components/skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { useT } from "@/lib/i18n";
 
 /**
  * Rider notifications inbox. Backed by the `rider_notifications`
@@ -67,6 +68,7 @@ const TABS: { key: Tab; label: string }[] = [
 ];
 
 export default function RiderNotificationsPage() {
+  const { t } = useT();
   const [items, setItems] = useState<RiderNotification[]>([]);
   const [unreadFromServer, setUnreadFromServer] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -172,19 +174,22 @@ export default function RiderNotificationsPage() {
           <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                Inbox
+                {t("notifications.eyebrow", "Inbox")}
               </p>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-                Notifications
+                {t("notifications.title", "Notifications")}
               </h1>
               <p className="mt-1 text-sm text-white/75">
-                Trip updates, promos, and safety tips — all in one place.
+                {t(
+                  "notifications.subtitle",
+                  "Trip updates, promos, and safety tips — all in one place.",
+                )}
               </p>
             </div>
             <div className="flex items-center gap-3">
               <div className="rounded-2xl bg-white/10 px-4 py-2 text-center backdrop-blur">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">
-                  Unread
+                  {t("notifications.unread", "Unread")}
                 </p>
                 <p className="mt-0.5 text-2xl font-extrabold tracking-tight">
                   {unread}
@@ -194,9 +199,9 @@ export default function RiderNotificationsPage() {
                 <button
                   type="button"
                   onClick={markAllRead}
-                  className="rounded-full bg-white px-4 py-2 text-xs font-bold text-rajlo-black transition-all hover:-translate-y-0.5"
+                  className="rounded-full bg-white px-4 py-2 text-xs font-bold text-foreground transition-all hover:-translate-y-0.5"
                 >
-                  Mark all read
+                  {t("notifications.markAllRead", "Mark all read")}
                 </button>
               )}
             </div>
@@ -204,28 +209,37 @@ export default function RiderNotificationsPage() {
         </div>
       </FadeUp>
 
-      {/* Tabs */}
+      {/* Tabs — iterator renamed `tabItem` so it doesn't shadow the
+         translation function `t` from useT(). */}
       <FadeUp delay={0.05}>
         <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <div className="inline-flex gap-1 rounded-full border border-line bg-surface-soft p-1">
-            {TABS.map((t) => {
-              const active = tab === t.key;
+            {TABS.map((tabItem) => {
+              const active = tab === tabItem.key;
               const count =
-                t.key === "all"
+                tabItem.key === "all"
                   ? items.length
-                  : items.filter((n) => n.kind === t.key).length;
+                  : items.filter((n) => n.kind === tabItem.key).length;
+              const labelKey =
+                tabItem.key === "all"
+                  ? "notifications.tab.all"
+                  : tabItem.key === "trip"
+                    ? "notifications.tab.trips"
+                    : tabItem.key === "promo"
+                      ? "notifications.tab.promos"
+                      : "notifications.tab.system";
               return (
                 <button
-                  key={t.key}
+                  key={tabItem.key}
                   type="button"
-                  onClick={() => setTab(t.key)}
+                  onClick={() => setTab(tabItem.key)}
                   className={`relative rounded-full px-5 py-2 text-sm font-bold transition-all ${
                     active
                       ? "bg-rajlo-red text-white shadow-md shadow-rajlo-red/30"
                       : "text-muted hover:text-foreground"
                   }`}
                 >
-                  {t.label}
+                  {t(labelKey, tabItem.label)}
                   <span
                     className={`ml-2 inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] font-extrabold ${
                       active
@@ -369,7 +383,7 @@ function NotificationCard({
           <div className="min-w-0">
             <p
               className={`text-sm font-extrabold tracking-tight ${
-                n.read ? "text-foreground" : "text-rajlo-black"
+                n.read ? "text-foreground" : "text-foreground"
               }`}
             >
               {n.title}

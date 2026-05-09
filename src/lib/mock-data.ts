@@ -1,51 +1,67 @@
 import type { IconName } from "@/components/icons";
 
-export type NavItem = { label: string; href: string; icon: IconName };
+/**
+ * `label` is the English fallback shown when no Patois translation
+ * exists yet. `labelKey` is the i18n key the sidebar uses to look up
+ * the Patois rendering — see `src/lib/i18n.ts` for the dictionary.
+ * Always include both so a missing key still renders English instead
+ * of an empty space.
+ */
+export type NavItem = {
+  label: string;
+  labelKey: string;
+  href: string;
+  icon: IconName;
+};
 
 export const riderNav: NavItem[] = [
-  { label: "Dashboard", href: "/rider", icon: "home" },
-  { label: "Request a ride", href: "/rider/request", icon: "plus-circle" },
-  { label: "Live trip", href: "/rider/live-trip", icon: "navigation" },
-  { label: "Fare breakdown", href: "/rider/fare-breakdown", icon: "calculator" },
-  { label: "Payments", href: "/rider/payments", icon: "credit-card" },
-  { label: "History", href: "/rider/history", icon: "clock" },
-  { label: "Spending", href: "/rider/analytics", icon: "bar-chart" },
-  { label: "Ratings", href: "/rider/ratings", icon: "star" },
-  { label: "Notifications", href: "/rider/notifications", icon: "bell" },
-  { label: "Settings", href: "/rider/settings", icon: "settings" },
-  { label: "Support", href: "/rider/support", icon: "help-circle" },
-  { label: "Safety", href: "/rider/safety", icon: "shield" },
+  { label: "Dashboard", labelKey: "nav.rider.dashboard", href: "/rider", icon: "home" },
+  { label: "Request a ride", labelKey: "nav.rider.request", href: "/rider/request", icon: "plus-circle" },
+  { label: "Live trip", labelKey: "nav.rider.liveTrip", href: "/rider/live-trip", icon: "navigation" },
+  { label: "Fare breakdown", labelKey: "nav.rider.fare", href: "/rider/fare-breakdown", icon: "calculator" },
+  { label: "Payments", labelKey: "nav.rider.payments", href: "/rider/payments", icon: "credit-card" },
+  { label: "History", labelKey: "nav.rider.history", href: "/rider/history", icon: "clock" },
+  { label: "Spending", labelKey: "nav.rider.spending", href: "/rider/analytics", icon: "bar-chart" },
+  { label: "Ratings", labelKey: "nav.rider.ratings", href: "/rider/ratings", icon: "star" },
+  { label: "Notifications", labelKey: "nav.rider.notifications", href: "/rider/notifications", icon: "bell" },
+  { label: "Settings", labelKey: "nav.rider.settings", href: "/rider/settings", icon: "settings" },
+  { label: "Support", labelKey: "nav.rider.support", href: "/rider/support", icon: "help-circle" },
+  { label: "Safety", labelKey: "nav.rider.safety", href: "/rider/safety", icon: "shield" },
 ];
 
 export const driverNav: NavItem[] = [
-  { label: "Dashboard", href: "/driver", icon: "home" },
-  { label: "Documents", href: "/driver/documents", icon: "file-text" },
-  { label: "TA verification", href: "/driver/verification", icon: "shield-check" },
-  { label: "Ride requests", href: "/driver/requests", icon: "inbox" },
-  { label: "Active trip", href: "/driver/active-trip", icon: "navigation" },
-  { label: "Seats", href: "/driver/seats", icon: "users" },
-  { label: "Earnings", href: "/driver/earnings", icon: "trending-up" },
-  { label: "Payouts", href: "/driver/payouts", icon: "wallet" },
-  { label: "History", href: "/driver/history", icon: "clock" },
-  { label: "Ratings", href: "/driver/ratings", icon: "star" },
-  { label: "Notifications", href: "/driver/notifications", icon: "bell" },
-  { label: "Profile", href: "/driver/profile", icon: "user" },
-  { label: "Support & safety", href: "/driver/support-safety", icon: "shield" },
+  { label: "Dashboard", labelKey: "nav.driver.dashboard", href: "/driver", icon: "home" },
+  { label: "Documents", labelKey: "nav.driver.documents", href: "/driver/documents", icon: "file-text" },
+  { label: "TA verification", labelKey: "nav.driver.verification", href: "/driver/verification", icon: "shield-check" },
+  { label: "Ride requests", labelKey: "nav.driver.requests", href: "/driver/requests", icon: "inbox" },
+  { label: "Active trip", labelKey: "nav.driver.activeTrip", href: "/driver/active-trip", icon: "navigation" },
+  { label: "Seats", labelKey: "nav.driver.seats", href: "/driver/seats", icon: "users" },
+  { label: "Earnings", labelKey: "nav.driver.earnings", href: "/driver/earnings", icon: "trending-up" },
+  { label: "Payouts", labelKey: "nav.driver.payouts", href: "/driver/payouts", icon: "wallet" },
+  { label: "History", labelKey: "nav.driver.history", href: "/driver/history", icon: "clock" },
+  { label: "Ratings", labelKey: "nav.driver.ratings", href: "/driver/ratings", icon: "star" },
+  { label: "Notifications", labelKey: "nav.driver.notifications", href: "/driver/notifications", icon: "bell" },
+  { label: "Profile", labelKey: "nav.driver.profile", href: "/driver/profile", icon: "user" },
+  { label: "Support & safety", labelKey: "nav.driver.support", href: "/driver/support-safety", icon: "shield" },
 ];
 
+// Admin nav stays English-only — admin is internal ops staff who all
+// work in English. No labelKey needed; we still satisfy the type by
+// pointing at a key that has no Patois translation, so it falls back
+// to the English label every time.
 export const adminNav: NavItem[] = [
-  { label: "Operations", href: "/admin", icon: "home" },
-  { label: "Verification queue", href: "/admin/verification-queue", icon: "clipboard-check" },
-  { label: "Ride monitoring", href: "/admin/ride-monitoring", icon: "activity" },
-  { label: "Parishes", href: "/admin/parishes", icon: "map" },
-  { label: "Fare rules", href: "/admin/fare-rules", icon: "scale" },
-  { label: "Fare overrides", href: "/admin/fare-overrides", icon: "trending-up" },
-  { label: "Disputes", href: "/admin/disputes", icon: "alert-triangle" },
-  { label: "Users", href: "/admin/users", icon: "users" },
-  { label: "Payouts", href: "/admin/payouts", icon: "wallet" },
-  { label: "Audit logs", href: "/admin/audit-logs", icon: "history" },
-  { label: "Templates", href: "/admin/notification-templates", icon: "mail" },
-  { label: "Risk alerts", href: "/admin/risk-alerts", icon: "shield-alert" },
+  { label: "Operations", labelKey: "nav.admin.ops", href: "/admin", icon: "home" },
+  { label: "Verification queue", labelKey: "nav.admin.verification", href: "/admin/verification-queue", icon: "clipboard-check" },
+  { label: "Ride monitoring", labelKey: "nav.admin.monitoring", href: "/admin/ride-monitoring", icon: "activity" },
+  { label: "Parishes", labelKey: "nav.admin.parishes", href: "/admin/parishes", icon: "map" },
+  { label: "Fare rules", labelKey: "nav.admin.fareRules", href: "/admin/fare-rules", icon: "scale" },
+  { label: "Fare overrides", labelKey: "nav.admin.fareOverrides", href: "/admin/fare-overrides", icon: "trending-up" },
+  { label: "Disputes", labelKey: "nav.admin.disputes", href: "/admin/disputes", icon: "alert-triangle" },
+  { label: "Users", labelKey: "nav.admin.users", href: "/admin/users", icon: "users" },
+  { label: "Payouts", labelKey: "nav.admin.payouts", href: "/admin/payouts", icon: "wallet" },
+  { label: "Audit logs", labelKey: "nav.admin.audit", href: "/admin/audit-logs", icon: "history" },
+  { label: "Templates", labelKey: "nav.admin.templates", href: "/admin/notification-templates", icon: "mail" },
+  { label: "Risk alerts", labelKey: "nav.admin.risk", href: "/admin/risk-alerts", icon: "shield-alert" },
 ];
 
 export const parishes = [

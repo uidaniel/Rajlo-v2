@@ -7,6 +7,7 @@ import { FadeUp } from "@/components/anim";
 import { RateDialog } from "@/components/rate-dialog";
 import { RideCardSkeleton } from "@/components/skeleton";
 import { formatJMD } from "@/lib/jamaica";
+import { useT } from "@/lib/i18n";
 
 /**
  * Rider trip history. Tabbed view of past + ongoing rides:
@@ -60,6 +61,7 @@ const TABS: { key: Tab; label: string; statusParam: string }[] = [
 const PAGE_SIZE = 20;
 
 export default function RiderHistoryPage() {
+  const { t } = useT();
   const [tab, setTab] = useState<Tab>("all");
   const [rowsByTab, setRowsByTab] = useState<Record<Tab, HistoryRow[]>>({
     all: [],
@@ -157,14 +159,16 @@ export default function RiderHistoryPage() {
       <FadeUp>
         <div>
           <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-            Trip history
+            {t("history.eyebrow", "Trip history")}
           </p>
           <h1 className="mt-1 text-3xl font-extrabold tracking-tight md:text-4xl">
-            Your past rides
+            {t("history.title", "Your past rides")}
           </h1>
           <p className="mt-1 text-sm text-muted">
-            Receipts, ratings, and re-booking — everything you&apos;ve done with
-            Rajlo.
+            {t(
+              "history.subtitle",
+              "Receipts, ratings, and re-booking — everything you've done with Rajlo.",
+            )}
           </p>
         </div>
       </FadeUp>
@@ -177,12 +181,12 @@ export default function RiderHistoryPage() {
       <FadeUp delay={0.04}>
         <div className="grid grid-cols-2 gap-3">
           <StatCard
-            label="Completed trips"
+            label={t("history.stat.completed", "Completed trips")}
             value={stats.tripsCompleted.toString()}
             icon="check-circle"
           />
           <StatCard
-            label="Total spent"
+            label={t("history.stat.spent", "Total spent")}
             value={formatJMD(stats.spent)}
             icon="trending-up"
             href="/rider/analytics"
@@ -541,6 +545,6 @@ const STATUS_BADGE: Record<RideStatus, { label: string; classes: string }> = {
   },
   cancelled: {
     label: "Cancelled",
-    classes: "bg-rajlo-black/10 text-rajlo-black",
+    classes: "bg-rajlo-black/10 text-foreground",
   },
 };

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
+import { useT } from "@/lib/i18n";
 
 /**
  * Rider help & support. The page is intentionally information-dense:
@@ -146,6 +147,7 @@ const QUICK_ACTIONS: QuickAction[] = [
 ];
 
 export default function RiderSupportPage() {
+  const { t } = useT();
   const [query, setQuery] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -180,14 +182,16 @@ export default function RiderSupportPage() {
           />
           <div className="relative">
             <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-              Help centre
+              {t("support.eyebrow", "Help centre")}
             </p>
             <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-              How can we help?
+              {t("support.title", "How can we help?")}
             </h1>
             <p className="mt-2 max-w-lg text-sm text-white/80">
-              Search the FAQ, or pick a quick action below to get straight to
-              the right place.
+              {t(
+                "support.subtitle",
+                "Search the FAQ, or pick a quick action below to get straight to the right place.",
+              )}
             </p>
 
             <div className="relative mt-5">
@@ -199,7 +203,7 @@ export default function RiderSupportPage() {
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Search help articles…"
+                placeholder={t("support.searchPlaceholder", "Search help articles…")}
                 className="w-full rounded-full bg-white py-3.5 pl-11 pr-4 text-sm text-foreground outline-none ring-2 ring-transparent transition-all placeholder:text-muted focus:ring-rajlo-red/40"
               />
             </div>

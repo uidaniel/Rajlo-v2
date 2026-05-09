@@ -12,6 +12,7 @@ import {
 } from "@/components/skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { formatJMD } from "@/lib/jamaica";
+import { useT } from "@/lib/i18n";
 
 /**
  * Rider home / dashboard. All sections are backed by real endpoints —
@@ -64,6 +65,7 @@ type RatingSummary = {
 };
 
 export default function RiderDashboardPage() {
+  const { t } = useT();
   const [firstName, setFirstName] = useState<string | null>(null);
   const [activeTrip, setActiveTrip] = useState<{
     ride: ActiveRideMini;
@@ -211,7 +213,9 @@ export default function RiderDashboardPage() {
     [history],
   );
 
-  const greeting = firstName ? `Hi, ${firstName}` : "Hey there";
+  const greeting = firstName
+    ? `${t("rider.home.eyebrow", "Welcome back")}, ${firstName}`
+    : t("rider.home.eyebrow", "Welcome back");
 
   return (
     <div className="space-y-6">
@@ -245,14 +249,13 @@ export default function RiderDashboardPage() {
               <span className="h-px flex-1 bg-white/15" />
             </div>
             <h1 className="mt-3 max-w-xl text-4xl font-extrabold leading-[1.05] tracking-tight md:text-5xl lg:text-6xl">
-              Where to{" "}
-              <span className="bg-gradient-to-r from-rajlo-red via-[#ff4d4d] to-rajlo-red bg-clip-text text-transparent">
-                today?
-              </span>
+              {t("rider.home.title", "Where to today?")}
             </h1>
             <p className="mt-3 max-w-md text-sm text-white/75 md:text-base">
-              Verified red-plate drivers, transparent fares, multi-stop trips —
-              tap once and ride.
+              {t(
+                "rider.home.subtitle",
+                "Verified red-plate drivers, transparent fares, multi-stop trips — tap once and ride.",
+              )}
             </p>
 
             <Link
@@ -266,7 +269,7 @@ export default function RiderDashboardPage() {
                 <span className="block text-[10px] font-bold uppercase tracking-wider text-muted">
                   Where to?
                 </span>
-                <span className="block truncate text-sm font-bold text-rajlo-black">
+                <span className="block truncate text-sm font-bold text-foreground">
                   Search a place, address, or landmark
                 </span>
               </span>
@@ -480,7 +483,7 @@ export default function RiderDashboardPage() {
                   <span
                     className={`grid h-10 w-10 shrink-0 place-items-center rounded-lg ${
                       r.status === "cancelled"
-                        ? "bg-rajlo-black/10 text-rajlo-black"
+                        ? "bg-rajlo-black/10 text-foreground"
                         : "bg-surface-soft text-muted group-hover:bg-primary-soft group-hover:text-rajlo-red"
                     }`}
                   >
@@ -609,7 +612,7 @@ export default function RiderDashboardPage() {
               <p className="mt-0.5 truncate text-sm font-extrabold tracking-tight md:text-base">
                 {unratedTrip.driverName} · {unratedTrip.dropoff.name}
               </p>
-              <p className="truncate text-xs text-rajlo-black/70">
+              <p className="truncate text-xs text-foreground/70">
                 Your feedback helps other riders pick the right driver.
               </p>
             </div>
@@ -640,7 +643,7 @@ export default function RiderDashboardPage() {
                 <p className="mt-0.5 text-sm font-extrabold tracking-tight md:text-base">
                   Match with a rider going your way
                 </p>
-                <p className="hidden text-xs text-rajlo-black/70 sm:block">
+                <p className="hidden text-xs text-foreground/70 sm:block">
                   Toggle &ldquo;Share this ride&rdquo; on your next booking
                 </p>
               </div>

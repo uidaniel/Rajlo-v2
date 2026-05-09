@@ -439,7 +439,7 @@ export default function RiderHistoryDetailPage({
               <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
                 Note from you
               </p>
-              <p className="mt-1 text-sm text-rajlo-black">{ride.notes}</p>
+              <p className="mt-1 text-sm text-foreground">{ride.notes}</p>
             </div>
           )}
         </div>

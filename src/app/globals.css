@@ -47,6 +47,14 @@
   --primary: var(--rajlo-red);
   --primary-soft: #fde8e7;
   --primary-hover: #d40100;
+
+  /* Logo letter + tagline colour for the *default* Logo variant.
+     Brand-black + muted-grey in light mode; pure white + soft white
+     in dark mode (defined in the [data-theme="dark"] block below) so
+     the wordmark + tagline stay legible on whatever surface the
+     header sits on. The "o" + arc keep their brand red regardless. */
+  --logo-letters: var(--rajlo-black);
+  --logo-tagline: var(--muted);
 }
 
 /*
@@ -69,6 +77,11 @@
   --primary: var(--rajlo-red);
   --primary-soft: #391010;
   --primary-hover: #ff2424;
+  /* Logo flips: white "Rajl" letters + clean white tagline in dark
+     mode. Pure white reads cleaner on dark surfaces than the muted
+     foreground tone we use for body copy. */
+  --logo-letters: #ffffff;
+  --logo-tagline: #ffffff;
 }
 
 /* When the user picks "system", we drop the data-theme attribute and
@@ -84,6 +97,8 @@
     --primary: var(--rajlo-red);
     --primary-soft: #391010;
     --primary-hover: #ff2424;
+    --logo-letters: #ffffff;
+    --logo-tagline: #ffffff;
   }
 }
 

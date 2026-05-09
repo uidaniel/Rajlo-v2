@@ -8,9 +8,14 @@ import { ArcWatermark } from "./arc-pattern";
 import { Icon, type IconName } from "./icons";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { clearSessionPolicy } from "@/lib/session-policy";
+import { useT } from "@/lib/i18n";
 
 type NavLink = {
   label: string;
+  /** Optional i18n key — when present, the label flips between English
+   *  and Patois based on the rider's language preference. Falls back
+   *  to the literal `label` if no translation exists. */
+  labelKey?: string;
   href: string;
   icon: IconName;
 };
@@ -54,6 +59,7 @@ export function MobileDrawer({
   const [profileLoading, setProfileLoading] = useState(true);
   const pathname = usePathname();
   const router = useRouter();
+  const { t } = useT();
 
   // Fetch the signed-in user's profile for the footer block. We do
   // two parallel fetches: one for name/email/role from the profiles
@@ -285,7 +291,11 @@ export function MobileDrawer({
                     >
                       <Icon name={item.icon} className="h-4 w-4" />
                     </span>
-                    <span className="flex-1 truncate">{item.label}</span>
+                    <span className="flex-1 truncate">
+                      {item.labelKey
+                        ? t(item.labelKey, item.label)
+                        : item.label}
+                    </span>
                     {active && (
                       <Icon
                         name="chevron-right"

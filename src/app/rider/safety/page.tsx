@@ -6,6 +6,7 @@ import { Icon, type IconName } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { Skeleton, ToggleRowsSkeleton } from "@/components/skeleton";
+import { useT } from "@/lib/i18n";
 
 /**
  * Rider safety dashboard. Trusted contacts are persisted via
@@ -66,6 +67,7 @@ const TOOLKIT_FEATURES: {
 ];
 
 export default function RiderSafetyPage() {
+  const { t } = useT();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [autoShare, setAutoShare] = useState<{
     enabled: boolean;
@@ -218,15 +220,16 @@ export default function RiderSafetyPage() {
           <div className="relative flex items-start justify-between gap-4">
             <div>
               <p className="font-secondary text-xs font-bold uppercase tracking-wider text-white/85">
-                Safety toolkit
+                {t("safety.eyebrow", "Safety toolkit")}
               </p>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-                You&apos;re in control
+                {t("safety.title", "You're in control")}
               </h1>
               <p className="mt-2 max-w-lg text-sm text-white/85">
-                Trusted contacts, live trip sharing, SOS, and a direct line to
-                Jamaica emergency services — every Rajlo trip ships with the
-                full toolkit.
+                {t(
+                  "safety.subtitle",
+                  "Trusted contacts, live trip sharing, SOS, and a direct line to Jamaica emergency services — every Rajlo trip ships with the full toolkit.",
+                )}
               </p>
             </div>
             <span

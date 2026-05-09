@@ -457,7 +457,7 @@ export function ChatSheet({
                   onClick={() => fileInputRef.current?.click()}
                   disabled={sending}
                   aria-label="Send a photo"
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-rajlo-black hover:bg-surface-soft disabled:opacity-50"
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground hover:bg-surface-soft disabled:opacity-50"
                 >
                   <Icon name="upload" className="h-5 w-5" />
                 </button>
@@ -552,9 +552,12 @@ function MessageBubble({ m, mine }: { m: ChatMessage; mine: boolean }) {
   });
 
   const align = mine ? "items-end self-end" : "items-start self-start";
+  // Their-side bubble: themable surface (`bg-surface`) so it darkens
+  // in dark mode instead of glaring bright white. My-side stays
+  // brand-red — that's the brand colour and reads on both themes.
   const bubbleColor = mine
     ? "bg-rajlo-red text-white"
-    : "bg-white text-rajlo-black border border-line";
+    : "bg-surface text-foreground border border-line";
 
   return (
     <li className={`flex max-w-[85%] flex-col ${align}`}>
@@ -635,7 +638,7 @@ function RecordingBar({
         type="button"
         onClick={onCancel}
         aria-label="Cancel recording"
-        className="grid h-9 w-9 place-items-center rounded-full text-rajlo-black hover:bg-white"
+        className="grid h-9 w-9 place-items-center rounded-full text-foreground hover:bg-surface"
       >
         <Icon name="x" className="h-4 w-4" />
       </button>

@@ -203,7 +203,7 @@ export default function RiderRequestPage() {
         <span className="rounded-full bg-rajlo-red px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white shadow-lg shadow-rajlo-red/30">
           Booking
         </span>
-        <span className="rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-bold text-rajlo-black shadow-md backdrop-blur">
+        <span className="rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-bold text-foreground shadow-md backdrop-blur">
           {allPoints.length === 0
             ? "Where are we going?"
             : allPoints.length < 2

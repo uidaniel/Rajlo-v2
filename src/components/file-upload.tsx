@@ -112,13 +112,13 @@ export function FileUpload({
             </>
           ) : file?.uploading ? (
             <>
-              <p className="truncate text-sm font-semibold text-rajlo-black">{file.name}</p>
+              <p className="truncate text-sm font-semibold text-foreground">{file.name}</p>
               <p className="text-xs text-muted">Uploading…</p>
             </>
           ) : file?.path ? (
             <>
               <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-semibold text-rajlo-black">{file.name}</p>
+                <p className="truncate text-sm font-semibold text-foreground">{file.name}</p>
                 {file.approved && (
                   <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                     <Icon name="check-circle" className="h-2.5 w-2.5" />
