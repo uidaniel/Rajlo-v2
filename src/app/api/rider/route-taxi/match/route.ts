@@ -202,6 +202,19 @@ export async function POST(request: Request) {
     .sort((a, b) => b.score - a.score || a.route.distance_km - b.route.distance_km)
     .slice(0, 3);
 
+  // Diagnostic log — visible in the dev server terminal. Helps debug
+  // "matcher returned nothing for an obvious corridor" reports by
+  // showing exactly what Google sent us vs. how we tokenised it.
+  console.log(
+    `[route-match] pickup="${pickupName}" dropoff="${dropoffName}" ` +
+      `pickupTokens=[${[...pickupTokens].join(",")}] ` +
+      `dropoffTokens=[${[...dropoffTokens].join(",")}] ` +
+      `routesScanned=${routes?.length ?? 0} candidates=${candidates.length} returned=${top.length}` +
+      (top.length > 0
+        ? ` topScore=${top[0].score.toFixed(2)} topRoute="${top[0].route.origin_name} → ${top[0].route.destination_name}"`
+        : ""),
+  );
+
   return NextResponse.json({
     matches: top.map((c) => ({
       route: {
@@ -226,10 +239,21 @@ function asString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
 
-/** Lowercase, split on word boundary, drop stopwords + short words. */
+/**
+ * Lowercase, normalise punctuation (hyphens, dashes, slashes, periods,
+ * apostrophes, parens — all become whitespace), split on whitespace,
+ * drop stopwords + short words.
+ *
+ * Aggressive normalisation matters here because Google sometimes
+ * returns "Half-Way Tree" with hyphens or "St. Andrew's" with a smart
+ * quote, while the TA seed has "Half Way Tree" / "St. Andrew" — we
+ * need both to tokenize the same way.
+ */
 function tokenize(s: string): Set<string> {
   const out = new Set<string>();
-  const lowered = s.toLowerCase().replace(/[.,/'’()]/g, " ");
+  const lowered = s
+    .toLowerCase()
+    .replace(/[.,/'’()\-–—_"`]/g, " ");
   for (const word of lowered.split(/\s+/)) {
     const w = word.trim();
     if (w.length < 3) continue;
