@@ -218,13 +218,20 @@ export default function RiderRequestPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pickup, dropoff, filledStops.length]);
 
-  const selectedMatch = useMemo(
+  // The match the rider would get IF they pick Route Taxi — drives
+  // the card render. Defaults to the top match the matcher returned;
+  // changes when the rider picks a different one from the sub-list.
+  const displayMatch = useMemo(
     () =>
-      mode === "route_taxi" && selectedRouteId
-        ? (matches ?? []).find((m) => m.route.id === selectedRouteId) ?? null
-        : null,
-    [mode, selectedRouteId, matches],
+      (matches ?? []).find((m) => m.route.id === selectedRouteId) ??
+      matches?.[0] ??
+      null,
+    [matches, selectedRouteId],
   );
+  // The match the rider has actually committed to — only non-null
+  // when they're in route_taxi mode. Drives the submit handler +
+  // action-bar fare/CTA.
+  const selectedMatch = mode === "route_taxi" ? displayMatch : null;
 
   const allPoints = useMemo(() => {
     const list: Place[] = [];
@@ -556,7 +563,7 @@ export default function RiderRequestPage() {
                 !matching &&
                 matches &&
                 matches.length > 0 &&
-                selectedMatch && (
+                displayMatch && (
                   <button
                     type="button"
                     onClick={() => setMode("route_taxi")}
@@ -582,16 +589,16 @@ export default function RiderRequestPage() {
                       </span>
                     </div>
                     <p className="text-base font-extrabold tracking-tight">
-                      {formatJMD(selectedMatch.fareJmd)}
+                      {formatJMD(displayMatch.fareJmd)}
                     </p>
                     <p className="text-[11px] leading-relaxed text-muted">
                       <span className="font-semibold text-foreground">
-                        {selectedMatch.direction === "reverse"
-                          ? `${selectedMatch.route.destination} → ${selectedMatch.route.origin}`
-                          : `${selectedMatch.route.origin} → ${selectedMatch.route.destination}`}
+                        {displayMatch.direction === "reverse"
+                          ? `${displayMatch.route.destination} → ${displayMatch.route.origin}`
+                          : `${displayMatch.route.origin} → ${displayMatch.route.destination}`}
                       </span>
                       <br />
-                      {selectedMatch.route.distanceKm.toFixed(1)} km · TA-regulated · single seat
+                      {displayMatch.route.distanceKm.toFixed(1)} km · TA-regulated · single seat
                     </p>
                   </button>
                 )}
