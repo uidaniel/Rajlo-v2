@@ -483,8 +483,10 @@ function VerificationDetailInner() {
       )}
 
       {loading && (
-        <div className="rounded-xl border border-line bg-surface px-4 py-3 text-sm text-muted">
-          Loading verification details…
+        <div className="space-y-3 rounded-xl border border-line bg-surface p-4">
+          <Skeleton className="h-3 w-40" rounded="md" />
+          <Skeleton className="h-4 w-2/3 max-w-md" rounded="md" />
+          <Skeleton className="h-3 w-1/2 max-w-sm" rounded="md" />
         </div>
       )}
 

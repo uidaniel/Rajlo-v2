@@ -4,6 +4,7 @@ import { use, useEffect, useState } from "react";
 import { Logo } from "@/components/logo";
 import { MapView } from "@/components/map-view";
 import { DriverVehicleCard } from "@/components/driver-vehicle-card";
+import { Skeleton } from "@/components/skeleton";
 import { useRidePosition } from "@/lib/use-ride-position";
 import { type Place } from "@/lib/jamaica";
 
@@ -113,11 +114,48 @@ export default function TripSharePage({
   );
 
   if (loading) {
+    // Skeleton mirrors the real shape: top bar, dark hero, map block,
+    // driver card, then the route list. Same vertical rhythm so the
+    // moment data lands the layout doesn't shift.
     return (
-      <div className="grid min-h-screen place-items-center bg-surface-soft">
-        <div className="flex items-center gap-3 text-sm font-semibold text-muted">
-          <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
-          Loading trip…
+      <div className="min-h-screen bg-surface-soft pb-12">
+        <header className="sticky top-0 z-10 border-b border-line bg-surface/95 px-2 py-3 backdrop-blur md:px-3">
+          <div className="mx-auto flex max-w-3xl items-center justify-between gap-3">
+            <Logo size="sm" tagline />
+            <Skeleton className="h-6 w-28" rounded="full" />
+          </div>
+        </header>
+        <div className="mx-auto max-w-3xl space-y-4 px-2 pt-6 md:px-3">
+          <div className="space-y-3 rounded-3xl bg-rajlo-black p-6 md:p-8">
+            <Skeleton variant="dark" className="h-3 w-32" rounded="full" />
+            <Skeleton variant="dark" className="h-9 w-3/4 max-w-md" rounded="lg" />
+            <Skeleton variant="dark" className="h-4 w-32" rounded="md" />
+          </div>
+          <Skeleton className="h-72 w-full md:h-96" rounded="3xl" />
+          <div className="space-y-3 rounded-2xl border border-line bg-surface p-5">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-12 w-12" rounded="full" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-4 w-2/3 max-w-48" rounded="md" />
+                <Skeleton className="h-3 w-1/2 max-w-32" rounded="md" />
+              </div>
+            </div>
+          </div>
+          <div className="space-y-4 rounded-2xl border border-line bg-surface p-5">
+            <div className="flex items-center justify-between">
+              <Skeleton className="h-3 w-16" rounded="md" />
+              <Skeleton className="h-5 w-32" rounded="full" />
+            </div>
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-8 w-8" rounded="full" />
+                <div className="flex-1 space-y-1.5">
+                  <Skeleton className="h-2.5 w-16" rounded="md" />
+                  <Skeleton className="h-4 w-2/3 max-w-64" rounded="md" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );

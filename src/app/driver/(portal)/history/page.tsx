@@ -203,22 +203,20 @@ export default function DriverHistoryPage() {
             />
           ))}
 
-          {hasMore && (
+          {/* Mirror the rider history pattern: while paginating, render
+             skeleton ride cards in the same shape as real rows so the
+             list flows continuously instead of swapping a text label
+             in and out of the button. */}
+          {loadingMore &&
+            [0, 1].map((i) => <RideCardSkeleton key={`more-${i}`} />)}
+          {hasMore && !loadingMore && (
             <div className="pt-2 text-center">
               <button
                 type="button"
                 onClick={loadMore}
-                disabled={loadingMore}
-                className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-bold text-foreground transition-colors hover:bg-surface-soft disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-bold text-foreground transition-colors hover:bg-surface-soft"
               >
-                {loadingMore ? (
-                  <>
-                    <span className="h-4 w-4 animate-spin rounded-full border-2 border-rajlo-red border-t-transparent" />
-                    Loading…
-                  </>
-                ) : (
-                  "Load more"
-                )}
+                Load more
               </button>
             </div>
           )}

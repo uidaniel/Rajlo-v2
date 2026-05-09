@@ -8,6 +8,7 @@ import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon, type IconName } from "@/components/icons";
 import { FadeUp } from "@/components/anim";
 import { FileUpload, type FileState } from "@/components/file-upload";
+import { Skeleton } from "@/components/skeleton";
 import { VehiclePicker } from "@/components/vehicle-picker";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { uploadDriverDocument, removeDriverDocument } from "@/lib/storage";
@@ -354,13 +355,29 @@ type ServerDriver = {
 };
 
 function LoadingScreen() {
+  // Match the onboarding wizard's real shape: top logo bar, hero with
+  // step indicator, then a tall card representing the active step's
+  // body. Same vertical rhythm as the live form so there's no jump
+  // when the real wizard mounts.
   return (
-    <div className="grid min-h-screen place-items-center bg-surface-soft">
-      <div className="flex flex-col items-center gap-4 text-center">
-        <span className="grid h-14 w-14 place-items-center rounded-full bg-rajlo-red/10">
-          <span className="h-6 w-6 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
-        </span>
-        <p className="text-sm font-semibold text-muted">Loading your application…</p>
+    <div className="min-h-screen bg-surface-soft">
+      <header className="border-b border-line bg-surface px-4 py-3 md:px-6">
+        <div className="mx-auto flex max-w-3xl items-center justify-between">
+          <Logo size="sm" tagline />
+          <Skeleton className="h-6 w-24" rounded="full" />
+        </div>
+      </header>
+      <div className="mx-auto max-w-3xl space-y-4 px-4 py-8 md:px-6">
+        <div className="space-y-3 rounded-3xl bg-rajlo-black p-7 md:p-9">
+          <Skeleton variant="dark" className="h-3 w-32" rounded="full" />
+          <Skeleton variant="dark" className="h-9 w-2/3 max-w-md" rounded="lg" />
+          <Skeleton variant="dark" className="h-4 w-3/4 max-w-md" rounded="md" />
+        </div>
+        <Skeleton className="h-72 w-full" rounded="2xl" />
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-10 w-24" rounded="full" />
+          <Skeleton className="h-10 w-32" rounded="full" />
+        </div>
       </div>
     </div>
   );

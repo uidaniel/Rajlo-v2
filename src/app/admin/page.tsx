@@ -189,9 +189,11 @@ export default function AdminOperationsPage() {
                 />
               </div>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-                {loading
-                  ? "Loading the platform…"
-                  : `${stats?.rides.active ?? 0} active ride${stats?.rides.active === 1 ? "" : "s"} · ${stats?.drivers.online ?? 0} driver${stats?.drivers.online === 1 ? "" : "s"} online`}
+                {loading ? (
+                  <Skeleton variant="dark" className="h-9 w-80 max-w-full" rounded="lg" />
+                ) : (
+                  `${stats?.rides.active ?? 0} active ride${stats?.rides.active === 1 ? "" : "s"} · ${stats?.drivers.online ?? 0} driver${stats?.drivers.online === 1 ? "" : "s"} online`
+                )}
               </h1>
               <p className="mt-2 max-w-2xl text-sm text-white/75 md:text-base">
                 Everything happening across the platform — every booking,

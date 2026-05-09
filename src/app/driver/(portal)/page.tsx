@@ -330,19 +330,23 @@ export default function DriverHomePage() {
                   Driver dashboard
                 </p>
                 <h1 className="mt-2 text-3xl font-extrabold leading-[1.1] tracking-tight md:text-4xl">
-                  {online === null
-                    ? "Loading your day…"
-                    : online
-                      ? `Hi ${firstName ?? "there"}, you're live.`
-                      : `Hi ${firstName ?? "there"}.`}
+                  {online === null ? (
+                    <Skeleton variant="dark" className="h-9 w-64 max-w-full" rounded="lg" />
+                  ) : online ? (
+                    `Hi ${firstName ?? "there"}, you're live.`
+                  ) : (
+                    `Hi ${firstName ?? "there"}.`
+                  )}
                 </h1>
-                <p className="mt-1 text-sm text-white/75">
-                  {online === null
-                    ? "We're checking your last status."
-                    : online
+                {online === null ? (
+                  <Skeleton variant="dark" className="mt-2 h-3 w-56 max-w-full" rounded="md" />
+                ) : (
+                  <p className="mt-1 text-sm text-white/75">
+                    {online
                       ? "Incoming ride requests show up below."
                       : "Toggle online when you're ready to take rides."}
-                </p>
+                  </p>
+                )}
               </div>
               <button
                 type="button"

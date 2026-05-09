@@ -6,6 +6,7 @@ import { Icon } from "@/components/icons";
 import { FadeUp } from "@/components/anim";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { MapView } from "@/components/map-view";
+import { Skeleton } from "@/components/skeleton";
 import { loadGoogleMaps } from "@/lib/google-maps";
 import { useFleet } from "@/lib/use-fleet";
 import {
@@ -184,12 +185,18 @@ export default function RiderRequestPage() {
   if (bootstrapping) {
     // Hide the form while the active-ride check is in flight. Without
     // this the form briefly flashes before the redirect kicks in.
+    // Skeleton mirrors the booking form's basic shape (header strip,
+    // map block, two waypoint slots) so there's no layout jump when
+    // the real form mounts.
     return (
-      <div className="grid place-items-center px-4 py-16">
-        <div className="flex items-center gap-3 text-sm font-semibold text-muted">
-          <span className="h-5 w-5 animate-spin rounded-full border-[2.5px] border-rajlo-red border-t-transparent" />
-          Loading…
+      <div className="mx-auto max-w-3xl space-y-4 px-4 py-8">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-6 w-24" rounded="full" />
+          <Skeleton className="h-4 w-32" rounded="md" />
         </div>
+        <Skeleton className="h-56 w-full" rounded="3xl" />
+        <Skeleton className="h-14 w-full" rounded="2xl" />
+        <Skeleton className="h-14 w-full" rounded="2xl" />
       </div>
     );
   }

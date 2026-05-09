@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Icon, type IconName } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
-import { ToggleRowsSkeleton } from "@/components/skeleton";
+import { Skeleton, ToggleRowsSkeleton } from "@/components/skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { usePush } from "@/lib/use-push";
 import { clearSessionPolicy } from "@/lib/session-policy";
@@ -289,12 +289,21 @@ export default function RiderSettingsPage() {
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-base font-extrabold tracking-tight">
-                {profile?.fullName ?? "Loading…"}
-              </p>
-              <p className="truncate text-xs text-muted">
-                {profile?.email ?? ""}
-              </p>
+              {profile ? (
+                <>
+                  <p className="truncate text-base font-extrabold tracking-tight">
+                    {profile.fullName}
+                  </p>
+                  <p className="truncate text-xs text-muted">
+                    {profile.email ?? ""}
+                  </p>
+                </>
+              ) : (
+                <div className="space-y-1.5">
+                  <Skeleton className="h-4 w-32" rounded="md" />
+                  <Skeleton className="h-3 w-48" rounded="md" />
+                </div>
+              )}
               <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700">
                 <Icon name="shield-check" className="h-3 w-3" />
                 Verified email

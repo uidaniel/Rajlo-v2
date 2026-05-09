@@ -7,6 +7,7 @@ import {
   useState,
 } from "react";
 import { Icon } from "./icons";
+import { Skeleton } from "./skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 
 /**
@@ -399,10 +400,26 @@ export function ChatSheet({
           className="relative flex-1 overflow-y-auto bg-surface-soft px-4 py-4"
         >
           {loading ? (
-            <div className="grid h-full place-items-center">
-              <p className="text-xs font-semibold text-muted">
-                Loading messages…
-              </p>
+            // Stagger left/right bubbles to mirror real chat shape so
+            // the layout doesn't jump when messages arrive.
+            <div className="space-y-3">
+              {[
+                { side: "left", w: "w-2/3" },
+                { side: "right", w: "w-1/2" },
+                { side: "left", w: "w-1/2" },
+                { side: "right", w: "w-3/4" },
+                { side: "left", w: "w-1/3" },
+              ].map((b, i) => (
+                <div
+                  key={i}
+                  className={`flex ${b.side === "right" ? "justify-end" : "justify-start"}`}
+                >
+                  <Skeleton
+                    className={`h-10 ${b.w} max-w-xs`}
+                    rounded="2xl"
+                  />
+                </div>
+              ))}
             </div>
           ) : messages.length === 0 ? (
             <div className="grid h-full place-items-center text-center">
