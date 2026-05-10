@@ -386,9 +386,10 @@ export default function DriverEarningsPage() {
             </div>
             <div className="space-y-2">
               {recentCompleted.map((r) => (
-                <div
+                <Link
                   key={r.id}
-                  className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4"
+                  href={`/driver/history#trip-${r.id}`}
+                  className="flex items-center gap-3 rounded-2xl border border-line bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-rajlo-red/30 hover:shadow-md"
                 >
                   <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-emerald-100 text-emerald-700">
                     <Icon name="check-circle" className="h-5 w-5" />
@@ -420,7 +421,7 @@ export default function DriverEarningsPage() {
                   <p className="shrink-0 text-sm font-extrabold text-rajlo-red">
                     {formatJMD(r.fareJMD)}
                   </p>
-                </div>
+                </Link>
               ))}
             </div>
           </div>

@@ -179,7 +179,7 @@ export default function DriverRatingsPage() {
                     <span className="inline-flex w-10 shrink-0 items-center gap-1 text-xs font-bold text-foreground">
                       {star}
                       <Icon
-                        name="star"
+                        name="star-solid"
                         className="h-3 w-3 text-rajlo-red"
                       />
                     </span>
@@ -206,7 +206,7 @@ export default function DriverRatingsPage() {
           <div className="space-y-3">
             <div className="flex items-center gap-2">
               <span className="grid h-7 w-7 place-items-center rounded-lg bg-primary-soft text-rajlo-red">
-                <Icon name="star" className="h-3.5 w-3.5" />
+                <Icon name="star-solid" className="h-3.5 w-3.5" />
               </span>
               <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
                 Recent reviews
@@ -224,7 +224,7 @@ export default function DriverRatingsPage() {
         <FadeUp delay={0.06}>
           <div className="rounded-3xl border border-dashed border-line bg-surface-soft p-10 text-center">
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-primary-soft text-rajlo-red">
-              <Icon name="star" className="h-5 w-5" />
+              <Icon name="star-solid" className="h-5 w-5" />
             </span>
             <p className="mt-3 text-sm font-extrabold tracking-tight">
               Your first review is coming
@@ -277,7 +277,7 @@ function ReviewCard({ r }: { r: RecentRating }) {
             {Array.from({ length: 5 }).map((_, i) => (
               <Icon
                 key={i}
-                name="star"
+                name="star-solid"
                 className={`h-4 w-4 ${
                   i < r.stars ? "text-rajlo-red" : "text-line"
                 }`}

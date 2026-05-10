@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { MapView } from "@/components/map-view";
 import { HailChatSheet } from "@/components/hail-chat-sheet";
-import type { Place } from "@/lib/jamaica";
+import { nearestParish, type Place } from "@/lib/jamaica";
 import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp, Stagger, StaggerItem } from "@/components/anim";
@@ -404,6 +404,11 @@ function StartSessionPicker({
               />
             </label>
 
+            {/* "Use my location" — uses browser GPS to pick the
+               nearest parish and pre-filter routes to corridors the
+               driver could realistically run from where they are. */}
+            <UseMyLocationButton onParishDetected={(p) => setParishFilter(p)} />
+
             {parishes.length > 0 && (
               <div className="-mx-1 flex flex-wrap gap-1.5">
                 {parishes.map((p) => (
@@ -709,6 +714,82 @@ function RiderBadge({
   );
 }
 
+/* ════════════════════ Use my location button ════════════════════
+ * Browser geolocation → nearest parish lookup → set the parish
+ * filter so the route list collapses to corridors the driver could
+ * realistically start from where they are. Silent failures (denied
+ * permission, no GPS) just leave the filter alone.
+ */
+function UseMyLocationButton({
+  onParishDetected,
+}: {
+  onParishDetected: (parish: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [detected, setDetected] = useState<string | null>(null);
+
+  const handle = () => {
+    if (typeof navigator === "undefined" || !navigator.geolocation) {
+      setError("Location isn't available on this browser.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const parish = nearestParish({
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude,
+        });
+        setBusy(false);
+        if (parish) {
+          setDetected(parish);
+          onParishDetected(parish);
+        } else {
+          setError(
+            "Couldn't tell which parish you're in. Try the chips below.",
+          );
+        }
+      },
+      () => {
+        setBusy(false);
+        setError("Location permission denied.");
+      },
+      { enableHighAccuracy: false, maximumAge: 30_000, timeout: 8_000 },
+    );
+  };
+
+  return (
+    <div className="space-y-1">
+      <button
+        type="button"
+        onClick={handle}
+        disabled={busy}
+        className="inline-flex items-center gap-2 rounded-full border border-rajlo-red/40 bg-primary-soft px-4 py-2 text-xs font-bold text-rajlo-red transition-all hover:border-rajlo-red disabled:opacity-50"
+      >
+        {busy ? (
+          <>
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-rajlo-red border-t-transparent" />
+            Locating…
+          </>
+        ) : (
+          <>
+            <Icon name="map-pin" className="h-3.5 w-3.5" />
+            Suggest routes near me
+          </>
+        )}
+      </button>
+      {detected && !error && (
+        <p className="text-[11px] text-emerald-700">
+          Showing corridors in <span className="font-bold">{detected}</span>.
+        </p>
+      )}
+      {error && <p className="text-[11px] text-rajlo-red">{error}</p>}
+    </div>
+  );
+}
+
 /** Stamp a hail's lat/lng + name into the Place shape MapView wants. */
 function hailToPlace(name: string, lat: number, lng: number): Place {
   return {
@@ -959,8 +1040,8 @@ function ActiveSessionMonitor({
                       }
                     />
                   )}
-                  <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
+                  <div className="mt-3 space-y-3 sm:flex sm:flex-wrap sm:items-start sm:justify-between sm:gap-3 sm:space-y-0">
+                    <div className="min-w-0 sm:flex-1">
                       <p className="text-sm font-bold text-emerald-900">
                         {h.pickup} → {h.dropoff}
                       </p>
@@ -968,12 +1049,12 @@ function ActiveSessionMonitor({
                         {h.distanceKm.toFixed(1)} km · {formatJMD(h.fareJmd)}
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => onTransition(h.id, "completed")}
                         disabled={isPending(h.id, "completed")}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-emerald-600/25 hover:-translate-y-0.5 hover:bg-emerald-700 disabled:opacity-50"
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-emerald-600/25 hover:-translate-y-0.5 hover:bg-emerald-700 disabled:opacity-50 sm:flex-none"
                       >
                         <Icon name="check-circle" className="h-3.5 w-3.5" />
                         {isPending(h.id, "completed")
@@ -984,7 +1065,7 @@ function ActiveSessionMonitor({
                         type="button"
                         onClick={() => onTransition(h.id, "cancelled")}
                         disabled={isPending(h.id, "cancelled")}
-                        className="rounded-full border border-emerald-700/30 bg-white px-3 py-2 text-xs font-bold text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
+                        className="rounded-full border border-emerald-700/30 bg-white px-4 py-2.5 text-xs font-bold text-emerald-900 hover:bg-emerald-100 disabled:opacity-50"
                       >
                         Cancel
                       </button>
@@ -1026,8 +1107,8 @@ function ActiveSessionMonitor({
                       }
                     />
                   )}
-                  <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
+                  <div className="mt-3 space-y-3 sm:flex sm:flex-wrap sm:items-start sm:justify-between sm:gap-3 sm:space-y-0">
+                    <div className="min-w-0 sm:flex-1">
                       <p className="text-sm font-bold text-amber-900">
                         Pick up at {h.pickup}
                       </p>
@@ -1036,13 +1117,13 @@ function ActiveSessionMonitor({
                         {formatJMD(h.fareJmd)}
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => onTransition(h.id, "picked_up")}
                         disabled={isPending(h.id, "picked_up") || seatsFull}
                         title={seatsFull ? "Vehicle full" : undefined}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-amber-600 px-4 py-2 text-xs font-bold text-white shadow-md shadow-amber-600/25 hover:-translate-y-0.5 hover:bg-amber-700 disabled:opacity-50 disabled:hover:-translate-y-0"
+                        className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-amber-600 px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-amber-600/25 hover:-translate-y-0.5 hover:bg-amber-700 disabled:opacity-50 disabled:hover:-translate-y-0 sm:flex-none"
                       >
                         <Icon name="check-circle" className="h-3.5 w-3.5" />
                         {isPending(h.id, "picked_up")
@@ -1053,7 +1134,7 @@ function ActiveSessionMonitor({
                         type="button"
                         onClick={() => onTransition(h.id, "cancelled")}
                         disabled={isPending(h.id, "cancelled")}
-                        className="rounded-full border border-amber-700/30 bg-white px-3 py-2 text-xs font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
+                        className="rounded-full border border-amber-700/30 bg-white px-4 py-2.5 text-xs font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-50"
                       >
                         Cancel
                       </button>

@@ -286,7 +286,7 @@ export default function AdminAnalyticsPage() {
       {/* Heatmap + ratings */}
       <div className="grid gap-5 lg:grid-cols-3">
         <FadeUp delay={0.1}>
-          <div className="rounded-2xl border border-line bg-surface p-5 lg:col-span-2">
+          <div className="overflow-hidden rounded-2xl border border-line bg-surface p-5 lg:col-span-2">
             <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
               When rides happen
             </p>
@@ -294,13 +294,18 @@ export default function AdminAnalyticsPage() {
             {loading ? (
               <Skeleton className="h-48 w-full" rounded="xl" />
             ) : data ? (
-              <Heatmap matrix={data.heatmap} caption="Darker cells = busier hours" />
+              // Heatmap is 24×7 cells — too wide for phone viewports.
+              // Wrap in a horizontal scroller so the card itself stays
+              // inside its grid column.
+              <div className="-mx-5 overflow-x-auto px-5">
+                <Heatmap matrix={data.heatmap} caption="Darker cells = busier hours" />
+              </div>
             ) : null}
           </div>
         </FadeUp>
 
         <FadeUp delay={0.12}>
-          <div className="rounded-2xl border border-line bg-surface p-5">
+          <div className="overflow-hidden rounded-2xl border border-line bg-surface p-5">
             <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
               Rating distribution
             </p>

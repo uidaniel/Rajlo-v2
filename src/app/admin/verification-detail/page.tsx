@@ -424,7 +424,7 @@ function VerificationDetailInner() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl space-y-5 px-2 py-6 md:px-3 md:py-8">
+    <div className="mx-auto max-w-6xl space-y-5 overflow-x-hidden px-2 py-6 md:px-3 md:py-8">
       {/* ─── Back to queue ─── */}
       <Link
         href="/admin/verification-queue"

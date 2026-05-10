@@ -6,6 +6,12 @@ import { Icon, type IconName } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { FARE_CONFIG, estimateFare, formatJMD } from "@/lib/jamaica";
+import {
+  calculateRouteFare,
+  calculateConcessionFare,
+  ROUTE_TAXI_BASE_RATE_JMD,
+  ROUTE_TAXI_RATE_PER_KM_JMD,
+} from "@/lib/fare-engine";
 
 /**
  * Rider fare-breakdown explainer. Doubles as a calculator —
@@ -18,10 +24,14 @@ import { FARE_CONFIG, estimateFare, formatJMD } from "@/lib/jamaica";
  */
 
 export default function RiderFareBreakdownPage() {
+  // Mode tab — private ride uses the metered estimator; route taxi
+  // uses the TA fare engine ($113 + km × $7, round to nearest $10).
+  const [mode, setMode] = useState<"private" | "route_taxi">("private");
   const [distanceKm, setDistanceKm] = useState(8);
   const [stops, setStops] = useState(0);
   const [seats, setSeats] = useState(1);
   const [carpool, setCarpool] = useState(false);
+  const [concession, setConcession] = useState(false);
 
   // Manufacture a synthetic point list that haversine'd would equal
   // the slider distance. Two points at the right great-circle gap
@@ -77,12 +87,44 @@ export default function RiderFareBreakdownPage() {
         </div>
       </FadeUp>
 
+      {/* Mode tabs — let the rider switch between Private Ride
+         (metered, multi-stop) and Route Taxi (TA-regulated single-leg)
+         estimators without leaving the page. */}
+      <FadeUp delay={0.05}>
+        <div className="inline-flex rounded-full border border-line bg-surface p-1 text-xs font-bold">
+          <button
+            type="button"
+            onClick={() => setMode("private")}
+            className={`rounded-full px-4 py-2 transition-colors ${
+              mode === "private"
+                ? "bg-rajlo-red text-white shadow-sm"
+                : "text-muted hover:text-foreground"
+            }`}
+          >
+            Private Ride
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("route_taxi")}
+            className={`rounded-full px-4 py-2 transition-colors ${
+              mode === "route_taxi"
+                ? "bg-rajlo-red text-white shadow-sm"
+                : "text-muted hover:text-foreground"
+            }`}
+          >
+            Route Taxi
+          </button>
+        </div>
+      </FadeUp>
+
       {/* Calculator */}
       <FadeUp delay={0.06}>
         <div className="overflow-hidden rounded-3xl border border-line bg-surface shadow-lg shadow-rajlo-red/[0.04]">
+          {mode === "private" ? (
+          <>
           <div className="bg-surface-soft px-6 py-5">
             <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
-              Estimated fare
+              Estimated fare · Private Ride
             </p>
             <div className="mt-1 flex items-baseline gap-3">
               <p className="text-4xl font-extrabold tracking-tight text-rajlo-red md:text-5xl">
@@ -191,10 +233,21 @@ export default function RiderFareBreakdownPage() {
               </span>
             </button>
           </div>
+          </>
+          ) : (
+          <RouteTaxiCalculator
+            distanceKm={distanceKm}
+            setDistanceKm={setDistanceKm}
+            concession={concession}
+            setConcession={setConcession}
+          />
+          )}
         </div>
       </FadeUp>
 
-      {/* Live breakdown */}
+      {/* Live breakdown (private only — route taxi has the formula
+         inline in its own panel above) */}
+      {mode === "private" && (
       <FadeUp delay={0.1}>
         <div className="rounded-2xl border border-line bg-surface p-5">
           <div className="mb-4 flex items-center gap-2">
@@ -233,8 +286,11 @@ export default function RiderFareBreakdownPage() {
           </p>
         </div>
       </FadeUp>
+      )}
 
-      {/* Components */}
+      {/* Components — private-only; route taxi has the formula in
+         the calculator panel. */}
+      {mode === "private" && (
       <FadeUp delay={0.14}>
         <Section title="What goes into a fare" icon="calculator">
           <RuleRow
@@ -264,6 +320,7 @@ export default function RiderFareBreakdownPage() {
           />
         </Section>
       </FadeUp>
+      )}
 
       {/* What's NOT charged */}
       <FadeUp delay={0.18}>
@@ -448,5 +505,112 @@ function NoChargeRow({
         <p className="mt-0.5 text-xs text-muted">{description}</p>
       </div>
     </div>
+  );
+}
+
+/* ════════════════════ Route Taxi calculator ════════════════════
+ * TA-regulated estimator: $113 base + (km × $7), rounded to nearest
+ * $10. Single-leg, single-seat. Concession toggle for the half-fare
+ * categories TA recognises (children, students, seniors, disabled).
+ */
+function RouteTaxiCalculator({
+  distanceKm,
+  setDistanceKm,
+  concession,
+  setConcession,
+}: {
+  distanceKm: number;
+  setDistanceKm: (v: number) => void;
+  concession: boolean;
+  setConcession: (v: boolean) => void;
+}) {
+  const fullFare = calculateRouteFare(distanceKm);
+  const concessionFare = calculateConcessionFare(distanceKm);
+  const displayed = concession ? concessionFare : fullFare;
+  const raw =
+    ROUTE_TAXI_BASE_RATE_JMD + distanceKm * ROUTE_TAXI_RATE_PER_KM_JMD;
+  const rawLabel = formatJMD(Math.round(raw));
+
+  return (
+    <>
+      <div className="bg-surface-soft px-6 py-5">
+        <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-muted">
+          Estimated fare · Route Taxi
+        </p>
+        <div className="mt-1 flex items-baseline gap-3">
+          <p className="text-4xl font-extrabold tracking-tight text-rajlo-red md:text-5xl">
+            {formatJMD(displayed)}
+          </p>
+          {concession && (
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-bold text-emerald-700">
+              Half-fare · save {formatJMD(fullFare - concessionFare)}
+            </span>
+          )}
+        </div>
+        <p className="mt-1 text-xs text-muted">
+          {distanceKm.toFixed(1)} km · TA-regulated route fare
+        </p>
+      </div>
+
+      <div className="space-y-6 px-6 py-6">
+        <SliderRow
+          label="Distance"
+          value={`${distanceKm.toFixed(1)} km`}
+          min={1}
+          max={60}
+          step={0.5}
+          valueNumber={distanceKm}
+          onChange={setDistanceKm}
+        />
+
+        <button
+          type="button"
+          onClick={() => setConcession(!concession)}
+          className={`flex w-full items-center gap-3 rounded-2xl border p-4 text-left transition-all ${
+            concession
+              ? "border-emerald-400 bg-emerald-50 shadow-md shadow-emerald-200/50"
+              : "border-line bg-surface hover:border-emerald-300"
+          }`}
+        >
+          <span
+            className={`grid h-10 w-10 place-items-center rounded-xl ${
+              concession
+                ? "bg-emerald-600 text-white"
+                : "bg-emerald-50 text-emerald-700"
+            }`}
+          >
+            <Icon name="check-circle" className="h-5 w-5" />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-sm font-extrabold tracking-tight">
+              I qualify for half-fare
+            </span>
+            <span className="mt-0.5 block text-xs text-muted">
+              Children, students in uniform, seniors, or physically disabled.
+              TA-regulated.
+            </span>
+          </span>
+          <span
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
+              concession ? "bg-emerald-600" : "bg-line"
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-all ${
+                concession ? "translate-x-5" : "translate-x-0.5"
+              }`}
+            />
+          </span>
+        </button>
+
+        <div className="rounded-xl bg-surface-soft px-4 py-3 text-[11px] text-muted">
+          Formula: <span className="font-mono">JMD ${ROUTE_TAXI_BASE_RATE_JMD} + (km × ${ROUTE_TAXI_RATE_PER_KM_JMD})</span>
+          {" → "}
+          <span className="font-mono">{rawLabel}</span>
+          {" "}rounded to nearest $10 ={" "}
+          <span className="font-bold text-foreground">{formatJMD(fullFare)}</span>.
+        </div>
+      </div>
+    </>
   );
 }

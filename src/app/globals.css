@@ -254,3 +254,31 @@ body {
   user-select: none;
   opacity: 0.06;
 }
+
+/* Deep-link highlight — used by /driver/history#trip-X coming in
+   from the earnings page so the linked card is visually distinct on
+   arrival. Browser auto-scrolls to the matching id; the :target rule
+   gives it a red border + soft glow that fades after a few seconds. */
+.rajlo-deep-link-target:target {
+  border-color: var(--color-rajlo-red, #f10100);
+  box-shadow: 0 8px 24px -12px color-mix(in oklab, var(--color-rajlo-red, #f10100) 35%, transparent);
+  animation: rajlo-deep-link-pulse 2.4s ease-out 2;
+}
+
+@keyframes rajlo-deep-link-pulse {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-2px); }
+}
+
+/* iOS Safari zooms the viewport when an input with font-size < 16px
+   gets focus — disorienting and breaks layout. Force every form
+   control to at least 16px on small screens so focus stays put on
+   iPhones. Tailwind classes that explicitly set a smaller font on
+   inputs still win via specificity. */
+@media (max-width: 768px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}

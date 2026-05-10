@@ -262,7 +262,10 @@ function DriverHistoryCard({
   const cancelled = row.status === "cancelled";
 
   return (
-    <div className="rounded-2xl border border-line bg-surface p-5">
+    <div
+      id={`trip-${row.id}`}
+      className="rajlo-deep-link-target scroll-mt-6 rounded-2xl border border-line bg-surface p-5"
+    >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

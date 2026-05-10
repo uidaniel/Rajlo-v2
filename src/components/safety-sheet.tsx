@@ -27,7 +27,10 @@ export function SafetySheet({
   livePosition: { lat: number; lng: number } | null;
   onClose: () => void;
 }) {
-  const [submitting, setSubmitting] = useState(false);
+  // Each action gets its own loading flag — sharing the trip should
+  // never put the SOS button in a "Sending…" state (or vice versa).
+  const [sosBusy, setSosBusy] = useState(false);
+  const [shareBusy, setShareBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submittedKind, setSubmittedKind] = useState<"sos" | "flag" | null>(
     null,
@@ -36,7 +39,7 @@ export function SafetySheet({
   const [copied, setCopied] = useState(false);
 
   const submitSafety = async (kind: "sos" | "flag", message?: string) => {
-    setSubmitting(true);
+    setSosBusy(true);
     setError(null);
     try {
       const res = await fetch(`/api/rider/rides/${rideId}/sos`, {
@@ -57,12 +60,12 @@ export function SafetySheet({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't send alert.");
     } finally {
-      setSubmitting(false);
+      setSosBusy(false);
     }
   };
 
   const generateShare = async () => {
-    setSubmitting(true);
+    setShareBusy(true);
     setError(null);
     try {
       const res = await fetch(`/api/rider/rides/${rideId}/share`, {
@@ -79,7 +82,7 @@ export function SafetySheet({
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't generate link.");
     } finally {
-      setSubmitting(false);
+      setShareBusy(false);
     }
   };
 
@@ -172,7 +175,7 @@ export function SafetySheet({
           {/* SOS — alerts Rajlo ops. */}
           <button
             type="button"
-            disabled={submitting || submittedKind === "sos"}
+            disabled={sosBusy || submittedKind === "sos"}
             onClick={() => submitSafety("sos")}
             className="group flex w-full items-center gap-4 rounded-2xl border border-rajlo-red/30 bg-primary-soft p-5 text-left transition-all hover:-translate-y-0.5 hover:border-rajlo-red disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
           >
@@ -188,7 +191,7 @@ export function SafetySheet({
                 call you back within minutes.
               </p>
             </div>
-            {submitting && submittedKind !== "sos" ? (
+            {sosBusy ? (
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-rajlo-red border-t-transparent" />
             ) : (
               <Icon
@@ -202,7 +205,7 @@ export function SafetySheet({
           {!shareUrl ? (
             <button
               type="button"
-              disabled={submitting}
+              disabled={shareBusy}
               onClick={generateShare}
               className="group flex w-full items-center gap-4 rounded-2xl border border-line bg-surface p-5 text-left transition-all hover:-translate-y-0.5 hover:border-rajlo-red/30 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
             >
@@ -218,10 +221,14 @@ export function SafetySheet({
                   no Rajlo account needed.
                 </p>
               </div>
-              <Icon
-                name="arrow-right"
-                className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-rajlo-red"
-              />
+              {shareBusy ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-rajlo-red border-t-transparent" />
+              ) : (
+                <Icon
+                  name="arrow-right"
+                  className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-rajlo-red"
+                />
+              )}
             </button>
           ) : (
             <ShareLinkPanel

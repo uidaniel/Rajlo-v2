@@ -190,6 +190,16 @@ export async function POST(request: Request) {
     event: "Driver resubmitted documents after rejection (focused flow)",
   });
 
+  // Auto-clear all unread "document expired / expiring / rejected"
+  // notifications now that the driver has resubmitted everything.
+  // Sweeping all unread is fine here — the focused flow is itself a
+  // bulk action and the driver explicitly addressed the flagged docs.
+  await supabase
+    .from("driver_notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("driver_id", user.id)
+    .is("read_at", null);
+
   return NextResponse.json({
     ok: true,
     source: "supabase",

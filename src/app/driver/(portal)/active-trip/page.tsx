@@ -570,22 +570,29 @@ export default function DriverActiveTripPage() {
                     : ""}
                 </p>
               </div>
-              {/* Chat icon — loads + subscribes from this point on
-                 via the ChatLauncher's hook, so messages are already
-                 in memory when the driver taps it. Unread badge +
-                 toast appear automatically when the rider sends. */}
+              {/* Tap-to-call sits next to the chat icon so drivers
+                 can reach the rider with one tap ("I'm at your
+                 gate"). */}
+              {rider.phone && (
+                <a
+                  href={`tel:${rider.phone}`}
+                  aria-label={`Call ${rider.name}`}
+                  className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-emerald-50 text-emerald-700 shadow-md transition-all hover:-translate-y-0.5 hover:bg-emerald-100"
+                >
+                  <Icon name="phone" className="h-4 w-4" />
+                </a>
+              )}
+              {/* Chat icon — `soft` variant (NOT dark) because this
+                 card is on a white surface; the dark variant would be
+                 invisible white-on-white. */}
               <ChatLauncher
                 rideId={ride.id}
                 myRole="driver"
                 peerName={rider.name}
                 peerAvatarUrl={rider.avatarUrl ?? null}
-                /* Tap-to-call enabled both directions — drivers need
-                   to call ("I'm at your gate") just as much as
-                   riders do. Phone privacy can layer in via a proxy
-                   number later when we wire a masking provider. */
                 peerPhone={rider.phone ?? null}
                 rideActive
-                variant="dark"
+                variant="soft"
                 iconSize={44}
               />
             </div>

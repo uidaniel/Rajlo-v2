@@ -56,12 +56,12 @@ export const driverNav: NavItem[] = [
   { label: "TA verification", labelKey: "nav.driver.verification", href: "/driver/verification", icon: "shield-check" },
   { label: "Active trip", labelKey: "nav.driver.activeTrip", href: "/driver/active-trip", icon: "navigation" },
   { label: "Earnings", labelKey: "nav.driver.earnings", href: "/driver/earnings", icon: "trending-up" },
+  { label: "Wallet", labelKey: "nav.driver.wallet", href: "/driver/wallet", icon: "wallet" },
   { label: "History", labelKey: "nav.driver.history", href: "/driver/history", icon: "clock" },
   { label: "Ratings", labelKey: "nav.driver.ratings", href: "/driver/ratings", icon: "star" },
   { label: "Notifications", labelKey: "nav.driver.notifications", href: "/driver/notifications", icon: "bell" },
   { label: "Profile", labelKey: "nav.driver.profile", href: "/driver/profile", icon: "user" },
   { label: "Help & safety", labelKey: "nav.driver.support", href: "/driver/help-safety", icon: "shield" },
-  { label: "Wallet", labelKey: "nav.driver.wallet", href: "/driver/wallet", icon: "wallet" },
 ];
 
 // Admin nav stays English-only — admin is internal ops staff who all

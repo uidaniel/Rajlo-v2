@@ -209,6 +209,17 @@ export async function POST(
     } document: ${docMeta.label}`,
   });
 
+  // Auto-clear stale "document expired / expiring" notifications for
+  // this doc — the driver has now resubmitted, so dragging the old
+  // alert into their inbox is misleading. Notifications stay in the
+  // table for audit; we just mark them read so the badge clears.
+  await supabase
+    .from("driver_notifications")
+    .update({ read_at: new Date().toISOString() })
+    .eq("driver_id", user.id)
+    .is("read_at", null)
+    .or(`title.ilike.%${docMeta.label}%,body.ilike.%${docMeta.label}%`);
+
   return NextResponse.json({
     ok: true,
     docKey,

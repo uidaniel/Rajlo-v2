@@ -19,7 +19,7 @@ import {
   MapSkeleton,
   Skeleton,
 } from "@/components/skeleton";
-import { formatJMD, type Place } from "@/lib/jamaica";
+import { formatJMD, haversineKm, type Place } from "@/lib/jamaica";
 
 /**
  * Rider's live-trip view.
@@ -575,6 +575,9 @@ export default function RiderLiveTripPage() {
             // the countdown ring inside the overlay.
             searching={ride.status === "requested"}
             searchingUntil={ride.status === "requested" ? ride.expiresAt : null}
+            // Explicit so a future MapView default change doesn't
+            // accidentally let scrolls past the map pan it on phones.
+            lockable
             className="h-[55vh] min-h-80 w-full md:h-[60vh] md:max-h-160"
           />
         </div>
@@ -582,11 +585,6 @@ export default function RiderLiveTripPage() {
 
       {driver && (
         <FadeUp delay={0.1}>
-          {/* Chat icon sits next to the call icon inside the driver
-             card. The launcher loads + subscribes to messages from
-             this point on, so tapping the icon shows the conversation
-             instantly — no spinner. New messages bump an unread badge
-             on the icon and pop a transient toast. */}
           <DriverVehicleCard
             name={driver.name}
             avatarUrl={driver.avatarUrl}
@@ -610,6 +608,21 @@ export default function RiderLiveTripPage() {
               />
             }
           />
+          {/* Live "X km · Y min" pill — only renders while the driver
+             is heading to pickup AND we actually have a fresh GPS fix
+             from them. Distance is haversine (straight-line) which
+             under-estimates road distance ~1.3×; we apply that fudge
+             factor + an avg city speed to reach a useful ETA without
+             a Directions API round-trip on every ping. */}
+          {(ride.status === "accepted" || ride.status === "arrived") &&
+            driverPosition && (
+              <DriverEtaPill
+                driverLat={driverPosition.lat}
+                driverLng={driverPosition.lng}
+                pickupLat={ride.pickup.lat}
+                pickupLng={ride.pickup.lng}
+              />
+            )}
         </FadeUp>
       )}
 
@@ -1048,6 +1061,50 @@ function NoDriverFoundView({
           minutes.
         </p>
       </FadeUp>
+    </div>
+  );
+}
+
+/* ════════════════════ Driver ETA pill ════════════════════
+ * Renders straight-line distance + a generous-but-honest ETA
+ * derived from average city traffic. Re-computes whenever the
+ * driverPosition prop changes (every realtime ping). */
+function DriverEtaPill({
+  driverLat,
+  driverLng,
+  pickupLat,
+  pickupLng,
+}: {
+  driverLat: number;
+  driverLng: number;
+  pickupLat: number;
+  pickupLng: number;
+}) {
+  const distanceKm = haversineKm(
+    { lat: driverLat, lng: driverLng },
+    { lat: pickupLat, lng: pickupLng },
+  );
+  // Road-distance fudge (typical 1.3×) + 25 km/h average urban speed.
+  const roadKm = distanceKm * 1.3;
+  const etaMin = Math.max(1, Math.round((roadKm / 25) * 60));
+  const distLabel =
+    distanceKm < 1
+      ? `${Math.round(distanceKm * 1000)} m`
+      : `${distanceKm.toFixed(1)} km`;
+
+  return (
+    <div className="mt-3 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-emerald-600 text-white shadow-md shadow-emerald-600/25">
+        <Icon name="navigation" className="h-4 w-4" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-emerald-800">
+          Driver heading to you
+        </p>
+        <p className="mt-0.5 text-sm font-extrabold tracking-tight text-emerald-900">
+          {distLabel} away · ~{etaMin} min
+        </p>
+      </div>
     </div>
   );
 }

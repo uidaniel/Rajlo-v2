@@ -71,7 +71,11 @@ export function useLiveQuery<T>(
       latestUrlRef.current = url;
       if (isRefresh) setRefreshing(true);
       try {
-        const res = await fetch(url);
+        // `cache: "no-store"` defends against browser HTTP caches
+        // serving a stale response when the only thing that changed
+        // is a query string filter (e.g., admin Transactions range
+        // tab clicks). Polling endpoints should never be cached.
+        const res = await fetch(url, { cache: "no-store" });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as T;
         if (latestUrlRef.current !== url) return;

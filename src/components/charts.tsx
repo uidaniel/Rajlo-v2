@@ -45,7 +45,7 @@ export function MonthlyBars({ data }: { data: BarPoint[] }) {
         </p>
       </div>
 
-      <div className="flex items-end gap-1.5 sm:gap-2.5" role="img" aria-label="Monthly spend chart">
+      <div className="flex items-end gap-1.5 pb-8 sm:gap-2.5 sm:pb-0" role="img" aria-label="Monthly spend chart">
         {data.map((d, i) => {
           const isLast = i === lastIdx;
           const heightPct = max > 0 ? Math.max(2, (d.spendJMD / max) * 100) : 2;
@@ -81,8 +81,11 @@ export function MonthlyBars({ data }: { data: BarPoint[] }) {
                   aria-label={`${d.label}: ${d.spendJMD > 0 ? formatJMD(d.spendJMD) : "no trips"}`}
                 />
               </div>
+              {/* Labels rotate -45° on small screens so 12 of them
+                 don't squeeze into 360px of viewport. Desktop has
+                 room for upright text. */}
               <p
-                className={`truncate text-[10px] font-semibold ${
+                className={`text-[9px] font-semibold whitespace-nowrap origin-top-left -rotate-45 translate-y-3 sm:rotate-0 sm:translate-y-0 sm:text-[10px] sm:truncate sm:max-w-full ${
                   isLast ? "text-rajlo-red" : "text-muted"
                 }`}
               >

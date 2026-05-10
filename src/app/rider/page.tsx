@@ -45,6 +45,7 @@ type ActiveDriverMini = {
 
 type HistoryRow = {
   id: string;
+  kind?: "private" | "route_taxi";
   status:
     | "requested"
     | "accepted"
@@ -264,12 +265,12 @@ export default function RiderDashboardPage() {
           <ArcWatermark
             size={520}
             variant="white"
-            className="absolute -right-24 -top-24 opacity-[0.06]"
+            className="absolute -right-24 -top-24 opacity-[0.025]"
           />
           <ArcWatermark
             size={360}
             variant="red"
-            className="absolute -left-20 -bottom-24 opacity-[0.16]"
+            className="absolute -left-20 -bottom-24 opacity-[0.06]"
           />
 
           <div className="relative">
@@ -512,7 +513,11 @@ export default function RiderDashboardPage() {
             {recentRides.map((r) => (
               <StaggerItem key={r.id}>
                 <Link
-                  href={`/rider/history/${r.id}`}
+                  href={
+                    r.kind === "route_taxi"
+                      ? `/rider/route-taxi/history/${r.id}`
+                      : `/rider/history/${r.id}`
+                  }
                   className="group flex items-center gap-3 rounded-xl border border-line bg-surface p-4 transition-all hover:-translate-y-0.5 hover:border-rajlo-red hover:shadow-md"
                 >
                   <span
@@ -592,7 +597,7 @@ export default function RiderDashboardPage() {
       {!loading && stats.totalTrips > 0 && (
         <FadeUp delay={0.2}>
           <div className="mt-6 overflow-hidden rounded-2xl border border-line bg-gradient-to-br from-rajlo-black via-rajlo-black to-[#1a1d10] p-6 text-white">
-            <div className="grid grid-cols-3 divide-x divide-white/10">
+            <div className="grid grid-cols-1 divide-y divide-white/10 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
               <Stat label="Trips" value={stats.totalTrips.toString()} />
               <Stat
                 label="Avg rating"
@@ -728,7 +733,7 @@ function Stat({
   prefix?: string;
 }) {
   return (
-    <div className="px-3 text-center first:pl-0 last:pr-0">
+    <div className="px-3 py-3 text-center first:pt-0 last:pb-0 sm:py-0 sm:first:pl-0 sm:last:pr-0">
       <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-white/55">
         {label}
       </p>

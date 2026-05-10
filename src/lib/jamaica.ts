@@ -20,6 +20,31 @@ export const JAMAICA_BOUNDS = {
 /** Geographic centre — used as the default map view. */
 export const JAMAICA_CENTER = { lat: 18.05, lng: -77.2 };
 
+/**
+ * Approximate centre of each Jamaican parish — keyed by the names the
+ * TA route table uses so a parish detected from GPS can match a
+ * route's `origin_parish` directly. Rough centres (~parish capital);
+ * good enough for "which parish is this driver in" lookups without
+ * a Google reverse-geocode round-trip.
+ */
+export const PARISH_CENTERS: Record<string, { lat: number; lng: number }> = {
+  "Kingston and St. Andrew": { lat: 17.99, lng: -76.79 },
+  Kingston: { lat: 17.97, lng: -76.79 },
+  "St. Andrew": { lat: 18.02, lng: -76.81 },
+  "St. Catherine": { lat: 17.99, lng: -76.95 },
+  Clarendon: { lat: 17.96, lng: -77.24 },
+  Manchester: { lat: 18.04, lng: -77.5 },
+  "St. Elizabeth": { lat: 18.03, lng: -77.85 },
+  Westmoreland: { lat: 18.22, lng: -78.13 },
+  Hanover: { lat: 18.45, lng: -78.18 },
+  "St. James": { lat: 18.47, lng: -77.92 },
+  Trelawny: { lat: 18.49, lng: -77.66 },
+  "St. Ann": { lat: 18.43, lng: -77.2 },
+  "St. Mary": { lat: 18.36, lng: -76.89 },
+  Portland: { lat: 18.18, lng: -76.45 },
+  "St. Thomas": { lat: 17.88, lng: -76.41 },
+};
+
 /** All 14 parishes (admin-area-level-1 values returned by Google). */
 export const PARISHES = [
   "Kingston",
@@ -101,6 +126,29 @@ export function isWithinJamaica(coord: {
     coord.lng >= JAMAICA_BOUNDS.west &&
     coord.lng <= JAMAICA_BOUNDS.east
   );
+}
+
+/**
+ * Find the parish whose centre is closest to a GPS coordinate. Used
+ * when we want to scope a list (e.g. driver Route Taxi suggestions)
+ * to "wherever I am" without burning a Google reverse-geocode call.
+ * Returns the parish name (matches `routes.origin_parish`) or null
+ * when the coord is implausibly far from every parish (e.g. outside JM).
+ */
+export function nearestParish(coord: {
+  lat: number;
+  lng: number;
+}): string | null {
+  if (!Number.isFinite(coord.lat) || !Number.isFinite(coord.lng)) return null;
+  let best: { name: string; km: number } | null = null;
+  for (const [name, centre] of Object.entries(PARISH_CENTERS)) {
+    const km = haversineKm(coord, centre);
+    if (!best || km < best.km) best = { name, km };
+  }
+  // 50 km cap — anything farther is clearly off-island and we'd
+  // rather show "no parish" than guess.
+  if (!best || best.km > 50) return null;
+  return best.name;
 }
 
 /** Great-circle distance between two coords in km (haversine). */

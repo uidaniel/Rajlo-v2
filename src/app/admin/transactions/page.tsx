@@ -111,6 +111,7 @@ export default function AdminTransactionsPage() {
     return `/api/admin/transactions?${params.toString()}`;
   }, [range, kindFilter, directionFilter, debouncedSearch]);
 
+
   const query = useLiveQuery<Response>(url, { interval: 30_000 });
   const data = query.data;
   const loading = !data && !query.error;

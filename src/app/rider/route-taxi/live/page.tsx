@@ -388,10 +388,13 @@ function StatusHero({ hail }: { hail: Hail }) {
         <p className="mt-1 text-sm text-white/75">{corridor}</p>
 
         {hail.status === "requested" && (
-          <p className="mt-3 max-w-md text-xs text-white/65">
-            Drivers running this route are getting notified now. Usually under a
-            minute.
-          </p>
+          <>
+            <p className="mt-3 max-w-md text-xs text-white/65">
+              Drivers running this route are getting notified now. Usually under
+              a minute.
+            </p>
+            <SearchCountdown requestedAt={hail.requestedAt} />
+          </>
         )}
         {hail.status === "cancelled" && hail.cancellationReason && (
           <p className="mt-3 rounded-xl bg-white/10 px-3 py-2 text-xs text-white/85">
@@ -467,6 +470,42 @@ function StatusTimeline({ status }: { status: HailStatus }) {
         </p>
       )}
     </section>
+  );
+}
+
+/* ════════════════════ Search countdown ════════════════════
+ * Live "we'll keep searching for X more" pill that ticks every
+ * second so the rider knows how long until we surface the
+ * "switch to private ride" offer.
+ */
+function SearchCountdown({ requestedAt }: { requestedAt: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const total = HAIL_TIMEOUT_MINUTES * 60 * 1000;
+  const elapsed = now - new Date(requestedAt).getTime();
+  const remaining = Math.max(0, total - elapsed);
+  const mm = Math.floor(remaining / 60_000);
+  const ss = String(Math.floor((remaining % 60_000) / 1000)).padStart(2, "0");
+  const pct = Math.min(100, (elapsed / total) * 100);
+
+  return (
+    <div className="mt-4 max-w-sm">
+      <div className="flex items-center justify-between text-[11px] font-bold uppercase tracking-wider text-white/75">
+        <span>Searching</span>
+        <span>
+          {mm}:{ss} until private-ride offer
+        </span>
+      </div>
+      <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-white/10">
+        <div
+          className="h-full bg-rajlo-red transition-all duration-1000"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -889,7 +928,7 @@ function ActionBar({
               type="button"
               onClick={onDismissCancel}
               disabled={cancelling}
-              className="rounded-full border border-line bg-surface px-3 py-2 text-xs font-bold text-muted hover:bg-surface-soft disabled:opacity-50"
+              className="rounded-full border border-line bg-surface px-4 py-2.5 text-xs font-bold text-muted hover:bg-surface-soft disabled:opacity-50"
             >
               Keep waiting
             </button>
@@ -897,7 +936,7 @@ function ActionBar({
               type="button"
               onClick={onConfirmCancel}
               disabled={cancelling}
-              className="inline-flex items-center gap-2 rounded-full bg-rajlo-red px-4 py-2 text-xs font-bold text-white shadow-md shadow-rajlo-red/25 disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-full bg-rajlo-red px-4 py-2.5 text-xs font-bold text-white shadow-md shadow-rajlo-red/25 disabled:opacity-50"
             >
               {cancelling ? (
                 <>
