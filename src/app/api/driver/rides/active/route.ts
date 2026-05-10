@@ -97,10 +97,11 @@ export async function GET() {
     .eq("ride_id", ride.id)
     .order("position", { ascending: true });
 
-  // Rider profile (name + avatar) so the driver sees who they're picking up.
+  // Rider profile (name + avatar + phone) so the driver can see who
+  // they're picking up and tap-to-call when needed ("I'm at your gate").
   const { data: riderProfile } = await supabase
     .from("profiles")
-    .select("full_name, avatar_url")
+    .select("full_name, avatar_url, phone")
     .eq("id", ride.rider_id)
     .maybeSingle();
 
@@ -146,6 +147,7 @@ export async function GET() {
     rider: {
       name: riderProfile?.full_name ?? "Rider",
       avatarUrl: riderProfile?.avatar_url ?? null,
+      phone: riderProfile?.phone ?? null,
     },
     // Carpool block — null for solo trips, populated when the driver's
     // currently-assigned ride is part of a matched group. The active-trip

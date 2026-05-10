@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { MapView } from "@/components/map-view";
+import { HailChatSheet } from "@/components/hail-chat-sheet";
 import type { Place } from "@/lib/jamaica";
 import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
@@ -79,8 +80,13 @@ type HailRow = {
   dropoffLng?: number | null;
 };
 
-type AcceptedHail = HailRow & { acceptedAt: string };
-type OnboardHail = HailRow & { pickedUpAt: string };
+type RiderInfo = {
+  name: string | null;
+  avatarUrl: string | null;
+  phone: string | null;
+};
+type AcceptedHail = HailRow & { acceptedAt: string; rider?: RiderInfo };
+type OnboardHail = HailRow & { pickedUpAt: string; rider?: RiderInfo };
 
 export default function DriverRouteTaxiPage() {
   const [data, setData] = useState<SessionPayload | null>(null);
@@ -618,6 +624,91 @@ function CapacityStepper({
   );
 }
 
+/**
+ * Compact rider info chip that sits at the top of each accepted /
+ * onboard hail card. Driver immediately sees who they're picking up
+ * (face + name) and gets one-tap call. The GPS pin lights up when
+ * the rider opted into location-share so the driver knows we have
+ * a precise pickup spot.
+ */
+function RiderBadge({
+  rider,
+  pickupLat,
+  pickupLng,
+  tone,
+  onMessage,
+}: {
+  rider: RiderInfo;
+  pickupLat: number | null | undefined;
+  pickupLng: number | null | undefined;
+  tone: "amber" | "emerald";
+  onMessage?: () => void;
+}) {
+  const initial = (rider.name?.[0] ?? "R").toUpperCase();
+  const hasGps = pickupLat != null && pickupLng != null;
+  const tonePill =
+    tone === "emerald"
+      ? "bg-white/70 text-emerald-900"
+      : "bg-white/70 text-amber-900";
+  const initialBg =
+    tone === "emerald"
+      ? "from-emerald-700 to-emerald-900"
+      : "from-amber-600 to-amber-800";
+
+  return (
+    <div className="flex items-center gap-3">
+      {rider.avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={rider.avatarUrl}
+          alt={rider.name ? `${rider.name}'s photo` : "Rider"}
+          className="h-10 w-10 shrink-0 rounded-xl object-cover ring-2 ring-white/70"
+        />
+      ) : (
+        <div
+          className={`grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br text-base font-extrabold text-white ${initialBg}`}
+        >
+          {initial}
+        </div>
+      )}
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-extrabold tracking-tight">
+          {rider.name ?? "Rajlo rider"}
+        </p>
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+          <span
+            className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${tonePill}`}
+          >
+            <Icon name={hasGps ? "map-pin" : "user"} className="h-3 w-3" />
+            {hasGps ? "GPS shared" : "No GPS"}
+          </span>
+        </div>
+      </div>
+      <div className="flex shrink-0 items-center gap-1.5">
+        {onMessage && (
+          <button
+            type="button"
+            onClick={onMessage}
+            aria-label="Message rider"
+            className="grid h-9 w-9 place-items-center rounded-xl bg-rajlo-red text-white shadow-sm hover:bg-primary-hover"
+          >
+            <Icon name="mail" className="h-3.5 w-3.5" />
+          </button>
+        )}
+        {rider.phone && (
+          <a
+            href={`tel:${rider.phone}`}
+            aria-label="Call rider"
+            className="grid h-9 w-9 place-items-center rounded-xl bg-white text-rajlo-red ring-1 ring-rajlo-red/30 hover:bg-primary-soft"
+          >
+            <Icon name="phone" className="h-3.5 w-3.5" />
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Stamp a hail's lat/lng + name into the Place shape MapView wants. */
 function hailToPlace(name: string, lat: number, lng: number): Place {
   return {
@@ -661,6 +752,13 @@ function ActiveSessionMonitor({
   const seatsFull = session.seatsRemaining <= 0;
   const isPending = (id: string, to: string) =>
     actionPending === `${id}:${to}`;
+
+  // One chat sheet, opens for whichever hail the driver tapped.
+  const [chatHail, setChatHail] = useState<{
+    id: string;
+    riderName: string | null;
+    riderAvatarUrl: string | null;
+  } | null>(null);
 
   // Pick the next-action target so the driver always sees ONE clear
   // pin to head toward (matches the live-trip page's single-driver-
@@ -846,7 +944,22 @@ function ActiveSessionMonitor({
                   key={h.id}
                   className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+                  {h.rider && (
+                    <RiderBadge
+                      rider={h.rider}
+                      pickupLat={h.pickupLat}
+                      pickupLng={h.pickupLng}
+                      tone="emerald"
+                      onMessage={() =>
+                        setChatHail({
+                          id: h.id,
+                          riderName: h.rider?.name ?? null,
+                          riderAvatarUrl: h.rider?.avatarUrl ?? null,
+                        })
+                      }
+                    />
+                  )}
+                  <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-emerald-900">
                         {h.pickup} → {h.dropoff}
@@ -898,7 +1011,22 @@ function ActiveSessionMonitor({
                   key={h.id}
                   className="rounded-2xl border border-amber-200 bg-amber-50 p-4"
                 >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
+                  {h.rider && (
+                    <RiderBadge
+                      rider={h.rider}
+                      pickupLat={h.pickupLat}
+                      pickupLng={h.pickupLng}
+                      tone="amber"
+                      onMessage={() =>
+                        setChatHail({
+                          id: h.id,
+                          riderName: h.rider?.name ?? null,
+                          riderAvatarUrl: h.rider?.avatarUrl ?? null,
+                        })
+                      }
+                    />
+                  )}
+                  <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-amber-900">
                         Pick up at {h.pickup}
@@ -1012,6 +1140,19 @@ function ActiveSessionMonitor({
           )}
         </section>
       </FadeUp>
+
+      {/* Chat sheet — single instance, opens for whichever hail the
+         driver tapped. RLS ensures the driver can only see + send on
+         hails attached to their session. */}
+      {chatHail && (
+        <HailChatSheet
+          hailId={chatHail.id}
+          open
+          onClose={() => setChatHail(null)}
+          counterpartName={chatHail.riderName ?? "Rider"}
+          counterpartAvatarUrl={chatHail.riderAvatarUrl}
+        />
+      )}
     </div>
   );
 }

@@ -313,6 +313,20 @@ export default function RiderLiveTripPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.ride?.id, data?.ride?.status, data?.ride?.expiresAt]);
 
+  // When the trip status flips (driver accepted, arrived, started,
+  // completed) scroll the rider to the top so the new hero copy +
+  // status timeline are immediately in view. Without this, riders
+  // mid-scroll on the receipt section miss the "Driver arrived"
+  // change. Skips the very first render.
+  const lastStatusRef = useRef<string | null>(null);
+  useEffect(() => {
+    const next = data?.ride?.status ?? null;
+    if (next && lastStatusRef.current && lastStatusRef.current !== next) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    lastStatusRef.current = next;
+  }, [data?.ride?.status]);
+
   const handleCancel = async () => {
     if (!data?.ride) return;
     if (!confirm("Cancel this ride?")) return;

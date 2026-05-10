@@ -45,11 +45,13 @@ type UserRow = {
   ridesCount: number;
 };
 
-type RoleFilter = "all" | "rider" | "driver" | "admin";
+// Role filter is hardcoded — drivers live on /admin/drivers now,
+// admins are separate. This page is rider-focused only.
+type RoleFilter = "rider";
 type StatusFilter = "all" | "active" | "deactivated";
 
 export default function AdminUsersPage() {
-  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [roleFilter] = useState<RoleFilter>("rider");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -65,7 +67,7 @@ export default function AdminUsersPage() {
 
   const usersUrl = (() => {
     const params = new URLSearchParams();
-    if (roleFilter !== "all") params.set("role", roleFilter);
+    params.set("role", roleFilter);
     if (statusFilter !== "all") params.set("status", statusFilter);
     if (debouncedSearch) params.set("q", debouncedSearch);
     params.set("limit", "100");
@@ -203,11 +205,17 @@ export default function AdminUsersPage() {
                 />
               </div>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-                Users on the platform
+                Riders
               </h1>
               <p className="mt-1 text-sm text-white/70 md:text-base">
-                Riders, drivers, and admins. Search by name, email, plate, or
-                driver ID. Click any row for a full audit-quality profile.
+                Every rider on the platform. Drivers live on the dedicated{" "}
+                <Link
+                  href="/admin/drivers"
+                  className="font-bold text-rajlo-red underline-offset-2 hover:underline"
+                >
+                  Drivers page
+                </Link>
+                .
               </p>
             </div>
             <button
@@ -226,8 +234,6 @@ export default function AdminUsersPage() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <Stat label="On this page" value={counts.total} />
         <Stat label="Riders" value={counts.riders} tone="red" />
-        <Stat label="Drivers" value={counts.drivers} tone="emerald" />
-        <Stat label="Admins" value={counts.admins} />
         <Stat label="Deactivated" value={counts.banned} tone="warning" />
       </div>
 
@@ -236,28 +242,6 @@ export default function AdminUsersPage() {
         <div className="rounded-2xl border border-line bg-surface p-4 md:p-5">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div className="flex flex-wrap gap-2">
-              {(
-                [
-                  { key: "all", label: "All" },
-                  { key: "rider", label: "Riders" },
-                  { key: "driver", label: "Drivers" },
-                  { key: "admin", label: "Admins" },
-                ] as const
-              ).map((t) => (
-                <button
-                  key={t.key}
-                  type="button"
-                  onClick={() => setRoleFilter(t.key)}
-                  className={`rounded-full px-4 py-2 text-xs font-bold transition-all ${
-                    roleFilter === t.key
-                      ? "bg-rajlo-red text-white shadow-md shadow-rajlo-red/30"
-                      : "bg-surface-soft text-muted hover:text-foreground"
-                  }`}
-                >
-                  {t.label}
-                </button>
-              ))}
-              <span className="mx-1 self-center h-5 w-px bg-line" />
               {(
                 [
                   { key: "all", label: "Any status" },

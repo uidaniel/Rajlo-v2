@@ -415,14 +415,14 @@ function HistoryCard({ row, onRate }: { row: HistoryRow; onRate: () => void }) {
     "in_progress",
   ].includes(row.status);
 
-  // Route taxi rows have their own live page + their detail page
-  // doesn't exist as /rider/history/[rideId]. Send taps to the
-  // dedicated live screen for in-flight hails, and to the catalogue
-  // for terminal ones (no detail screen yet — Phase 9 maybe).
+  // Route taxi rows have their own dedicated screens:
+  //   • In-flight  → /rider/route-taxi/live?id=  (live status + map)
+  //   • Terminal   → /rider/route-taxi/history/[id]  (full receipt)
+  // Private rides keep the existing routing.
   const href = isRouteTaxi
     ? isOngoing
       ? `/rider/route-taxi/live?id=${row.id}`
-      : "/rider/route-taxi"
+      : `/rider/route-taxi/history/${row.id}`
     : isOngoing
       ? "/rider/live-trip"
       : `/rider/history/${row.id}`;
@@ -512,7 +512,10 @@ function HistoryCard({ row, onRate }: { row: HistoryRow; onRate: () => void }) {
             <Icon name="star" className="h-3.5 w-3.5" />
             You rated · {row.myRatingStars}
           </p>
-        ) : row.status === "completed" && row.driverName ? (
+        ) : row.status === "completed" && row.driverName && !isRouteTaxi ? (
+          // Rating today is wired to the rides table only — route taxi
+          // ratings need their own model (Phase 9). Until then, hide
+          // the CTA on hail rows so taps don't 404.
           <button
             type="button"
             onClick={(e) => {

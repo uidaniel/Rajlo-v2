@@ -1,13 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { Skeleton } from "@/components/skeleton";
 import { MapView } from "@/components/map-view";
+import { HailChatSheet } from "@/components/hail-chat-sheet";
 import { useBackgroundRefresh } from "@/lib/use-background-refresh";
 import { formatJMD, type Place } from "@/lib/jamaica";
 
@@ -76,6 +77,7 @@ type Hail = {
       vehicleModel: string | null;
       vehicleColor: string | null;
       phone: string | null;
+      selfieUrl: string | null;
     };
   };
   route: null | {
@@ -108,6 +110,7 @@ function LiveInner() {
   const [error, setError] = useState<string | null>(null);
   const [cancelArmed, setCancelArmed] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
 
   const refresh = useCallback(async () => {
     if (!hailId) return;
@@ -168,6 +171,19 @@ function LiveInner() {
     data?.hail.status === "picked_up";
   useBackgroundRefresh(refresh, 5000, { enabled: isLive });
 
+  // Scroll to top whenever the hail's status changes — driver
+  // accepted, picked up, dropped off, etc. So the rider's eye lands
+  // on the new hero copy + timeline rather than wherever they were
+  // last scrolled. Skips the first render.
+  const lastStatusRef = useRef<string | null>(null);
+  useEffect(() => {
+    const next = data?.hail.status ?? null;
+    if (next && lastStatusRef.current && lastStatusRef.current !== next) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    lastStatusRef.current = next;
+  }, [data?.hail.status]);
+
   const cancelHail = async () => {
     if (!hailId) return;
     setCancelling(true);
@@ -227,8 +243,26 @@ function LiveInner() {
             driver={hail.session.driver}
             seatsTaken={hail.session.seatsTaken}
             vehicleCapacity={hail.session.vehicleCapacity}
+            chatEnabled={
+              hail.status === "accepted" || hail.status === "picked_up"
+            }
+            onOpenChat={() => setChatOpen(true)}
           />
         </FadeUp>
+      )}
+
+      {hail.session?.driver && (
+        <HailChatSheet
+          hailId={hail.id}
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          counterpartName={
+            [hail.session.driver.firstName, hail.session.driver.lastName]
+              .filter(Boolean)
+              .join(" ") || "Driver"
+          }
+          counterpartAvatarUrl={hail.session.driver.selfieUrl}
+        />
       )}
 
       {(hail.status === "accepted" || hail.status === "picked_up") &&
@@ -539,10 +573,14 @@ function DriverCard({
   driver,
   seatsTaken,
   vehicleCapacity,
+  chatEnabled,
+  onOpenChat,
 }: {
   driver: NonNullable<NonNullable<Hail["session"]>["driver"]>;
   seatsTaken: number;
   vehicleCapacity: number;
+  chatEnabled: boolean;
+  onOpenChat: () => void;
 }) {
   const fullName =
     [driver.firstName, driver.lastName].filter(Boolean).join(" ") ||
@@ -556,9 +594,18 @@ function DriverCard({
   return (
     <section className="rounded-3xl border border-line bg-surface p-5 md:p-6">
       <div className="flex items-center gap-4">
-        <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-rajlo-red via-rajlo-red to-[#7a0000] text-2xl font-extrabold text-white shadow-md shadow-rajlo-red/30">
-          {initial}
-        </div>
+        {driver.selfieUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={driver.selfieUrl}
+            alt={`${driver.firstName ?? "Driver"}'s photo`}
+            className="h-14 w-14 shrink-0 rounded-2xl object-cover shadow-md shadow-rajlo-red/30 ring-2 ring-rajlo-red"
+          />
+        ) : (
+          <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-rajlo-red via-rajlo-red to-[#7a0000] text-2xl font-extrabold text-white shadow-md shadow-rajlo-red/30">
+            {initial}
+          </div>
+        )}
         <div className="min-w-0 flex-1">
           <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
             Your driver
@@ -581,7 +628,7 @@ function DriverCard({
         )}
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
+      <div className="mt-4 flex flex-wrap items-center gap-2">
         {driver.plateNumber && (
           <span className="inline-flex items-center gap-1.5 rounded-full bg-rajlo-black px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-white">
             <Icon name="car" className="h-3 w-3" />
@@ -590,8 +637,18 @@ function DriverCard({
         )}
         <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-soft px-3 py-1.5 text-[11px] font-bold text-muted">
           <Icon name="users" className="h-3 w-3" />
-          {seatsTaken}/{vehicleCapacity} seats taken
+          {seatsTaken}/{vehicleCapacity}
         </span>
+        {chatEnabled && (
+          <button
+            type="button"
+            onClick={onOpenChat}
+            className="ml-auto inline-flex items-center gap-1.5 rounded-full bg-rajlo-red px-3 py-1.5 text-[11px] font-bold text-white shadow-sm hover:bg-primary-hover"
+          >
+            <Icon name="mail" className="h-3.5 w-3.5" />
+            Message driver
+          </button>
+        )}
       </div>
     </section>
   );

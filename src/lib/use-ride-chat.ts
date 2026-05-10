@@ -170,8 +170,14 @@ export function useRideChat(
             if (prev.find((m) => m.id === incoming.id)) return prev;
             return [...prev, incoming];
           });
-          // Only peer messages count toward unread + toast.
-          if (incoming.senderRole !== myRole) {
+          // Only peer messages count toward unread + toast — AND only
+          // when they're not already read. A reconnect that re-fires
+          // events for messages I've already seen shouldn't keep
+          // popping the same notification.
+          if (
+            incoming.senderRole !== myRole &&
+            incoming.readAt === null
+          ) {
             setUnreadCount((c) => c + 1);
             setLatestIncoming(incoming);
           }

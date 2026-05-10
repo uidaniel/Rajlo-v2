@@ -132,34 +132,8 @@ export async function GET() {
         : null,
     },
     pending: enrichAndSortPending(pending, session),
-    accepted:
-      (accepted ?? []).map((h) => ({
-        id: h.id,
-        riderId: h.rider_id,
-        pickup: h.pickup_name,
-        pickupLat: nonZero(h.pickup_lat),
-        pickupLng: nonZero(h.pickup_lng),
-        dropoff: h.dropoff_name,
-        dropoffLat: nonZero(h.dropoff_lat),
-        dropoffLng: nonZero(h.dropoff_lng),
-        distanceKm: Number(h.distance_km),
-        fareJmd: h.fare_jmd,
-        acceptedAt: h.accepted_at,
-      })) ?? [],
-    onboard:
-      (onboard ?? []).map((h) => ({
-        id: h.id,
-        riderId: h.rider_id,
-        pickup: h.pickup_name,
-        pickupLat: nonZero(h.pickup_lat),
-        pickupLng: nonZero(h.pickup_lng),
-        dropoff: h.dropoff_name,
-        dropoffLat: nonZero(h.dropoff_lat),
-        dropoffLng: nonZero(h.dropoff_lng),
-        distanceKm: Number(h.distance_km),
-        fareJmd: h.fare_jmd,
-        pickedUpAt: h.picked_up_at,
-      })) ?? [],
+    accepted: await attachRiderProfiles(supabase, accepted ?? [], "accepted"),
+    onboard: await attachRiderProfiles(supabase, onboard ?? [], "onboard"),
     driver: {
       activated: driver.activated,
       onboardingStatus: driver.onboarding_status,
@@ -175,6 +149,65 @@ export async function GET() {
 function nonZero(n: number | null | undefined): number | null {
   if (n == null) return null;
   return n === 0 ? null : Number(n);
+}
+
+/**
+ * Bulk-fetch rider profile rows + attach name + avatar to each hail.
+ * Drives the rider info card on the driver's monitor (so the driver
+ * knows who they're picking up + can recognise them by face).
+ */
+async function attachRiderProfiles(
+  supabase: ReturnType<typeof getSupabaseServerClient> & object,
+  hails: Array<{
+    id: string;
+    rider_id: string;
+    pickup_name: string;
+    pickup_lat: number | null;
+    pickup_lng: number | null;
+    dropoff_name: string;
+    dropoff_lat: number | null;
+    dropoff_lng: number | null;
+    distance_km: number;
+    fare_jmd: number;
+    accepted_at?: string;
+    picked_up_at?: string;
+  }>,
+  shape: "accepted" | "onboard",
+) {
+  if (hails.length === 0) return [];
+  const riderIds = Array.from(new Set(hails.map((h) => h.rider_id)));
+  const { data: profiles } = await supabase
+    .from("profiles")
+    .select("id, full_name, avatar_url, phone")
+    .in("id", riderIds);
+  const profileById = new Map(
+    (profiles ?? []).map((p) => [p.id as string, p]),
+  );
+
+  return hails.map((h) => {
+    const p = profileById.get(h.rider_id);
+    const base = {
+      id: h.id,
+      riderId: h.rider_id,
+      pickup: h.pickup_name,
+      pickupLat: nonZero(h.pickup_lat),
+      pickupLng: nonZero(h.pickup_lng),
+      dropoff: h.dropoff_name,
+      dropoffLat: nonZero(h.dropoff_lat),
+      dropoffLng: nonZero(h.dropoff_lng),
+      distanceKm: Number(h.distance_km),
+      fareJmd: h.fare_jmd,
+      rider: {
+        name: (p?.full_name as string | null) ?? null,
+        avatarUrl: (p?.avatar_url as string | null) ?? null,
+        phone: (p?.phone as string | null) ?? null,
+      },
+    };
+    if (shape === "accepted") {
+      return { ...base, acceptedAt: h.accepted_at ?? null };
+    }
+    return { ...base, pickedUpAt: h.picked_up_at ?? null };
+  });
 }
 
 /**

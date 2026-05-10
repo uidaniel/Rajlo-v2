@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
@@ -50,7 +50,11 @@ type CarpoolPartner = {
 
 type ActiveResponse = {
   ride: ActiveRide | null;
-  rider: { name: string; avatarUrl: string | null } | null;
+  rider: {
+    name: string;
+    avatarUrl: string | null;
+    phone: string | null;
+  } | null;
   carpool: { groupId: string; partner: CarpoolPartner } | null;
 };
 
@@ -125,6 +129,19 @@ export default function DriverActiveTripPage() {
       setLoading(false);
     }
   };
+
+  // Scroll to top whenever the ride status changes (accepted →
+  // arrived → in_progress → completed) so the driver lands on the
+  // updated stage hero + next-action button instead of wherever they
+  // were last scrolled. Skips the very first render.
+  const lastStatusRef = useRef<string | null>(null);
+  useEffect(() => {
+    const next = data?.ride?.status ?? null;
+    if (next && lastStatusRef.current && lastStatusRef.current !== next) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+    lastStatusRef.current = next;
+  }, [data?.ride?.status]);
 
   // Initial fetch + Supabase Realtime subscription. RLS gates the driver
   // to their own rides + open requests, so we subscribe to all `rides`
@@ -561,10 +578,12 @@ export default function DriverActiveTripPage() {
                 rideId={ride.id}
                 myRole="driver"
                 peerName={rider.name}
-                peerAvatarUrl={null}
-                /* Driver doesn't get a tap-to-call to the rider —
-                   privacy by default; rider phone isn't surfaced. */
-                peerPhone={null}
+                peerAvatarUrl={rider.avatarUrl ?? null}
+                /* Tap-to-call enabled both directions — drivers need
+                   to call ("I'm at your gate") just as much as
+                   riders do. Phone privacy can layer in via a proxy
+                   number later when we wire a masking provider. */
+                peerPhone={rider.phone ?? null}
                 rideActive
                 variant="dark"
                 iconSize={44}

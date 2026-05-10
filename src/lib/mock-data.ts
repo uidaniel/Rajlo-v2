@@ -25,6 +25,10 @@ export const riderNav: NavItem[] = [
   { label: "Wallet", labelKey: "nav.rider.wallet", href: "/rider/wallet", icon: "wallet" },
   { label: "QR Pay", labelKey: "nav.rider.qrPay", href: "/rider/qr-pay", icon: "credit-card" },
   { label: "Ratings", labelKey: "nav.rider.ratings", href: "/rider/ratings", icon: "star" },
+  // Note: /rider/route-taxi was previously surfaced as a "browse all
+  // corridors" page. The mode picker now lives inside /rider/request,
+  // so the catalogue is redundant — the page now redirects to /request
+  // (or to /rider/route-taxi/live when an active hail exists).
   { label: "Notifications", labelKey: "nav.rider.notifications", href: "/rider/notifications", icon: "bell" },
   { label: "Settings", labelKey: "nav.rider.settings", href: "/rider/settings", icon: "settings" },
   { label: "Support", labelKey: "nav.rider.support", href: "/rider/support", icon: "help-circle" },
@@ -78,11 +82,13 @@ export const adminNav: NavItem[] = [
   { label: "Route Taxi sessions", labelKey: "nav.admin.routeSessions", href: "/admin/route-sessions", icon: "navigation" },
   { label: "Routes catalogue", labelKey: "nav.admin.routes", href: "/admin/routes", icon: "map" },
   { label: "QR charges", labelKey: "nav.admin.qrCharges", href: "/admin/qr-charges", icon: "credit-card" },
-  { label: "Users", labelKey: "nav.admin.users", href: "/admin/users", icon: "users" },
+  { label: "Riders", labelKey: "nav.admin.users", href: "/admin/users", icon: "users" },
+  { label: "Drivers", labelKey: "nav.admin.drivers", href: "/admin/drivers", icon: "user" },
   { label: "Messaging", labelKey: "nav.admin.messages", href: "/admin/messages", icon: "mail" },
   { label: "Verification queue", labelKey: "nav.admin.verification", href: "/admin/verification-queue", icon: "clipboard-check" },
   { label: "Vehicle changes", labelKey: "nav.admin.vehicle", href: "/admin/vehicle-changes", icon: "car" },
   { label: "Wallets", labelKey: "nav.admin.wallets", href: "/admin/wallets", icon: "wallet" },
+  { label: "Transactions", labelKey: "nav.admin.transactions", href: "/admin/transactions", icon: "trending-up" },
   { label: "Payouts", labelKey: "nav.admin.payouts", href: "/admin/wallet-withdrawals", icon: "trending-up" },
   { label: "Audit logs", labelKey: "nav.admin.audit", href: "/admin/audit-logs", icon: "history" },
 ];

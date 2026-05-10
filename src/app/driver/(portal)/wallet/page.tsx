@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon } from "@/components/icons";
@@ -221,35 +222,40 @@ function TransactionRow({
   const meta = KIND_META[tx.kind] ?? { label: tx.kind, icon: "wallet" as const };
   const isCredit = tx.direction === "credit";
   return (
-    <li className="flex items-start gap-3 py-3">
-      <span
-        className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
-          isCredit ? "bg-emerald-50 text-emerald-700" : "bg-primary-soft text-rajlo-red"
-        }`}
+    <li>
+      <Link
+        href={`/driver/wallet/transactions/${tx.id}`}
+        className="flex items-start gap-3 rounded-xl py-3 transition-colors hover:bg-surface-soft"
       >
-        <Icon name={meta.icon} className="h-4 w-4" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-extrabold tracking-tight">
-          {meta.label}
-        </p>
-        <p className="truncate text-xs text-muted">
-          {tx.description || ago(tx.created_at)}
-        </p>
-      </div>
-      <div className="text-right">
-        <p
-          className={`text-sm font-extrabold tracking-tight ${
-            isCredit ? "text-emerald-700" : "text-rajlo-red"
+        <span
+          className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
+            isCredit ? "bg-emerald-50 text-emerald-700" : "bg-primary-soft text-rajlo-red"
           }`}
         >
-          {isCredit ? "+" : "−"}
-          {formatJMD(tx.amount_jmd)}
-        </p>
-        <p className="text-[10px] font-semibold text-muted">
-          Bal · {formatJMD(tx.balance_after_jmd)}
-        </p>
-      </div>
+          <Icon name={meta.icon} className="h-4 w-4" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-extrabold tracking-tight">
+            {meta.label}
+          </p>
+          <p className="truncate text-xs text-muted">
+            {tx.description || ago(tx.created_at)}
+          </p>
+        </div>
+        <div className="text-right">
+          <p
+            className={`text-sm font-extrabold tracking-tight ${
+              isCredit ? "text-emerald-700" : "text-rajlo-red"
+            }`}
+          >
+            {isCredit ? "+" : "−"}
+            {formatJMD(tx.amount_jmd)}
+          </p>
+          <p className="text-[10px] font-semibold text-muted">
+            Bal · {formatJMD(tx.balance_after_jmd)}
+          </p>
+        </div>
+      </Link>
     </li>
   );
 }

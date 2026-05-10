@@ -79,7 +79,8 @@ export function ChatSheet({
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // (file input ref retired — `ImageSourceMenu` owns its own inputs
+  //  so it can offer "Take photo" vs "Choose from library" cleanly.)
   const scrollRef = useRef<HTMLDivElement>(null);
 
   /* ─── Voice recording state ─── */
@@ -497,25 +498,10 @@ export function ChatSheet({
               />
             ) : (
               <div className="flex items-end gap-2">
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
+                <ImageSourceMenu
                   disabled={sending}
-                  aria-label="Send a photo"
-                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground hover:bg-surface-soft disabled:opacity-50"
-                >
-                  <Icon name="upload" className="h-5 w-5" />
-                </button>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    e.target.value = "";
-                    if (f) void sendImage(f);
-                  }}
+                  onPickFromLibrary={(f) => void sendImage(f)}
+                  onTakePhoto={(f) => void sendImage(f)}
                 />
                 <textarea
                   value={draft}
@@ -696,6 +682,128 @@ function RecordingBar({
         <Icon name="arrow-right" className="h-4 w-4" />
       </button>
     </div>
+  );
+}
+
+/* ─── Image source menu — pick from library OR open the camera ─── */
+
+function ImageSourceMenu({
+  disabled,
+  onPickFromLibrary,
+  onTakePhoto,
+}: {
+  disabled?: boolean;
+  onPickFromLibrary: (file: File) => void;
+  onTakePhoto: (file: File) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const libraryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // Close on outside tap.
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e: MouseEvent) => {
+      if (!wrapRef.current) return;
+      if (!wrapRef.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, [open]);
+
+  return (
+    <div ref={wrapRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        disabled={disabled}
+        aria-label="Send a photo"
+        aria-expanded={open}
+        className="grid h-10 w-10 shrink-0 place-items-center rounded-full text-foreground hover:bg-surface-soft disabled:opacity-50"
+      >
+        <Icon name="upload" className="h-5 w-5" />
+      </button>
+
+      {open && (
+        <div className="absolute bottom-12 left-0 z-10 w-44 overflow-hidden rounded-2xl border border-line bg-surface shadow-xl">
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              cameraRef.current?.click();
+            }}
+            className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm font-medium hover:bg-surface-soft"
+          >
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-rajlo-red text-white">
+              <CameraIcon />
+            </span>
+            Take photo
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setOpen(false);
+              libraryRef.current?.click();
+            }}
+            className="flex w-full items-center gap-3 border-t border-line px-4 py-3 text-left text-sm font-medium hover:bg-surface-soft"
+          >
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary-soft text-rajlo-red">
+              <ImageIcon />
+            </span>
+            Choose photo
+          </button>
+        </div>
+      )}
+
+      {/* Hidden inputs — `capture="environment"` opens the rear
+         camera directly (mobile); the libraryRef one opens the
+         OS picker (Photos / Files). */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        className="sr-only"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) onTakePhoto(f);
+        }}
+      />
+      <input
+        ref={libraryRef}
+        type="file"
+        accept="image/*"
+        className="sr-only"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f) onPickFromLibrary(f);
+        }}
+      />
+    </div>
+  );
+}
+
+/* ─── Inline icons — kept local so we don't grow the shared icon set ─── */
+
+function CameraIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  );
+}
+
+function ImageIcon({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className} aria-hidden>
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <polyline points="21 15 16 10 5 21" />
+    </svg>
   );
 }
 

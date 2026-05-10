@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { getWalletBalance } from "@/lib/wallet";
+import { getDriverSelfieUrl } from "@/lib/driver-selfie";
 
 /**
  * /api/rider/route-taxi/hails/[id]
@@ -77,6 +78,9 @@ export async function GET(
       vehicleModel: string | null;
       vehicleColor: string | null;
       phone: string | null;
+      /** Signed URL to the driver's TA-verified selfie. Null when
+       *  storage sign fails or the doc isn't uploaded yet. */
+      selfieUrl: string | null;
     } | null;
   } = null;
 
@@ -92,10 +96,15 @@ export async function GET(
       const { data: driver } = await supabase
         .from("drivers")
         .select(
-          "first_name, last_name, plate_number, vehicle_make, vehicle_model, vehicle_color, phone",
+          "id, first_name, last_name, plate_number, vehicle_make, vehicle_model, vehicle_color, phone",
         )
         .eq("id", sess.driver_id)
         .maybeSingle();
+      // Sign the driver's selfie URL in parallel with the row fetch
+      // above. Failures degrade silently to the initial avatar.
+      const selfieUrl = driver
+        ? await getDriverSelfieUrl(supabase, driver.id).catch(() => null)
+        : null;
       session = {
         id: sess.id,
         seatsTaken: sess.seats_taken,
@@ -112,6 +121,7 @@ export async function GET(
               vehicleModel: driver.vehicle_model,
               vehicleColor: driver.vehicle_color,
               phone: driver.phone,
+              selfieUrl,
             }
           : null,
       };
