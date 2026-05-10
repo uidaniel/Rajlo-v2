@@ -50,7 +50,7 @@ export function LandingV2({ cta }: { cta: LandingCtaTargets }) {
 /* ──────────────────────── 1. Hero ──────────────────────── */
 
 function Hero({ cta }: { cta: LandingCtaTargets }) {
-  const ref = useGsap<HTMLElement>((_ctx, root) => {
+  const ref = useGsap<HTMLElement>((root) => {
     const tl = gsap.timeline({ defaults: { ease: "power3.out" } });
 
     // Eyebrow ping in
@@ -292,7 +292,7 @@ const CORRIDORS = [
 ];
 
 function CorridorMarquee() {
-  const ref = useGsap<HTMLDivElement>((_ctx, root) => {
+  const ref = useGsap<HTMLDivElement>((root) => {
     const track = root.querySelector<HTMLElement>("[data-marquee-track]");
     if (!track) return;
     const half = track.scrollWidth / 2;
@@ -330,7 +330,7 @@ function CorridorMarquee() {
 /* ──────────────────────── 2. Two Modes ──────────────────────── */
 
 function TwoModes({ cta }: { cta: LandingCtaTargets }) {
-  const ref = useGsap<HTMLElement>((_ctx, root) => {
+  const ref = useGsap<HTMLElement>((root) => {
     gsap.from(root.querySelector("[data-anim='heading']"), {
       scrollTrigger: { trigger: root, start: "top 75%" },
       y: 36,
@@ -516,7 +516,7 @@ const STEPS = [
 ];
 
 function HowItWorks() {
-  const ref = useGsap<HTMLElement>((_ctx, root) => {
+  const ref = useGsap<HTMLElement>((root) => {
     gsap.from(root.querySelector("[data-anim='heading']"), {
       scrollTrigger: { trigger: root, start: "top 75%" },
       y: 36,
@@ -609,7 +609,7 @@ function FareTransparency() {
   const [km, setKm] = useState(8);
   const fare = calculateRouteFare(km);
 
-  const ref = useGsap<HTMLElement>((_ctx, root) => {
+  const ref = useGsap<HTMLElement>((root) => {
     gsap.from(root.querySelector("[data-anim='left']"), {
       scrollTrigger: { trigger: root, start: "top 70%" },
       x: -36,
@@ -755,7 +755,7 @@ const PILLARS = [
 ];
 
 function WhyRajlo() {
-  const ref = useGsap<HTMLElement>((_ctx, root) => {
+  const ref = useGsap<HTMLElement>((root) => {
     // Counter animation as the strip enters view.
     const counters = root.querySelectorAll<HTMLElement>("[data-counter]");
     counters.forEach((el) => {
@@ -865,7 +865,7 @@ function CounterCell({
 /* ──────────────────────── 6. Drive with Rajlo ──────────────────────── */
 
 function DriveWithRajlo({ cta }: { cta: LandingCtaTargets }) {
-  const ref = useGsap<HTMLElement>((_ctx, root) => {
+  const ref = useGsap<HTMLElement>((root) => {
     gsap.from("[data-anim='drive-copy']", {
       scrollTrigger: { trigger: root, start: "top 75%" },
       x: -40,
@@ -1012,7 +1012,7 @@ function Stat({
 /* ──────────────────────── 7. Final CTA ──────────────────────── */
 
 function FinalCta({ cta }: { cta: LandingCtaTargets }) {
-  const ref = useGsap<HTMLElement>((_ctx, root) => {
+  const ref = useGsap<HTMLElement>((root) => {
     gsap.from(root.querySelector("[data-anim='cta-title']"), {
       scrollTrigger: { trigger: root, start: "top 80%" },
       scale: 0.92,

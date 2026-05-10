@@ -36,13 +36,21 @@ export function prefersReducedMotion(): boolean {
  * Cleanup runs on unmount automatically — no leftover ScrollTriggers
  * or live animations after navigation away from the landing.
  *
- *   const ref = useGsap<HTMLDivElement>((ctx, root) => {
+ *   const ref = useGsap<HTMLDivElement>((root) => {
  *     gsap.from(root.querySelector(".title"), { y: 40, opacity: 0 });
  *   });
  *   return <div ref={ref}>...</div>;
+ *
+ * NOTE on the API: we deliberately do NOT pass the `gsap.Context` into
+ * the setup callback. `gsap.context()` invokes the callback synchronously
+ * during its own initialisation, so any closure that references the
+ * outer `ctx` const hits a TDZ error ("Cannot access 'X' before
+ * initialization") in production builds where minifiers can't rescue
+ * it. Animations created inside the callback are auto-scoped to the
+ * context regardless, so the param wasn't earning its keep.
  */
 export function useGsap<T extends HTMLElement = HTMLDivElement>(
-  setup: (ctx: gsap.Context, root: T) => void,
+  setup: (root: T) => void,
   deps: ReadonlyArray<unknown> = [],
 ) {
   const ref = useRef<T | null>(null);
@@ -52,7 +60,7 @@ export function useGsap<T extends HTMLElement = HTMLDivElement>(
     if (!root) return;
     if (prefersReducedMotion()) return;
 
-    const ctx = gsap.context(() => setup(ctx, root), root);
+    const ctx = gsap.context(() => setup(root), root);
     return () => ctx.revert();
     // The setup callback identity is intentionally ignored — callers
     // pass an inline function on every render, but the actual deps
