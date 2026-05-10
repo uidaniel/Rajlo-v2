@@ -340,7 +340,10 @@ async function resolveRecipients(
       page++;
     }
   } catch (e) {
-    console.error("listUsers failed during message resolve:", e);
+    console.error(
+      "listUsers failed during message resolve:",
+      e instanceof Error ? e.message : "unknown error",
+    );
   }
 
   const { data: profileRows } = await profilesP;

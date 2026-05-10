@@ -83,7 +83,10 @@ export async function GET(
     const { data: authData } = await supabase.auth.admin.getUserById(userId);
     email = authData?.user?.email ?? null;
   } catch (e) {
-    console.error("getUserById in /admin/wallets/[id]:", e);
+    console.error(
+      "getUserById in /admin/wallets/[id]:",
+      e instanceof Error ? e.message : "unknown error",
+    );
   }
 
   const balance = await getWalletBalance(supabase, userId);

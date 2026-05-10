@@ -4,6 +4,7 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { debitWallet, getWalletBalance } from "@/lib/wallet";
 import { sendWalletTransferOtpEmail } from "@/lib/email-templates";
+import { enforceUserRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/wallet/transfer
@@ -57,6 +58,18 @@ export async function POST(request: Request) {
   if (!user || !user.email) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // Per-user throttle on initiate. 5 transfer initiations per 10 minutes
+  // is enough headroom for legitimate retries (typo'd recipient email,
+  // OTP not received, abandoned + restarted) but stops a stolen-session
+  // attacker from spraying transfers / spamming OTP emails.
+  const limited = enforceUserRateLimit(user.id, {
+    prefix: "wallet:transfer-initiate",
+    limit: 5,
+    windowMs: 10 * 60_000,
+  });
+  if (limited) return limited;
+
   const supabase = getSupabaseServerClient();
   if (!supabase) {
     return NextResponse.json(

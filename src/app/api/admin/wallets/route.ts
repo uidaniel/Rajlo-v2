@@ -70,7 +70,10 @@ export async function GET(request: NextRequest) {
       emailMap.set(u.id, u.email ?? null),
     );
   } catch (e) {
-    console.error("listUsers in /admin/wallets:", e);
+    console.error(
+      "listUsers in /admin/wallets:",
+      e instanceof Error ? e.message : "unknown error",
+    );
   }
 
   type ProfileRow = {

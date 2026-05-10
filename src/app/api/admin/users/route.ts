@@ -106,7 +106,12 @@ export async function GET(request: NextRequest) {
       });
     });
   } catch (e) {
-    console.error("auth.admin.listUsers failed:", e);
+    // Log only the message — full error object can include connection
+    // strings + cookies in the underlying fetch trace.
+    console.error(
+      "auth.admin.listUsers failed:",
+      e instanceof Error ? e.message : "unknown error",
+    );
   }
 
   // 3. Hydrate drivers (only if any of the page rows are drivers)

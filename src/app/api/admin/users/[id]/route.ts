@@ -49,7 +49,10 @@ export async function GET(
         new Date(authData.user.banned_until!).getTime() > Date.now();
     }
   } catch (e) {
-    console.error("auth.admin.getUserById failed:", e);
+    console.error(
+      "auth.admin.getUserById failed:",
+      e instanceof Error ? e.message : "unknown error",
+    );
   }
 
   // Driver enrichment

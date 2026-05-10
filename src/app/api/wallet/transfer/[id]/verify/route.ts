@@ -1,8 +1,27 @@
 import { NextResponse } from "next/server";
-import { createHash } from "crypto";
+import { createHash, timingSafeEqual } from "crypto";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { creditWallet } from "@/lib/wallet";
+import { enforceUserRateLimit } from "@/lib/rate-limit";
+
+/**
+ * Constant-time hex compare. We hash the user-submitted code with SHA-256
+ * (32 bytes / 64 hex chars) before comparing, but a plain `===` on the
+ * hex strings still leaks bytes-equal-up-to-N timing — which an attacker
+ * could exploit to learn the stored hash one byte at a time. Decoding
+ * both sides to fixed-length Buffers and using timingSafeEqual closes
+ * that gap. We also sanity-check the byte length so a malformed input
+ * can't crash the compare.
+ */
+function constantTimeHexEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(a, "hex"), Buffer.from(b, "hex"));
+  } catch {
+    return false;
+  }
+}
 
 /**
  * POST /api/wallet/transfer/[id]/verify
@@ -36,6 +55,19 @@ export async function POST(
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // Per-user throttle on verify attempts. The 5-attempt account lockout
+  // already exists below — this rate limit just makes sure those 5
+  // attempts can't be burned through in milliseconds by a brute-force
+  // script. 10 attempts per minute is forgiving for a real human
+  // mistyping the code.
+  const limited = enforceUserRateLimit(user.id, {
+    prefix: "wallet:transfer-verify",
+    limit: 10,
+    windowMs: 60_000,
+  });
+  if (limited) return limited;
+
   const supabase = getSupabaseServerClient();
   if (!supabase) {
     return NextResponse.json(
@@ -82,7 +114,7 @@ export async function POST(
   }
 
   const submittedHash = createHash("sha256").update(code).digest("hex");
-  if (submittedHash !== transfer.otp_hash) {
+  if (!constantTimeHexEqual(submittedHash, transfer.otp_hash)) {
     const nextAttempts = transfer.otp_attempts + 1;
     if (nextAttempts >= MAX_ATTEMPTS) {
       // Five wrong tries → kill the transfer and refund.

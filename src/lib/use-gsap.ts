@@ -1,0 +1,64 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
+
+/**
+ * Tiny GSAP scaffolding used across the landing page. Pulls the
+ * ScrollTrigger plugin in once, exposes a `useGsap` hook that scopes
+ * `gsap.context` to a ref so animations clean up on unmount, and a
+ * `prefersReducedMotion` reader that lets every section skip flashy
+ * effects for users who've opted out at the OS level.
+ *
+ * Why centralise: every landing section uses the same setup pattern
+ * (ref + context + cleanup), so one helper keeps each section file
+ * focused on the actual animation choreography rather than the
+ * boilerplate.
+ */
+
+// GSAP de-dupes registerPlugin internally, so calling this at module
+// load is safe even if multiple imports trigger it.
+if (typeof window !== "undefined") {
+  gsap.registerPlugin(ScrollTrigger);
+}
+
+export { gsap, ScrollTrigger };
+
+/** True when the OS-level "reduce motion" pref is on. SSR-safe (returns false). */
+export function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/**
+ * Run a GSAP setup function inside a `gsap.context()` scoped to a ref.
+ * Cleanup runs on unmount automatically — no leftover ScrollTriggers
+ * or live animations after navigation away from the landing.
+ *
+ *   const ref = useGsap<HTMLDivElement>((ctx, root) => {
+ *     gsap.from(root.querySelector(".title"), { y: 40, opacity: 0 });
+ *   });
+ *   return <div ref={ref}>...</div>;
+ */
+export function useGsap<T extends HTMLElement = HTMLDivElement>(
+  setup: (ctx: gsap.Context, root: T) => void,
+  deps: ReadonlyArray<unknown> = [],
+) {
+  const ref = useRef<T | null>(null);
+
+  useEffect(() => {
+    const root = ref.current;
+    if (!root) return;
+    if (prefersReducedMotion()) return;
+
+    const ctx = gsap.context(() => setup(ctx, root), root);
+    return () => ctx.revert();
+    // The setup callback identity is intentionally ignored — callers
+    // pass an inline function on every render, but the actual deps
+    // they care about live in the `deps` array below.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+
+  return ref;
+}

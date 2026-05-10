@@ -202,17 +202,15 @@ export async function POST(request: Request) {
     .sort((a, b) => b.score - a.score || a.route.distance_km - b.route.distance_km)
     .slice(0, 3);
 
-  // Diagnostic log — visible in the dev server terminal. Helps debug
-  // "matcher returned nothing for an obvious corridor" reports by
-  // showing exactly what Google sent us vs. how we tokenised it.
+  // Diagnostic log — counts only. We deliberately do NOT log the
+  // rider's pickup/dropoff strings here: those are the rider's own
+  // trip patterns and would accumulate in retained server logs as
+  // a rolling map of where each user travels. Counts are enough to
+  // debug "matcher returned nothing for an obvious corridor" reports.
   console.log(
-    `[route-match] pickup="${pickupName}" dropoff="${dropoffName}" ` +
-      `pickupTokens=[${[...pickupTokens].join(",")}] ` +
-      `dropoffTokens=[${[...dropoffTokens].join(",")}] ` +
+    `[route-match] pickupTokens=${pickupTokens.size} dropoffTokens=${dropoffTokens.size} ` +
       `routesScanned=${routes?.length ?? 0} candidates=${candidates.length} returned=${top.length}` +
-      (top.length > 0
-        ? ` topScore=${top[0].score.toFixed(2)} topRoute="${top[0].route.origin_name} → ${top[0].route.destination_name}"`
-        : ""),
+      (top.length > 0 ? ` topScore=${top[0].score.toFixed(2)}` : ""),
   );
 
   return NextResponse.json({

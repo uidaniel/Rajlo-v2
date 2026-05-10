@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
+import { enforceIpRateLimit } from "@/lib/rate-limit";
 
 /**
  * POST /api/auth/check-email
@@ -17,6 +18,15 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
  * we grow past that, swap to a `check_email_exists` RPC function.
  */
 export async function POST(request: NextRequest) {
+  // Throttle by IP to make email enumeration impractical. Still allows
+  // a real user fat-fingering their email a few times.
+  const limited = enforceIpRateLimit(request, {
+    prefix: "auth:check-email",
+    limit: 15,
+    windowMs: 60_000,
+  });
+  if (limited) return limited;
+
   let email: unknown;
   try {
     const body = await request.json();

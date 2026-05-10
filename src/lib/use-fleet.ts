@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "./supabase-browser";
 import { isIOS } from "./platform-detect";
 
@@ -132,7 +132,19 @@ function computeBearing(
  * @param online    whether the driver has toggled themselves online
  */
 export function useFleetBroadcaster(driverId: string | null, online: boolean) {
-  const [error, setError] = useState<string | null>(null);
+  // Runtime error from the watchPosition callback (denial, timeout, etc).
+  // The "browser doesn't support geolocation" message is derived below
+  // instead of synced via setState — keeps us out of the cascading-render
+  // foot-gun that React 19's lint rules flag.
+  const [runtimeError, setRuntimeError] = useState<string | null>(null);
+  const error = useMemo(() => {
+    if (!driverId || !online) return null;
+    if (typeof navigator !== "undefined" && !("geolocation" in navigator)) {
+      return "Your browser doesn't support live location.";
+    }
+    return runtimeError;
+  }, [driverId, online, runtimeError]);
+
   // Latest fix the browser has given us. Updated on every watchPosition
   // callback (and the initial cached getCurrentPosition). Held in a ref
   // because the heartbeat timer below reads it on a fixed schedule —
@@ -144,8 +156,8 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
 
   useEffect(() => {
     if (!driverId || !online) return;
+    // No geolocation support → derived error above already reflects this.
     if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-      setError("Your browser doesn't support live location.");
       return;
     }
 
@@ -156,9 +168,6 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
 
     let watchId: number | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-
-    // eslint-disable-next-line no-console
-    console.log("[fleet] broadcaster mounting", { driverId, online });
 
     const broadcastLatest = () => {
       const fix = lastFixRef.current;
@@ -173,8 +182,6 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
             : null,
         ts: Date.now(),
       };
-      // eslint-disable-next-line no-console
-      console.log("[fleet] broadcasting position", payload);
       channel.send({
         type: "broadcast",
         event: FLEET_EVENT,
@@ -183,8 +190,6 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
     };
 
     channel.subscribe((status) => {
-      // eslint-disable-next-line no-console
-      console.log("[fleet] broadcaster channel status:", status);
       if (status !== "SUBSCRIBED") return;
 
       // Step 1: prime lastFixRef with whatever cached fix the browser has,
@@ -212,9 +217,7 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
           lastFixRef.current = pos.coords;
         },
         (err) => {
-          // eslint-disable-next-line no-console
-          console.warn("[fleet] geolocation error:", err.code, err.message);
-          setError(driverGeoErrorMessage(err.code));
+          setRuntimeError(driverGeoErrorMessage(err.code));
         },
         { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 },
       );
@@ -242,8 +245,6 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
         event: FLEET_OFFLINE_EVENT,
         payload: { driverId },
       });
-      // eslint-disable-next-line no-console
-      console.log("[fleet] broadcaster going offline", { driverId });
       supabase.removeChannel(channel);
       lastFixRef.current = null;
     };
@@ -269,25 +270,16 @@ export function useFleet(active: boolean): FleetDriver[] {
   const driversRef = useRef<Map<string, FleetDriver>>(new Map());
 
   useEffect(() => {
-    if (!active) {
-      driversRef.current.clear();
-      setDrivers([]);
-      return;
-    }
+    if (!active) return;
 
     const supabase = createSupabaseBrowserClient();
     const channel = supabase.channel(FLEET_CHANNEL, {
       config: { broadcast: { self: false } },
     });
 
-    // eslint-disable-next-line no-console
-    console.log("[fleet] subscriber mounting");
-
     channel
       .on("broadcast", { event: FLEET_EVENT }, ({ payload }) => {
         const p = parseFleetPayload(payload);
-        // eslint-disable-next-line no-console
-        console.log("[fleet] subscriber received position", { payload, parsed: p });
         if (!p) return;
 
         // Compute the icon's facing direction from movement instead of
@@ -324,17 +316,12 @@ export function useFleet(active: boolean): FleetDriver[] {
           payload && typeof payload === "object" && "driverId" in payload
             ? (payload as { driverId?: unknown }).driverId
             : null;
-        // eslint-disable-next-line no-console
-        console.log("[fleet] subscriber received offline", { driverId });
         if (typeof driverId !== "string") return;
         if (driversRef.current.delete(driverId)) {
           setDrivers(Array.from(driversRef.current.values()));
         }
       })
-      .subscribe((status) => {
-        // eslint-disable-next-line no-console
-        console.log("[fleet] subscriber channel status:", status);
-      });
+      .subscribe();
 
     // Periodic prune so offline drivers fade off the map without us needing
     // an explicit "going offline" broadcast (which would be unreliable
@@ -357,6 +344,9 @@ export function useFleet(active: boolean): FleetDriver[] {
       clearInterval(sweepTimer);
       supabase.removeChannel(channel);
       driversRef.current.clear();
+      // Clearing local state belongs in cleanup, not the effect body —
+      // setState inside the body itself triggers the cascading-render warning.
+      setDrivers([]);
     };
   }, [active]);
 

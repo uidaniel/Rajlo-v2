@@ -8,6 +8,7 @@ import {
 import { notifyRider } from "@/lib/notify";
 import { resolveDriverEmail } from "@/lib/driver-email-resolver";
 import { creditWallet, debitWallet } from "@/lib/wallet";
+import { splitFare } from "@/lib/fare-engine";
 
 /**
  * POST /api/driver/rides/[id]/status
@@ -171,76 +172,117 @@ export async function POST(
         .eq("id", target.carpool_group_id);
     }
 
-    // Money movement on completion: debit each rider's wallet for
-    // their final fare and credit the driver's wallet by the same
-    // amount. Today the driver gets 100% of the fare — when a
-    // platform commission lands later, just credit the driver
-    // (fare - commission) and credit a Rajlo "treasury" wallet for
-    // the commission cut.
+    // Money movement on completion. SYNCHRONOUS — we wait for the
+    // settlement to land (or fail and be recorded) before responding,
+    // so the driver's UI never sees a "trip complete" without the
+    // platform also knowing whether the money moved.
     //
-    // Best-effort: a wallet failure here doesn't roll back the
-    // ride completion (the ride is physically done — the driver
-    // already drove it). Failures get surfaced through the
-    // wallet's transaction history so admin can reconcile via
-    // /admin/wallets/[userId]/adjust.
-    void (async () => {
-      try {
-        const { data: completedRides } = await supabase
+    // Ordering per ride:
+    //   1. Debit the rider their full fare.
+    //   2. Credit the driver their earnings (fare − 15% commission).
+    //   3. Stamp settlement_status + transaction IDs on the ride row.
+    //
+    // We do NOT roll back the completion if either leg fails — the
+    // trip physically happened, the driver already drove it. Instead
+    // we mark the ride as needing admin reconciliation. The
+    // /admin/rides surface (TODO) filters on settlement_status to
+    // surface any ride that never settled cleanly.
+    const { data: completedRides } = await supabase
+      .from("rides")
+      .select(
+        "id, rider_id, final_fare_jmd, estimated_fare_jmd, pickup_name, dropoff_name",
+      )
+      .in(
+        "id",
+        updated.map((u) => u.id),
+      );
+
+    for (const ride of (completedRides ?? []) as Array<{
+      id: string;
+      rider_id: string;
+      final_fare_jmd: number | null;
+      estimated_fare_jmd: number;
+      pickup_name: string;
+      dropoff_name: string;
+    }>) {
+      const fare = ride.final_fare_jmd ?? ride.estimated_fare_jmd;
+      if (!fare || fare <= 0) {
+        await supabase
           .from("rides")
-          .select("id, rider_id, final_fare_jmd, estimated_fare_jmd, pickup_name, dropoff_name")
-          .in(
-            "id",
-            updated.map((u) => u.id),
-          );
-        for (const ride of (completedRides ?? []) as Array<{
-          id: string;
-          rider_id: string;
-          final_fare_jmd: number | null;
-          estimated_fare_jmd: number;
-          pickup_name: string;
-          dropoff_name: string;
-        }>) {
-          const fare = ride.final_fare_jmd ?? ride.estimated_fare_jmd;
-          if (!fare || fare <= 0) continue;
-          const description = `Ride · ${ride.pickup_name} → ${ride.dropoff_name}`;
-
-          // Debit the rider. If they're short, the trigger raises
-          // and we record the failure as a metadata note on the
-          // ride; admin sweeps these via the wallets page.
-          const debit = await debitWallet(
-            supabase,
-            ride.rider_id,
-            fare,
-            "ride_charge",
-            { rideId: ride.id, description },
-          );
-          if (!debit.ok) {
-            console.error(
-              `Couldn't debit rider ${ride.rider_id} ${fare} JMD for ride ${ride.id}:`,
-              debit.error,
-            );
-            continue;
-          }
-
-          // Credit the driver. user.id is the driver's auth id.
-          const credit = await creditWallet(
-            supabase,
-            user.id,
-            fare,
-            "ride_earning",
-            { rideId: ride.id, description },
-          );
-          if (!credit.ok) {
-            console.error(
-              `Couldn't credit driver ${user.id} ${fare} JMD for ride ${ride.id}:`,
-              credit.error,
-            );
-          }
-        }
-      } catch (err) {
-        console.error("Wallet movement on ride completion failed:", err);
+          .update({ settlement_status: "skipped_zero_fare" })
+          .eq("id", ride.id);
+        continue;
       }
-    })();
+      const { driverEarningsJmd, commissionJmd } = splitFare(fare);
+      const description = `Ride · ${ride.pickup_name} → ${ride.dropoff_name}`;
+
+      const debit = await debitWallet(
+        supabase,
+        ride.rider_id,
+        fare,
+        "ride_charge",
+        { rideId: ride.id, description },
+      );
+      if (!debit.ok) {
+        // Rider couldn't be charged. Record the failure so admin can
+        // reach out / collect / waive. We DO NOT credit the driver in
+        // this branch — the platform shouldn't pay out earnings on a
+        // ride where the rider didn't actually pay. Driver gets paid
+        // when admin manually settles (or rider tops up + the cron
+        // sweeper retries — future work).
+        await supabase
+          .from("rides")
+          .update({
+            settlement_status: "rider_debit_failed",
+            settlement_error: debit.error.slice(0, 500),
+            commission_jmd: commissionJmd,
+            driver_earnings_jmd: driverEarningsJmd,
+          })
+          .eq("id", ride.id);
+        continue;
+      }
+
+      const credit = await creditWallet(
+        supabase,
+        user.id,
+        driverEarningsJmd,
+        "ride_earning",
+        {
+          rideId: ride.id,
+          description,
+          metadata: { gross_fare_jmd: fare, commission_jmd: commissionJmd },
+        },
+      );
+      if (!credit.ok) {
+        // Rider was charged but driver credit failed. The rider's
+        // payment is REAL — we mark the ride for admin to manually
+        // credit the driver via /admin/wallets/[userId]/adjust.
+        await supabase
+          .from("rides")
+          .update({
+            settlement_status: "driver_credit_failed",
+            settlement_error: credit.error.slice(0, 500),
+            commission_jmd: commissionJmd,
+            driver_earnings_jmd: driverEarningsJmd,
+            rider_charge_transaction_id: debit.transactionId,
+            settled_at: new Date().toISOString(),
+          })
+          .eq("id", ride.id);
+        continue;
+      }
+
+      await supabase
+        .from("rides")
+        .update({
+          settlement_status: "settled",
+          commission_jmd: commissionJmd,
+          driver_earnings_jmd: driverEarningsJmd,
+          rider_charge_transaction_id: debit.transactionId,
+          driver_credit_transaction_id: credit.transactionId,
+          settled_at: new Date().toISOString(),
+        })
+        .eq("id", ride.id);
+    }
 
     // Best-effort receipt email per affected rider. We pull each
     // ride's full record + driver name so the receipt has every detail.

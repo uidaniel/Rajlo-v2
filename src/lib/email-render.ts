@@ -36,8 +36,32 @@ const BRAND = {
   footerBg: "#0d1107",
 } as const;
 
-const APP_URL =
-  process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+/**
+ * Public origin every email link is built off. Required in production
+ * (Vercel / wherever) — falling back to localhost there would silently
+ * ship every magic link, password reset, and ride receipt with a
+ * `http://localhost:3000` URL that no recipient can reach. We ALLOW
+ * the localhost fallback in dev so the file you're editing today
+ * keeps working without an env var.
+ *
+ * email-render.ts is only loaded by route handlers (never by static
+ * page rendering at build time), so throwing here surfaces as a
+ * 500 on the first email send rather than killing the build.
+ */
+function resolveAppUrl(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
+  if (fromEnv) return fromEnv.replace(/\/$/, "");
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "NEXT_PUBLIC_APP_URL is required in production. " +
+        "Set it on the deployment (Vercel: Project Settings → Environment Variables) " +
+        "to the public origin of the app, e.g. https://rajlo.com.",
+    );
+  }
+  return "http://localhost:3000";
+}
+
+const APP_URL = resolveAppUrl();
 
 /** Sections you can compose into an email body. Each renders to HTML. */
 export type EmailSection =
@@ -325,11 +349,12 @@ function renderCta(href: string, label: string): string {
        branded "Rajlo · Let's go!" header in the right colours.
    ────────────────────────────────────────────────────────────────────── */
 
-// White wordmark served from our own /public folder. Spaces in the
-// filename get URL-encoded so email clients fetch the right asset.
+// White wordmark served from our own /public folder. Generated from
+// `Rajlo white.svg` via sharp at 600×303 with a transparent background
+// (tightly cropped so it scales cleanly to email-header sizes).
 // Swap the file in `public/` (or change the path here) to update
 // every transactional email in one shot.
-const EMAIL_LOGO_URL = `${APP_URL}/Logo%20white%20PNG.png`;
+const EMAIL_LOGO_URL = `${APP_URL}/email-logo-white.png`;
 
 function renderHeaderMark(): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0">

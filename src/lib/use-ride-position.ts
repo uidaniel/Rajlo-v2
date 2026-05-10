@@ -59,11 +59,7 @@ export function useRidePosition(
   const lastSentRef = useRef<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
-    if (!rideId) {
-      setDriverPosition(null);
-      setRiderPosition(null);
-      return;
-    }
+    if (!rideId) return;
 
     const supabase = createSupabaseBrowserClient();
     const channel = supabase.channel(`ride:${rideId}:position`, {
@@ -155,6 +151,12 @@ export function useRidePosition(
         navigator.geolocation.clearWatch(watchId);
       }
       supabase.removeChannel(channel);
+      // Reset positions on teardown so a new ride doesn't briefly inherit
+      // stale markers from the previous one. Cleanup is the safe spot to
+      // setState — putting these resets in the effect body itself triggers
+      // the cascading-render warning React 19's lint rules surface.
+      setDriverPosition(null);
+      setRiderPosition(null);
     };
   }, [rideId, role, streamSelf]);
 
