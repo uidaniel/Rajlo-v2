@@ -93,7 +93,15 @@ export function renderEmail({
   <style>
     /* Mobile + dark-mode overrides (clients that support <style>). */
     @media only screen and (max-width: 620px) {
-      .rj-card { padding: 28px 22px !important; }
+      /* Title block stays tight to the body so the gap between
+         the headline and the lede paragraph doesn't blow out on
+         narrow screens. Body block keeps comfortable bottom
+         padding before the footer. */
+      .rj-card-title { padding: 26px 22px 4px 22px !important; }
+      .rj-card-body  { padding: 6px 22px 22px 22px !important; }
+      /* Legacy class kept so any caller still using rj-card
+         doesn't lose its mobile overrides. */
+      .rj-card { padding: 22px 22px !important; }
       .rj-hero { padding: 28px 22px !important; }
       .rj-foot { padding: 22px !important; }
       .rj-title { font-size: 26px !important; line-height: 1.18 !important; }
@@ -123,10 +131,10 @@ export function renderEmail({
 
           <!-- Eyebrow + Title block -->
           <tr>
-            <td class="rj-card" style="padding:36px 32px 6px 32px;">
+            <td class="rj-card-title" style="padding:32px 32px 4px 32px;">
               ${
                 eyebrow
-                  ? `<div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${BRAND.red};margin:0 0 14px 0;">${esc(eyebrow)}</div>`
+                  ? `<div style="font-size:11px;font-weight:700;letter-spacing:0.14em;text-transform:uppercase;color:${BRAND.red};margin:0 0 12px 0;">${esc(eyebrow)}</div>`
                   : ""
               }
               <h1 class="rj-title" style="margin:0;font-size:30px;line-height:1.18;letter-spacing:-0.02em;font-weight:800;color:${BRAND.textTitle};font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">${esc(title)}</h1>
@@ -135,7 +143,7 @@ export function renderEmail({
 
           <!-- Body sections -->
           <tr>
-            <td class="rj-card" style="padding:18px 32px 28px 32px;">
+            <td class="rj-card-body" style="padding:8px 32px 28px 32px;">
               ${body}
             </td>
           </tr>
@@ -317,23 +325,22 @@ function renderCta(href: string, label: string): string {
        branded "Rajlo · Let's go!" header in the right colours.
    ────────────────────────────────────────────────────────────────────── */
 
+// Externally-hosted logo (white wordmark) so emails render the
+// official Rajlo brand mark even when ${APP_URL} isn't reachable
+// from a recipient's network. Swap the URL here to update every
+// transactional email in one shot.
+const EMAIL_LOGO_URL = "https://i.ibb.co/gLZMkRMb/Logo-white-PNG.png";
+
 function renderHeaderMark(): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0">
     <tr>
-      <td style="vertical-align:middle;padding-right:14px;">
-        <img
-          src="${APP_URL}/icon.png"
-          width="48"
-          height="48"
-          alt="Rajlo"
-          style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;border-radius:10px;"
-        />
-      </td>
       <td style="vertical-align:middle;">
-        <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-weight:900;font-size:30px;letter-spacing:-0.02em;line-height:1;">
-          <span style="color:${BRAND.white};">Rajl</span><span style="color:${BRAND.red};">o</span>
-        </div>
-        <div style="margin-top:6px;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;font-style:italic;color:#bcc2bd;letter-spacing:0.04em;">Let's go!</div>
+        <img
+          src="${EMAIL_LOGO_URL}"
+          height="44"
+          alt="Rajlo · Let's go!"
+          style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;height:44px;width:auto;"
+        />
       </td>
     </tr>
   </table>`;
