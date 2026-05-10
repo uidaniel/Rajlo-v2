@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Logo } from "./logo";
-import { ArcWatermark } from "./arc-pattern";
 import { Icon, type IconName } from "./icons";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { clearSessionPolicy } from "@/lib/session-policy";
@@ -218,29 +217,28 @@ export function MobileDrawer({
         </button>
       </header>
 
-      {/* Mobile backdrop. `top-14` keeps the navbar tappable so the close
-         button still works; `bottom-0` + h-auto pin to the actually-
-         visible area. `touch-none` makes sure swipes on the backdrop
-         don't pass through and scroll content underneath — body
-         overflow is also locked via the effect below as a backup. */}
+      {/* Mobile backdrop. Full-viewport on mobile now (drawer covers
+         the top bar too), so the backdrop also goes top-0. `touch-none`
+         makes sure swipes on the backdrop don't pass through and
+         scroll content underneath — body overflow is locked by the
+         effect below as a backup. */}
       {isOpen && (
         <button
           aria-hidden
           tabIndex={-1}
-          className="fixed inset-x-0 bottom-0 top-14 z-30 touch-none bg-black/50 md:hidden"
+          className="fixed inset-0 z-30 touch-none bg-black/50 md:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       {/* ============== Sidebar ==============
-         Mobile: pinned below the top bar (top-14 = 3.5rem) and sized
-         with `100dvh` (dynamic viewport height) so the iOS URL bar
-         doesn't push the footer off-screen. `100vh` would *over*-size
-         the drawer because vh includes the URL-bar slot even when
-         it's hidden — dvh tracks the actually-visible area.
+         Mobile: covers the full viewport (top:0) with the close button
+         baked into its own dark header — avoids the awkward
+         white-strip-then-dark stack you'd get if it sat below the
+         page's mobile top bar.
          Desktop: takes the full viewport in its grid cell. */}
       <aside
-        className={`fixed left-0 top-14 z-40 flex h-[calc(100dvh-3.5rem)] w-72 flex-col overflow-hidden text-white shadow-2xl transition-transform md:static md:top-0 md:h-screen md:w-auto md:translate-x-0 md:shadow-none ${
+        className={`fixed left-0 top-0 z-40 flex h-[100dvh] w-72 flex-col overflow-hidden text-white shadow-2xl transition-transform md:static md:h-screen md:w-auto md:translate-x-0 md:shadow-none ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
@@ -251,7 +249,22 @@ export function MobileDrawer({
             "radial-gradient(circle at 100% 100%, rgba(241,1,0,0.18) 0%, rgba(241,1,0,0) 38%), linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 24%), linear-gradient(165deg, #1a1d10 0%, #111906 55%, #07090a 100%)",
         }}
       >
-        {/* Top: Logo only — portal title/subtitle removed for cleaner chrome. */}
+        {/* Mobile drawer header: logo on the left, close button on
+           the right. Dark theme matches the rest of the drawer so
+           there's no contrasting white strip above the nav. */}
+        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 md:hidden">
+          <Logo size="sm" variant="white" tagline />
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            aria-label="Close menu"
+            className="grid h-9 w-9 place-items-center rounded-lg border border-white/15 bg-white/5 text-white/85 hover:bg-white/15"
+          >
+            <Icon name="x" className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Desktop logo header — unchanged. */}
         <div className="relative hidden border-b border-white/10 px-6 pb-5 pt-7 md:block">
           <Logo size="sm" variant="white" tagline />
         </div>
