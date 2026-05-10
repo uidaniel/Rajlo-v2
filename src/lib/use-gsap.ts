@@ -61,7 +61,31 @@ export function useGsap<T extends HTMLElement = HTMLDivElement>(
     if (prefersReducedMotion()) return;
 
     const ctx = gsap.context(() => setup(root), root);
-    return () => ctx.revert();
+
+    // ScrollTrigger calculates trigger positions from the DOM the
+    // moment each `gsap.to/from(... scrollTrigger: ...)` is created.
+    // If fonts load late, images settle, or any other layout shift
+    // happens after that, every cached position is stale and the
+    // triggers can silently miss their start point — sections never
+    // animate in, content stays at opacity 0.
+    //
+    // We force a refresh after mount, again on the next frame (post
+    // hydration paint), and one more time once webfonts settle. Each
+    // refresh is cheap — ScrollTrigger debounces internally.
+    const refreshSoon = () => ScrollTrigger.refresh();
+    const raf = requestAnimationFrame(refreshSoon);
+    const t1 = window.setTimeout(refreshSoon, 250);
+    const fontsReady =
+      typeof document !== "undefined" && "fonts" in document
+        ? (document.fonts as FontFaceSet).ready.then(refreshSoon).catch(() => null)
+        : null;
+    void fontsReady;
+
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t1);
+      ctx.revert();
+    };
     // The setup callback identity is intentionally ignored — callers
     // pass an inline function on every render, but the actual deps
     // they care about live in the `deps` array below.

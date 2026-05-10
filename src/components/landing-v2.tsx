@@ -332,26 +332,29 @@ function CorridorMarquee() {
 function TwoModes({ cta }: { cta: LandingCtaTargets }) {
   const ref = useGsap<HTMLElement>((root) => {
     gsap.from(root.querySelector("[data-anim='heading']"), {
-      scrollTrigger: { trigger: root, start: "top 75%" },
+      scrollTrigger: { trigger: root, start: "top 85%", once: true },
       y: 36,
       opacity: 0,
       duration: 0.8,
       ease: "power3.out",
+      immediateRender: false,
     });
     gsap.from("[data-anim='card-private']", {
-      scrollTrigger: { trigger: root, start: "top 70%" },
+      scrollTrigger: { trigger: root, start: "top 80%", once: true },
       x: -50,
       opacity: 0,
       duration: 0.9,
       ease: "expo.out",
+      immediateRender: false,
     });
     gsap.from("[data-anim='card-route']", {
-      scrollTrigger: { trigger: root, start: "top 70%" },
+      scrollTrigger: { trigger: root, start: "top 80%", once: true },
       x: 50,
       opacity: 0,
       duration: 0.9,
       ease: "expo.out",
       delay: 0.1,
+      immediateRender: false,
     });
   });
 
@@ -518,22 +521,31 @@ const STEPS = [
 function HowItWorks() {
   const ref = useGsap<HTMLElement>((root) => {
     gsap.from(root.querySelector("[data-anim='heading']"), {
-      scrollTrigger: { trigger: root, start: "top 75%" },
+      scrollTrigger: { trigger: root, start: "top 85%", once: true },
       y: 36,
       opacity: 0,
       duration: 0.7,
       ease: "power3.out",
+      immediateRender: false,
     });
     gsap.from("[data-anim='step']", {
-      scrollTrigger: { trigger: "[data-anim='step-grid']", start: "top 80%" },
+      scrollTrigger: {
+        trigger: "[data-anim='step-grid']",
+        start: "top 90%",
+        once: true,
+      },
       y: 50,
       opacity: 0,
       duration: 0.8,
       stagger: 0.18,
       ease: "expo.out",
+      immediateRender: false,
     });
 
     // Animated connecting line that draws as you scroll past the steps.
+    // Scrub animations don't suffer the "stuck invisible" failure mode
+    // because their state is bound to scroll position — so we leave
+    // immediateRender at its default here.
     const line = root.querySelector<HTMLElement>("[data-anim='line']");
     if (line) {
       gsap.fromTo(
@@ -545,7 +557,7 @@ function HowItWorks() {
           ease: "none",
           scrollTrigger: {
             trigger: "[data-anim='step-grid']",
-            start: "top 75%",
+            start: "top 80%",
             end: "bottom 60%",
             scrub: 0.4,
           },
@@ -611,28 +623,31 @@ function FareTransparency() {
 
   const ref = useGsap<HTMLElement>((root) => {
     gsap.from(root.querySelector("[data-anim='left']"), {
-      scrollTrigger: { trigger: root, start: "top 70%" },
+      scrollTrigger: { trigger: root, start: "top 85%", once: true },
       x: -36,
       opacity: 0,
       duration: 0.9,
       ease: "expo.out",
+      immediateRender: false,
     });
     gsap.from(root.querySelector("[data-anim='right']"), {
-      scrollTrigger: { trigger: root, start: "top 70%" },
+      scrollTrigger: { trigger: root, start: "top 85%", once: true },
       x: 36,
       opacity: 0,
       duration: 0.9,
       ease: "expo.out",
       delay: 0.05,
+      immediateRender: false,
     });
     gsap.from("[data-anim='formula-token']", {
-      scrollTrigger: { trigger: root, start: "top 65%" },
+      scrollTrigger: { trigger: root, start: "top 80%", once: true },
       y: 14,
       opacity: 0,
       duration: 0.5,
       stagger: 0.06,
       delay: 0.4,
       ease: "back.out(1.7)",
+      immediateRender: false,
     });
   });
 
@@ -756,16 +771,20 @@ const PILLARS = [
 
 function WhyRajlo() {
   const ref = useGsap<HTMLElement>((root) => {
-    // Counter animation as the strip enters view.
+    // Count-up enhancement. Each counter starts already rendered at its
+    // final value (see CounterCell below) so it's never blank if the
+    // trigger misses — we reset to 0 here and animate back up only
+    // after the trigger fires, making the animation a pure enhancement.
     const counters = root.querySelectorAll<HTMLElement>("[data-counter]");
     counters.forEach((el) => {
       const target = Number(el.dataset.counter ?? "0");
       const obj = { v: 0 };
+      el.textContent = "0";
       gsap.to(obj, {
         v: target,
         duration: 1.6,
         ease: "power2.out",
-        scrollTrigger: { trigger: el, start: "top 85%", once: true },
+        scrollTrigger: { trigger: el, start: "top 90%", once: true },
         onUpdate: () => {
           el.textContent = Math.round(obj.v).toString();
         },
@@ -773,12 +792,17 @@ function WhyRajlo() {
     });
 
     gsap.from("[data-anim='pillar']", {
-      scrollTrigger: { trigger: "[data-anim='pillar-grid']", start: "top 80%" },
+      scrollTrigger: {
+        trigger: "[data-anim='pillar-grid']",
+        start: "top 90%",
+        once: true,
+      },
       y: 40,
       opacity: 0,
       duration: 0.8,
       stagger: 0.12,
       ease: "expo.out",
+      immediateRender: false,
     });
   });
 
@@ -845,6 +869,10 @@ function CounterCell({
   /** When provided, render this string verbatim instead of animating. */
   exact?: string;
 }) {
+  // Pre-render the final value as the initial textContent. The WhyRajlo
+  // setup resets it to "0" before animating up, so JS-on users see the
+  // count animation; JS-off / animation-skipped users see the correct
+  // number from the start — never a blank "0".
   return (
     <div className="text-center md:text-left">
       <p className="text-4xl font-extrabold tracking-tight text-rajlo-red md:text-5xl">
@@ -852,7 +880,7 @@ function CounterCell({
           <span>{exact}</span>
         ) : (
           <>
-            <span data-counter={value}>0</span>
+            <span data-counter={value}>{value}</span>
             {suffix}
           </>
         )}
@@ -867,30 +895,36 @@ function CounterCell({
 function DriveWithRajlo({ cta }: { cta: LandingCtaTargets }) {
   const ref = useGsap<HTMLElement>((root) => {
     gsap.from("[data-anim='drive-copy']", {
-      scrollTrigger: { trigger: root, start: "top 75%" },
+      scrollTrigger: { trigger: root, start: "top 85%", once: true },
       x: -40,
       opacity: 0,
       duration: 0.9,
       ease: "expo.out",
+      immediateRender: false,
     });
     gsap.from("[data-anim='drive-card']", {
-      scrollTrigger: { trigger: root, start: "top 75%" },
+      scrollTrigger: { trigger: root, start: "top 85%", once: true },
       x: 40,
       opacity: 0,
       duration: 0.9,
       ease: "expo.out",
       delay: 0.1,
+      immediateRender: false,
     });
-    // Earnings number ticks up
+    // Earnings count-up. Same pattern as the WhyRajlo counters — the
+    // element pre-renders at its final formatted value (see JSX below)
+    // so the number is never blank; we reset to 0 here and animate up
+    // once the trigger fires.
     const num = root.querySelector<HTMLElement>("[data-anim='earnings']");
     if (num) {
       const target = Number(num.dataset.target ?? "0");
       const obj = { v: 0 };
+      num.textContent = "0";
       gsap.to(obj, {
         v: target,
         duration: 1.8,
         ease: "power2.out",
-        scrollTrigger: { trigger: num, start: "top 85%", once: true },
+        scrollTrigger: { trigger: num, start: "top 90%", once: true },
         onUpdate: () => {
           num.textContent = Math.round(obj.v).toLocaleString("en-JM");
         },
@@ -908,7 +942,7 @@ function DriveWithRajlo({ cta }: { cta: LandingCtaTargets }) {
           <p className="text-xs font-bold uppercase tracking-wider text-rajlo-red">
             Drive with Rajlo
           </p>
-          <h2 className="mt-3 text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">
+          <h2 className="text-4xl font-extrabold leading-[1.05] tracking-tight md:text-6xl">
             Keep <span className="text-rajlo-red">85%</span> of every fare.
             <br />
             <span className="italic font-light">Get paid instantly.</span>
@@ -952,7 +986,7 @@ function DriveWithRajlo({ cta }: { cta: LandingCtaTargets }) {
                   data-target="42500"
                   className="text-6xl font-black tabular-nums tracking-tight md:text-7xl"
                 >
-                  0
+                  42,500
                 </span>
               </p>
               <p className="mt-2 text-sm text-white/65">
@@ -1014,20 +1048,22 @@ function Stat({
 function FinalCta({ cta }: { cta: LandingCtaTargets }) {
   const ref = useGsap<HTMLElement>((root) => {
     gsap.from(root.querySelector("[data-anim='cta-title']"), {
-      scrollTrigger: { trigger: root, start: "top 80%" },
+      scrollTrigger: { trigger: root, start: "top 90%", once: true },
       scale: 0.92,
       opacity: 0,
       duration: 0.9,
       ease: "expo.out",
+      immediateRender: false,
     });
     gsap.from("[data-anim='cta-btn']", {
-      scrollTrigger: { trigger: root, start: "top 75%" },
+      scrollTrigger: { trigger: root, start: "top 90%", once: true },
       y: 20,
       opacity: 0,
       duration: 0.7,
       stagger: 0.1,
       ease: "power3.out",
       delay: 0.3,
+      immediateRender: false,
     });
     // Big logo subtle pulse
     gsap.to(root.querySelector("[data-anim='cta-logo']"), {
