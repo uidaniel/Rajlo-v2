@@ -217,28 +217,29 @@ export function MobileDrawer({
         </button>
       </header>
 
-      {/* Mobile backdrop. Full-viewport on mobile now (drawer covers
-         the top bar too), so the backdrop also goes top-0. `touch-none`
-         makes sure swipes on the backdrop don't pass through and
-         scroll content underneath — body overflow is locked by the
-         effect below as a backup. */}
+      {/* Mobile backdrop. Full-viewport (top-0, inset-0) so it covers the
+         page's mobile top bar too. Sits at z-[55] — above the sticky
+         top bar (z-40) so the bar can't poke through, but below the
+         drawer panel itself. `touch-none` blocks swipe-through; body
+         overflow is also locked by the effect below as backup. */}
       {isOpen && (
         <button
           aria-hidden
           tabIndex={-1}
-          className="fixed inset-0 z-30 touch-none bg-black/50 md:hidden"
+          className="fixed inset-0 z-[55] touch-none bg-black/50 md:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
 
       {/* ============== Sidebar ==============
-         Mobile: covers the full viewport (top:0) with the close button
-         baked into its own dark header — avoids the awkward
-         white-strip-then-dark stack you'd get if it sat below the
-         page's mobile top bar.
+         Mobile: covers the full viewport (top:0) at z-[60] so it sits
+         above the sticky mobile top bar (z-40) AND the backdrop. The
+         close button is baked into its own dark header — avoids the
+         awkward white-strip-then-dark stack you'd get if it sat below
+         the page's mobile top bar.
          Desktop: takes the full viewport in its grid cell. */}
       <aside
-        className={`fixed left-0 top-0 z-40 flex h-[100dvh] w-72 flex-col overflow-hidden text-white shadow-2xl transition-transform md:static md:h-screen md:w-auto md:translate-x-0 md:shadow-none ${
+        className={`fixed left-0 top-0 z-[60] flex h-[100dvh] w-72 flex-col overflow-hidden text-white shadow-2xl transition-transform md:static md:z-auto md:h-screen md:w-auto md:translate-x-0 md:shadow-none ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{

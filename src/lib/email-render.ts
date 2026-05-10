@@ -325,11 +325,11 @@ function renderCta(href: string, label: string): string {
        branded "Rajlo · Let's go!" header in the right colours.
    ────────────────────────────────────────────────────────────────────── */
 
-// Externally-hosted logo (white wordmark) so emails render the
-// official Rajlo brand mark even when ${APP_URL} isn't reachable
-// from a recipient's network. Swap the URL here to update every
-// transactional email in one shot.
-const EMAIL_LOGO_URL = "https://i.ibb.co/gLZMkRMb/Logo-white-PNG.png";
+// White wordmark served from our own /public folder. Spaces in the
+// filename get URL-encoded so email clients fetch the right asset.
+// Swap the file in `public/` (or change the path here) to update
+// every transactional email in one shot.
+const EMAIL_LOGO_URL = `${APP_URL}/Logo%20white%20PNG.png`;
 
 function renderHeaderMark(): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0">
@@ -337,9 +337,9 @@ function renderHeaderMark(): string {
       <td style="vertical-align:middle;">
         <img
           src="${EMAIL_LOGO_URL}"
-          height="44"
+          height="52"
           alt="Rajlo · Let's go!"
-          style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;height:44px;width:auto;"
+          style="display:block;border:0;outline:none;text-decoration:none;-ms-interpolation-mode:bicubic;height:52px;width:auto;max-width:220px;"
         />
       </td>
     </tr>
