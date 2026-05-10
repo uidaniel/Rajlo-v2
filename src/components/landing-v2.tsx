@@ -414,7 +414,7 @@ function TwoModes({ cta }: { cta: LandingCtaTargets }) {
                 </div>
                 <Link
                   href={cta.riderHref}
-                  className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-rajlo-black transition-transform hover:-translate-y-0.5"
+                  className="shrink-0 whitespace-nowrap rounded-full bg-white px-5 py-2.5 text-sm font-bold text-rajlo-black transition-transform hover:-translate-y-0.5"
                 >
                   Book a ride →
                 </Link>
@@ -461,7 +461,7 @@ function TwoModes({ cta }: { cta: LandingCtaTargets }) {
                 </div>
                 <Link
                   href={cta.riderHref}
-                  className="rounded-full bg-rajlo-black px-5 py-2.5 text-sm font-bold text-white transition-transform hover:-translate-y-0.5"
+                  className="shrink-0 whitespace-nowrap rounded-full bg-rajlo-black px-5 py-2.5 text-sm font-bold text-white transition-transform hover:-translate-y-0.5"
                 >
                   Hail a route taxi →
                 </Link>
@@ -1113,7 +1113,7 @@ function FinalCta({ cta }: { cta: LandingCtaTargets }) {
           <Link
             data-anim="cta-btn"
             href={cta.riderHref}
-            className="rounded-full bg-rajlo-black px-9 py-4 text-base font-bold text-white shadow-2xl shadow-black/40 transition-transform hover:-translate-y-0.5"
+            className="whitespace-nowrap rounded-full bg-rajlo-black px-9 py-4 text-base font-bold text-white shadow-2xl shadow-black/40 transition-transform hover:-translate-y-0.5"
           >
             {cta.riderIsDashboard
               ? "Open my dashboard →"
@@ -1122,7 +1122,7 @@ function FinalCta({ cta }: { cta: LandingCtaTargets }) {
           <Link
             data-anim="cta-btn"
             href={cta.driverHref}
-            className="rounded-full border-2 border-white/85 px-9 py-4 text-base font-bold text-white transition-colors hover:bg-white/10"
+            className="whitespace-nowrap rounded-full border-2 border-white/85 px-9 py-4 text-base font-bold text-white transition-colors hover:bg-white/10"
           >
             {cta.driverIsDashboard ? "Driver dashboard" : "Drive with Rajlo"}
           </Link>
