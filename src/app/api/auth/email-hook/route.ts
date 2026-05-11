@@ -179,10 +179,23 @@ export async function POST(request: Request) {
 }
 
 /**
- * Build the URL the recipient should tap. Supabase exposes the
- * primitives (token_hash + action_type + redirect) and expects us to
- * compose them. We point at Supabase's hosted /auth/v1/verify endpoint
- * which validates the token and then sends the user to `redirect_to`.
+ * Build the URL the recipient should tap.
+ *
+ * We deliberately point at our own `/auth/confirm` route (a Next.js
+ * route handler at `src/app/auth/confirm/route.ts`) instead of
+ * Supabase's hosted `/auth/v1/verify`. Three reasons:
+ *
+ *   1. Supabase's hosted endpoint requires the anon key as a query
+ *      param (`apikey=…`) — if it's missing the user sees the raw
+ *      JSON error "No API key found in request". Our route handler
+ *      uses the server's Supabase client, no key in URL.
+ *   2. The URL stays on rajlo.com — clicking the email keeps the user
+ *      on our domain instead of jumping to a `*.supabase.co` host.
+ *   3. We can show branded error UI when a link is expired/used.
+ *
+ * Action-type names line up with the values `supabase.auth.verifyOtp`
+ * accepts (`signup`, `recovery`, `magiclink`, `invite`, `email_change`,
+ * `email`) so we just pass `email_action_type` straight through.
  *
  * Falls back to `APP_URL` if `site_url` isn't present in the payload
  * — defensive for replayed events from dev environments.
@@ -194,9 +207,9 @@ function buildConfirmationUrl(emailData: AuthHookPayload["email_data"]): string 
     type: emailData.email_action_type,
   });
   if (emailData.redirect_to) {
-    params.set("redirect_to", emailData.redirect_to);
+    params.set("next", emailData.redirect_to);
   }
-  return `${base}/auth/v1/verify?${params.toString()}`;
+  return `${base}/auth/confirm?${params.toString()}`;
 }
 
 function pickFirstName(meta: Record<string, unknown> | undefined): string | null {
