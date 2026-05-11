@@ -623,43 +623,6 @@ export default function RiderRequestPage() {
                 )}
             </div>
 
-            {/* Multi-route picker — only when route_taxi mode is on AND
-               there's more than one match to pick from. Lets the rider
-               swap to a different corridor if our first pick was wrong. */}
-            {mode === "route_taxi" && matches && matches.length > 1 && (
-              <div className="mt-3">
-                <p className="font-secondary mb-2 text-[10px] font-bold uppercase tracking-wider text-muted">
-                  Other corridors that match · {matches.length - 1}
-                </p>
-                <div className="space-y-1.5">
-                  {matches
-                    .filter((m) => m.route.id !== selectedRouteId)
-                    .map((m) => (
-                      <button
-                        key={m.route.id}
-                        type="button"
-                        onClick={() => setSelectedRouteId(m.route.id)}
-                        className="flex w-full items-center justify-between gap-3 rounded-xl border border-line bg-surface px-3 py-2 text-left transition-all hover:border-rajlo-red hover:bg-primary-soft/40"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs font-bold">
-                            {m.direction === "reverse"
-                              ? `${m.route.destination} → ${m.route.origin}`
-                              : `${m.route.origin} → ${m.route.destination}`}
-                          </p>
-                          <p className="text-[10px] text-muted">
-                            {m.route.distanceKm.toFixed(1)} km
-                          </p>
-                        </div>
-                        <p className="shrink-0 text-xs font-extrabold text-rajlo-red">
-                          {formatJMD(m.fareJmd)}
-                        </p>
-                      </button>
-                    ))}
-                </div>
-              </div>
-            )}
-
             {/* Hint when no route taxi covers this corridor */}
             {filledStops.length === 0 &&
               !matching &&
@@ -973,11 +936,38 @@ function WaypointSlot({
       if (!results.length) throw new Error("Couldn't find your address.");
       const top = results[0];
 
+      // For the `name` field we deliberately PREFER a neighbourhood
+      // / sublocality token (e.g. "Half Way Tree", "Cross Roads",
+      // "Spanish Town") over the literal street address. Reason: the
+      // route-taxi matcher tokenises the rider's name and looks for
+      // overlap with TA route corridor names — "12 Hope Road" → tokens
+      // [hope, road] won't ever match a corridor called
+      // "Half Way Tree → Cross Roads". Pulling the neighbourhood
+      // surfaces the right tokens AND reads more naturally for the
+      // rider ("Half Way Tree" beats "12 Hope Road, Kingston").
+      // The `?? []` fallback drops TypeScript's inferred element type,
+      // so we re-annotate with a structural shape that matches what
+      // Google's geocoder returns. We avoid `google.maps.GeocoderAddressComponent`
+      // here because the `google` namespace isn't always resolvable
+      // in client-component files depending on tsconfig — the inline
+      // shape compiles everywhere.
+      type AddrComponent = { types: string[]; long_name: string };
+      const components: AddrComponent[] =
+        (top.address_components as AddrComponent[] | undefined) ?? [];
+      const pick = (type: string) =>
+        components.find((c) => c.types.includes(type))?.long_name;
+      const corridorName =
+        pick("neighborhood") ??
+        pick("sublocality_level_1") ??
+        pick("sublocality") ??
+        pick("locality") ??
+        pick("administrative_area_level_2") ??
+        top.formatted_address.split(",")[0] ??
+        "Current location";
+
       onSelect({
         placeId: top.place_id ?? "",
-        // Pull the first comma-segment as a friendly short name
-        // ("12 Hope Road" rather than the full multi-line address).
-        name: top.formatted_address.split(",")[0] || "Current location",
+        name: corridorName,
         address: top.formatted_address,
         lat: latitude,
         lng: longitude,
