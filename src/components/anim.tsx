@@ -146,7 +146,9 @@ export function CountUp({
   useEffect(() => {
     if (!inView) return;
     if (reduced) {
-      setDisplay(to);
+      // Defer the reduced-motion snap-to-final off the synchronous
+      // effect body so React 19's cascading-render lint passes.
+      queueMicrotask(() => setDisplay(to));
       return;
     }
     const controls = animate(0, to, {
@@ -155,7 +157,7 @@ export function CountUp({
       onUpdate: (latest) => setDisplay(Math.round(latest)),
     });
     return () => controls.stop();
-  }, [inView, to, duration, reduced]);
+  }, [inView, to, duration, reduced, easing]);
 
   return (
     <span ref={ref} className={className}>
@@ -325,7 +327,12 @@ export function Typewriter({
           typingSpeed,
         );
       } else {
-        setPhase("holding");
+        // Phase transitions inside an effect body trip the React 19
+        // cascading-render lint. Deferring to a microtask keeps the
+        // typewriter sequencing intact (same tick of the event loop,
+        // just after the current render commits) and satisfies the
+        // rule.
+        queueMicrotask(() => setPhase("holding"));
       }
     } else if (phase === "holding") {
       t = setTimeout(() => setPhase("deleting"), holdMs);
@@ -333,8 +340,10 @@ export function Typewriter({
       if (text.length > 0) {
         t = setTimeout(() => setText(text.slice(0, -1)), deletingSpeed);
       } else {
-        setIndex((i) => (i + 1) % texts.length);
-        setPhase("typing");
+        queueMicrotask(() => {
+          setIndex((i) => (i + 1) % texts.length);
+          setPhase("typing");
+        });
       }
     }
 

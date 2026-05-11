@@ -37,21 +37,33 @@ const BRAND = {
 } as const;
 
 /**
- * Public origin every email link is built off. Required in production
- * (Vercel / wherever) — falling back to localhost there would silently
- * ship every magic link, password reset, and ride receipt with a
- * `http://localhost:3000` URL that no recipient can reach. We ALLOW
- * the localhost fallback in dev so the file you're editing today
- * keeps working without an env var.
+ * Public origin every email link is built off. Required in production —
+ * falling back to localhost would silently ship every magic link,
+ * password reset, and ride receipt with a `http://localhost:3000`
+ * URL that no recipient can reach.
  *
- * email-render.ts is only loaded by route handlers (never by static
- * page rendering at build time), so throwing here surfaces as a
- * 500 on the first email send rather than killing the build.
+ * Resolution strategy:
+ *   - If `NEXT_PUBLIC_APP_URL` is set → use it.
+ *   - Else if we're INSIDE `next build` (Next sets
+ *     `NEXT_PHASE=phase-production-build`) → fall through to the
+ *     localhost placeholder. The build never actually sends email,
+ *     so the placeholder is harmless and lets local prod builds
+ *     succeed without forcing the developer to set the env var.
+ *   - Else if NODE_ENV is production (i.e. real runtime on a
+ *     deployment) → throw loudly. This is the case that matters:
+ *     a deployed server without the env var would mint broken
+ *     emails, so failing fast is the right move.
+ *   - Else (dev) → localhost. Standard dev experience.
  */
+const BUILD_PHASE = "phase-production-build";
+
 function resolveAppUrl(): string {
   const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.trim();
   if (fromEnv) return fromEnv.replace(/\/$/, "");
-  if (process.env.NODE_ENV === "production") {
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.NEXT_PHASE !== BUILD_PHASE
+  ) {
     throw new Error(
       "NEXT_PUBLIC_APP_URL is required in production. " +
         "Set it on the deployment (Vercel: Project Settings → Environment Variables) " +

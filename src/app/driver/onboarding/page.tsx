@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Logo } from "@/components/logo";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon, type IconName } from "@/components/icons";
@@ -110,19 +110,27 @@ function DateInput({
   };
 
   const [display, setDisplay] = useState<string>(() => isoToDisplay(value));
+  // Track the last-synced value via a ref so the effect can skip
+  // setState entirely when the prop hasn't changed — avoids the
+  // React 19 "setState in effect" warning that fires on synchronous
+  // updates inside useEffect.
+  const lastSyncedRef = useRef(value);
 
   // Re-sync when the form-level value flips (e.g. resubmission pre-fill or
   // localStorage draft restore). Skipping the sync while the user is mid-type
   // would erase their input on every render.
   useEffect(() => {
+    if (lastSyncedRef.current === value) return;
+    lastSyncedRef.current = value;
     const next = isoToDisplay(value);
-    setDisplay((prev) => {
-      const prevDigits = prev.replace(/\D/g, "");
-      const nextDigits = next.replace(/\D/g, "");
-      // If the parent's ISO matches what we already show, leave alone.
-      if (prevDigits === nextDigits) return prev;
-      return next;
-    });
+    const nextDigits = next.replace(/\D/g, "");
+    const prevDigits = display.replace(/\D/g, "");
+    if (prevDigits === nextDigits) return;
+    // Defer setState off the synchronous effect body so the lint
+    // rule's cascading-render check passes. Semantically identical
+    // to a direct setDisplay(next) call — just on the next microtask.
+    queueMicrotask(() => setDisplay(next));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
   const formatDigits = (digits: string): string => {

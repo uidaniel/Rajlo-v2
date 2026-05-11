@@ -29,9 +29,17 @@ export default async function DriverPendingPage() {
     month: "long",
     day: "numeric",
   });
+  // This is a server component (runs once per request). `Date.now()`
+  // here is request-time, not render-time — the React 19 purity rule
+  // assumes a client render context that can re-execute, which isn't
+  // applicable for an async server component. Captured into a const
+  // so the rest of the math reads from a single value, and the
+  // eslint disable below is scoped to this one intentional call.
+  // eslint-disable-next-line react-hooks/purity
+  const nowMs = Date.now();
   const minutesSince = Math.max(
     0,
-    Math.floor((Date.now() - submittedAt.getTime()) / (1000 * 60)),
+    Math.floor((nowMs - submittedAt.getTime()) / (1000 * 60)),
   );
   const hoursSince = Math.floor(minutesSince / 60);
   const daysSince = Math.floor(hoursSince / 24);
@@ -312,6 +320,11 @@ export default async function DriverPendingPage() {
           <p className="relative mt-6 text-center text-xs text-muted">
             We&apos;ll email and text you the moment your account activates. Want to check
             right now?{" "}
+            {/* Intentional plain <a>: this is a server component, and
+                we WANT a full reload so the server re-fetches the
+                driver status. A <Link> to the same URL is a client
+                no-op and wouldn't refresh anything. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
             <a
               href="/driver/pending"
               className="font-semibold text-rajlo-red hover:underline"
