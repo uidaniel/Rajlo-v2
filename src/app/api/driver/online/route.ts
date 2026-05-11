@@ -91,6 +91,35 @@ export async function PATCH(request: Request) {
     );
   }
 
+  // Push-subscription gate: a driver going online MUST have at least
+  // one active web-push subscription on file. Without it they'd never
+  // get the wake-up notification when a rider hails — they'd have to
+  // sit on the page staring at it, which defeats the point of being
+  // "online but not eyes-on-screen".
+  //
+  // The UI also enforces this client-side (DriverReadinessGate), but
+  // the server is the source of truth — a tampered or stale client
+  // can't sneak past.
+  //
+  // Only enforced on the offline→online flip. Going OFFLINE is always
+  // allowed regardless (a driver should never be trapped online).
+  if (desired) {
+    const { count: pushCount } = await supabase
+      .from("push_subscriptions")
+      .select("*", { count: "exact", head: true })
+      .eq("user_id", user.id);
+    if (!pushCount || pushCount === 0) {
+      return NextResponse.json(
+        {
+          error: "push_required",
+          message:
+            "Enable push notifications before going online — riders' hails won't reach you otherwise.",
+        },
+        { status: 412 },
+      );
+    }
+  }
+
   // Stamp went_online_at only on the offline → online transition. We
   // don't bump it on every PATCH so the "online for X minutes" timer
   // stays anchored to the actual session start.

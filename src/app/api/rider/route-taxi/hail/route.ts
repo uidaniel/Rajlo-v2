@@ -4,6 +4,7 @@ import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { hasSufficientBalance } from "@/lib/wallet";
 import { calculateRouteFare } from "@/lib/fare-engine";
 import { isWithinJamaica } from "@/lib/jamaica";
+import { notifyRouteTaxiDrivers } from "@/lib/notify";
 
 /**
  * POST /api/rider/route-taxi/hail
@@ -183,6 +184,22 @@ export async function POST(request: Request) {
       { status: 500 },
     );
   }
+
+  // Broadcast to every driver currently on this route. First one to
+  // tap "Accept" wins via the atomic claim in
+  // /api/driver/route-taxi/hails/[id]. Best-effort — a notification
+  // failure must not roll back the hail (the rider's UI is already
+  // polling and will reconcile if a driver accepts via in-app poll).
+  void notifyRouteTaxiDrivers(supabase, route.id, {
+    kind: "ride_available",
+    title: "New route taxi hail",
+    body: `${pickupName} → ${dropoffName} · JMD ${fareJmd.toLocaleString("en-JM")}`,
+    href: "/driver/route-taxi",
+    pushTag: `route-hail-${hail.id}`,
+    pushRenotify: true,
+    requireInteraction: true,
+    pushOnly: true,
+  }).catch(() => null);
 
   return NextResponse.json({
     ok: true,

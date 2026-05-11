@@ -10,6 +10,7 @@ import { Skeleton } from "@/components/skeleton";
 import { MapView } from "@/components/map-view";
 import { HailChatSheet } from "@/components/hail-chat-sheet";
 import { useBackgroundRefresh } from "@/lib/use-background-refresh";
+import { useSelfGpsPosition } from "@/lib/use-self-gps";
 import { formatJMD, type Place } from "@/lib/jamaica";
 
 /**
@@ -731,6 +732,19 @@ function MapBlock({ hail }: { hail: Hail }) {
       ? { lat: hail.session.currentLat, lng: hail.session.currentLng }
       : null;
 
+  // Rider's own GPS for their map marker. Active during every phase
+  // except the terminal ones (completed / cancelled / no_show) so the
+  // rider sees their dot from "looking for a driver" right through
+  // pickup. We don't broadcast — driver position comes via polling on
+  // the hail row, not Realtime, so a channel here would be overhead.
+  const trackingActive = ["requested", "accepted", "picked_up"].includes(
+    hail.status,
+  );
+  const { position: riderSelf } = useSelfGpsPosition(trackingActive);
+  const riderPosition = riderSelf
+    ? { lat: riderSelf.lat, lng: riderSelf.lng }
+    : null;
+
   return (
     <section className="overflow-hidden rounded-3xl border border-line bg-surface">
       <MapView
@@ -738,6 +752,7 @@ function MapBlock({ hail }: { hail: Hail }) {
         stops={[]}
         dropoff={dropoff}
         driverPosition={driverPos}
+        riderPosition={riderPosition}
         liveRoute={
           hail.status === "accepted"
             ? { target: "pickup" }

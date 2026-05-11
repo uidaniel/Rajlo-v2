@@ -41,6 +41,13 @@ type Role = "driver" | "rider";
  * @param role            which side this client is on (driver or rider)
  * @param streamSelf      whether to broadcast our own GPS into the channel
  */
+/** Heartbeat cadence — the latest known position is re-broadcast on
+ *  this interval even if the device is stationary. Without this, a
+ *  driver who parks at the pickup spot would never re-send a fix and
+ *  the rider's marker would look "stuck" / go stale. Mirrors the
+ *  cadence used by the fleet broadcaster (`use-fleet.ts`). */
+const HEARTBEAT_MS = 5_000;
+
 export function useRidePosition(
   rideId: string | null,
   role: Role,
@@ -57,6 +64,11 @@ export function useRidePosition(
   // can dedupe before sending — saves a roundtrip when the device hasn't
   // actually moved.
   const lastSentRef = useRef<{ lat: number; lng: number } | null>(null);
+  // Most recent fix from the browser, regardless of whether it was
+  // sent. The 5-second heartbeat reads this so it can keep refreshing
+  // the rider's marker even when the driver is stationary (no
+  // watchPosition callbacks fire).
+  const latestFixRef = useRef<LivePosition | null>(null);
 
   useEffect(() => {
     if (!rideId) return;
@@ -81,6 +93,19 @@ export function useRidePosition(
       });
 
     let watchId: number | null = null;
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+
+    const eventName: "driver-position" | "rider-position" =
+      role === "driver" ? "driver-position" : "rider-position";
+
+    /** Send the latest known fix to the channel with a fresh timestamp.
+     *  Used both by the heartbeat and inline on each new GPS callback. */
+    const broadcastLatest = () => {
+      const fix = latestFixRef.current;
+      if (!fix) return;
+      const payload: LivePosition = { ...fix, ts: Date.now() };
+      channel.send({ type: "broadcast", event: eventName, payload });
+    };
 
     channel.subscribe((status) => {
       if (status !== "SUBSCRIBED") return;
@@ -89,8 +114,6 @@ export function useRidePosition(
         setGeoError("Your browser doesn't support live location.");
         return;
       }
-      const eventName: "driver-position" | "rider-position" =
-        role === "driver" ? "driver-position" : "rider-position";
 
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
@@ -109,13 +132,15 @@ export function useRidePosition(
                 : null,
             ts: Date.now(),
           };
+          latestFixRef.current = next;
 
           // Mirror into local state so the sender's own marker shows up
           // on their map too.
           if (role === "driver") setDriverPosition(next);
           else setRiderPosition(next);
 
-          // Skip near-duplicate pings (< ~5 m of drift).
+          // Skip near-duplicate pings (< ~5 m of drift). The heartbeat
+          // below still keeps the marker fresh.
           const last = lastSentRef.current;
           if (
             last &&
@@ -125,12 +150,7 @@ export function useRidePosition(
             return;
           }
           lastSentRef.current = { lat: next.lat, lng: next.lng };
-
-          channel.send({
-            type: "broadcast",
-            event: eventName,
-            payload: next,
-          });
+          broadcastLatest();
         },
         (err) => {
           // Code 1 = denied, 2 = unavailable, 3 = timeout. iOS users
@@ -144,13 +164,22 @@ export function useRidePosition(
           timeout: 15_000,
         },
       );
+
+      // Heartbeat — keeps the rider's marker fresh even when the
+      // driver hasn't moved. Cheap: a broadcast message of <100 bytes
+      // every 5s. Doesn't deplete battery (no extra GPS read — just
+      // re-sends the cached fix).
+      heartbeatTimer = setInterval(broadcastLatest, HEARTBEAT_MS);
     });
 
     return () => {
       if (watchId !== null && typeof navigator !== "undefined") {
         navigator.geolocation.clearWatch(watchId);
       }
+      if (heartbeatTimer) clearInterval(heartbeatTimer);
       supabase.removeChannel(channel);
+      latestFixRef.current = null;
+      lastSentRef.current = null;
       // Reset positions on teardown so a new ride doesn't briefly inherit
       // stale markers from the previous one. Cleanup is the safe spot to
       // setState — putting these resets in the effect body itself triggers

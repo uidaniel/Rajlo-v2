@@ -56,11 +56,10 @@ export default function RiderRequestPage() {
   const [dropoff, setDropoff] = useState<Place | null>(null);
   const [seats, setSeats] = useState(1);
   const [notes, setNotes] = useState("");
-  // Phase 2A.3 — opt-in to carpool. When true, the server tries to
-  // pair this ride with another rider going the same way and the fare
-  // drops to ~65% of solo. If no match is found, the ride proceeds
-  // normally as a solo trip at the regular fare.
-  const [allowCarpool, setAllowCarpool] = useState(false);
+  // Carpool was scoped out of launch — the toggle and matching logic
+  // are intentionally hidden from the UI until we have the bandwidth
+  // to do the matcher properly. The server still defaults `allowCarpool`
+  // to false, so no contract change is required here.
   // Mode B (Route Taxi) lives inside this flow now. The picker only
   // surfaces once we have both pickup + dropoff — before that, the
   // matcher has nothing to chew on. Default mode is `private` because
@@ -385,7 +384,6 @@ export default function RiderRequestPage() {
           })),
           seats,
           notes,
-          allowCarpool,
           fare: {
             totalKm: fare.totalKm,
             etaMinutes: fare.etaMinutes,
@@ -716,61 +714,6 @@ export default function RiderRequestPage() {
             })}
           </div>
         </div>
-      </FadeUp>
-
-      <FadeUp delay={0.18}>
-        <button
-          type="button"
-          onClick={() => setAllowCarpool((v) => !v)}
-          aria-pressed={allowCarpool}
-          className={`mt-6 flex w-full items-center gap-4 rounded-2xl border p-4 text-left transition-all ${
-            mode === "route_taxi" ? "hidden" : ""
-          } ${
-            allowCarpool
-              ? "border-rajlo-red bg-primary-soft shadow-md shadow-rajlo-red/15"
-              : "border-line bg-surface hover:border-rajlo-red/40 hover:bg-primary-soft/40"
-          }`}
-        >
-          <span
-            className={`grid h-11 w-11 shrink-0 place-items-center rounded-xl ${
-              allowCarpool
-                ? "bg-rajlo-red text-white"
-                : "bg-primary-soft text-rajlo-red"
-            }`}
-          >
-            <Icon name="users" className="h-5 w-5" />
-          </span>
-          <span className="min-w-0 flex-1">
-            <span className="flex items-center gap-2">
-              <span className="text-sm font-extrabold tracking-tight">
-                Share this ride · save 35%
-              </span>
-              {allowCarpool && (
-                <span className="rounded-full bg-rajlo-red px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                  On
-                </span>
-              )}
-            </span>
-            <span className="mt-0.5 block text-xs text-muted">
-              {allowCarpool
-                ? `Pay around ${formatJMD(Math.max(400, Math.round((fare.fareJMD * 0.65) / 50) * 50))} if we find someone going your way. Falls back to your normal fare if no one matches.`
-                : "We'll try to pair you with another rider going the same direction. If no match, you ride solo at the regular fare."}
-            </span>
-          </span>
-          {/* Toggle thumb — visual indicator only; the whole row is clickable */}
-          <span
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${
-              allowCarpool ? "bg-rajlo-red" : "bg-line"
-            }`}
-            aria-hidden
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-all ${
-                allowCarpool ? "translate-x-5" : "translate-x-0.5"
-              }`}
-            />
-          </span>
-        </button>
       </FadeUp>
 
       <FadeUp delay={0.2}>

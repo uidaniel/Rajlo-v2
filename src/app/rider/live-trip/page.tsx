@@ -172,14 +172,17 @@ export default function RiderLiveTripPage() {
     fareJMD: number;
   } | null>(null);
 
-  // Live tracking: rider streams their own GPS so the driver can find them,
-  // and the hook surfaces the driver's incoming pings as `driverPosition`.
-  // We only stream while the trip is active (not before a driver accepts —
-  // no point telling a non-existent driver where you are).
+  // Live tracking. The rider streams their own GPS whenever they have an
+  // active ride row — not just after a driver accepts. Why broaden the
+  // window: the rider expects to see their own marker on the map while
+  // they're waiting for a match (so they can confirm "yes, that's where
+  // I am, the driver will know"). Streaming starts in the `requested`
+  // phase too; the channel may not have a driver listening yet, but the
+  // local state still hydrates `riderPosition` for the map.
   const activeRideId = data?.ride?.id ?? null;
+  const liveStatuses = ["requested", "accepted", "arrived", "in_progress"];
   const trackingActive =
-    !!data?.ride &&
-    ["accepted", "arrived", "in_progress"].includes(data.ride.status);
+    !!data?.ride && liveStatuses.includes(data.ride.status);
   const { driverPosition, riderPosition, geoError } = useRidePosition(
     trackingActive ? activeRideId : null,
     "rider",

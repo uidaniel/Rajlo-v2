@@ -266,3 +266,77 @@ export async function notifyAllAvailableDrivers(
 
   return { notified: drivers.length };
 }
+
+/**
+ * Route-taxi fan-out — notify every driver who currently has an active
+ * session on the given route. This is the "broadcast" matcher: a hail
+ * pings everyone driving that corridor and the first to accept wins
+ * via the atomic claim in `/api/driver/route-taxi/hails/[id]`.
+ *
+ * Why join through `drivers.user_id`? Sessions key on `driver_id` (the
+ * drivers-table PK), but notifications + push subscriptions key on
+ * the auth-user id. The join resolves that.
+ *
+ * Cap at 50 — Jamaica's biggest corridors might have a couple dozen
+ * cars at peak; 50 is comfortable headroom without an explosion.
+ */
+export async function notifyRouteTaxiDrivers(
+  supabase: SupabaseClient,
+  routeId: string,
+  args: Omit<DriverNotifyArgs, "driverUserId">,
+): Promise<{ notified: number }> {
+  // Two-step lookup rather than a nested PostgREST select. The nested
+  // shape is awkward to type — PostgREST returns the joined table as
+  // an array of unknown cardinality and the inferred type fights us.
+  // Two small queries keeps the types honest and the code readable.
+  const { data: sessions } = await supabase
+    .from("driver_sessions")
+    .select("driver_id")
+    .eq("route_id", routeId)
+    .eq("status", "active")
+    .limit(50);
+
+  if (!sessions || sessions.length === 0) {
+    return { notified: 0 };
+  }
+
+  const driverIds = Array.from(
+    new Set(
+      (sessions as Array<{ driver_id: string | null }>)
+        .map((s) => s.driver_id)
+        .filter((id): id is string => typeof id === "string"),
+    ),
+  );
+
+  if (driverIds.length === 0) return { notified: 0 };
+
+  const { data: drivers } = await supabase
+    .from("drivers")
+    .select("user_id")
+    .in("id", driverIds)
+    .eq("activated", true)
+    .is("deactivated_at", null)
+    .not("user_id", "is", null);
+
+  if (!drivers || drivers.length === 0) {
+    return { notified: 0 };
+  }
+
+  const userIds = Array.from(
+    new Set(
+      (drivers as Array<{ user_id: string | null }>)
+        .map((d) => d.user_id)
+        .filter((id): id is string => typeof id === "string"),
+    ),
+  );
+
+  if (userIds.length === 0) return { notified: 0 };
+
+  await Promise.all(
+    userIds.map((userId) =>
+      notifyDriver(supabase, { ...args, driverUserId: userId }),
+    ),
+  );
+
+  return { notified: userIds.length };
+}

@@ -153,7 +153,17 @@ export async function PATCH(
       );
     }
 
-    const { error: acceptError } = await supabase
+    // Atomic claim. The chain `eq("status","requested").is("session_id",null)`
+    // becomes ONE SQL `UPDATE … WHERE id=? AND status='requested' AND
+    // session_id IS NULL` — Postgres row-locks during the update, so
+    // only one concurrent caller can match the WHERE. Crucially we
+    // `.select().maybeSingle()` so we can distinguish:
+    //   - row returned → we won the claim
+    //   - null returned → someone else got there first (no rows matched)
+    // Without the .select() the previous code happily returned 200 OK
+    // even when 0 rows were updated, which meant two racing drivers
+    // could BOTH see "you accepted!" while only one actually owned it.
+    const { data: claimed, error: acceptError } = await supabase
       .from("route_hails")
       .update({
         session_id: session.id,
@@ -161,11 +171,19 @@ export async function PATCH(
         accepted_at: new Date().toISOString(),
       })
       .eq("id", hail.id)
-      .eq("status", "requested") // optimistic concurrency: another driver may have grabbed it
-      .is("session_id", null);
+      .eq("status", "requested")
+      .is("session_id", null)
+      .select("id")
+      .maybeSingle();
 
     if (acceptError) {
       return NextResponse.json({ error: acceptError.message }, { status: 500 });
+    }
+    if (!claimed) {
+      return NextResponse.json(
+        { error: "Another driver just accepted this hail." },
+        { status: 409 },
+      );
     }
 
     // Best-effort rider notification.

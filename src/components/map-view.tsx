@@ -98,8 +98,15 @@ function approxDistanceMeters(
 // rotation directly into the SVG and produce a different data URL per
 // rotation bucket. We bucket to 10° steps so we end up with ≤36 cached
 // SVGs total no matter how many drivers, no matter how often they move.
+//
+// IMPORTANT: viewBox is intentionally larger than the car body so corners
+// don't clip when the car is rotated to a diagonal. The body is ~24×50
+// drawn inside a 70×70 box centred at (35,35). Half-diagonal of the
+// body is √(12² + 25²) ≈ 28, so 35px of margin around the rotation
+// centre is plenty — at 45° the corners still sit ~7px inside the
+// viewBox edge.
 function carIconSvg(rotationDeg: number): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 60"><g transform="rotate(${rotationDeg} 20 30)"><path d="M12 4 Q8 4 8 8 L8 50 Q8 54 12 54 L28 54 Q32 54 32 50 L32 8 Q32 4 28 4 Z" fill="#f10100" stroke="#1a1a1a" stroke-width="1.5"/><path d="M11 13 L29 13 L26 21 L14 21 Z" fill="#1a1a1a" opacity="0.7"/><path d="M14 35 L26 35 L29 43 L11 43 Z" fill="#1a1a1a" opacity="0.7"/><rect x="5.5" y="15" width="3" height="3" rx="1" fill="#1a1a1a"/><rect x="31.5" y="15" width="3" height="3" rx="1" fill="#1a1a1a"/><line x1="20" y1="22" x2="20" y2="34" stroke="#1a1a1a" stroke-width="0.6" opacity="0.5"/></g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 70"><g transform="rotate(${rotationDeg} 35 35)"><path d="M27 9 Q23 9 23 13 L23 55 Q23 59 27 59 L43 59 Q47 59 47 55 L47 13 Q47 9 43 9 Z" fill="#f10100" stroke="#1a1a1a" stroke-width="1.5"/><path d="M26 18 L44 18 L41 26 L29 26 Z" fill="#1a1a1a" opacity="0.7"/><path d="M29 40 L41 40 L44 48 L26 48 Z" fill="#1a1a1a" opacity="0.7"/><rect x="20.5" y="20" width="3" height="3" rx="1" fill="#1a1a1a"/><rect x="46.5" y="20" width="3" height="3" rx="1" fill="#1a1a1a"/><line x1="35" y1="27" x2="35" y2="39" stroke="#1a1a1a" stroke-width="0.6" opacity="0.5"/></g></svg>`;
 }
 
 export function MapView({
@@ -920,10 +927,13 @@ function buildCarIcon(heading: number | null | undefined): google.maps.Icon {
   const svg = carIconSvg(bucket);
   const icon: google.maps.Icon = {
     url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
-    // 28×42 keeps the icon legible without dominating the map. Anchor at
-    // (14, 21) puts the car's centre on the driver's actual coordinates.
-    scaledSize: new google.maps.Size(28, 42),
-    anchor: new google.maps.Point(14, 21),
+    // 40×40 square — matches the 70×70 padded viewBox so the car keeps
+    // its previous on-screen size while every rotation angle stays
+    // fully visible (the previous 28×42 with a 40×60 viewBox cropped
+    // the car at diagonal headings). Anchor at the centre so the
+    // rotation pivot sits exactly on the driver's GPS coordinate.
+    scaledSize: new google.maps.Size(40, 40),
+    anchor: new google.maps.Point(20, 20),
   };
   carIconCache.set(bucket, icon);
   return icon;

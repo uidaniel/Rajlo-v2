@@ -6,9 +6,11 @@ import { useRouter } from "next/navigation";
 import { Icon, type IconName } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
+import { DriverReadinessGate } from "@/components/driver-readiness-gate";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { formatJMD } from "@/lib/jamaica";
 import { useFleetBroadcaster } from "@/lib/use-fleet";
+import { useWakeLock } from "@/lib/use-wake-lock";
 import {
   HeroSkeleton,
   RideCardSkeleton,
@@ -221,21 +223,37 @@ export default function DriverHomePage() {
   }, [refreshStats]);
 
   /* ─── Online toggle persistence ─── */
+  const [onlineError, setOnlineError] = React.useState<string | null>(null);
   const setOnline = React.useCallback(
     async (next: boolean) => {
       if (online === next || onlineSyncing) return;
       const prev = online;
       setOnlineState(next);
       setOnlineSyncing(true);
+      setOnlineError(null);
       try {
         const res = await fetch("/api/driver/online", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ online: next }),
         });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      } catch {
+        if (!res.ok) {
+          // Surface the server's reason — particularly the 412
+          // "push_required" gate so a driver who got past a stale
+          // readiness UI still understands what's missing.
+          const body = (await res.json().catch(() => ({}))) as {
+            message?: string;
+            error?: string;
+          };
+          throw new Error(
+            body.message ?? body.error ?? `Couldn't go ${next ? "online" : "offline"}.`,
+          );
+        }
+      } catch (e) {
         setOnlineState(prev);
+        setOnlineError(
+          e instanceof Error ? e.message : "Couldn't update online status.",
+        );
       } finally {
         setOnlineSyncing(false);
       }
@@ -248,6 +266,15 @@ export default function DriverHomePage() {
     driverUserId,
     online === true && !hasActiveTrip,
   );
+
+  /* ─── Wake lock while online ─── */
+  // Keep the screen on whenever the driver is online so the
+  // browser doesn't sleep the JS engine and stall GPS broadcasts.
+  // Honest limitation: this only helps while the Rajlo tab is
+  // foreground — once the user switches apps or locks their phone
+  // the OS still gates timers. The `backgrounded` flag below
+  // surfaces that state so we can warn the driver.
+  const wake = useWakeLock(online === true);
 
   /* ─── Live inbox ─── */
   React.useEffect(() => {
@@ -309,8 +336,13 @@ export default function DriverHomePage() {
 
   return (
     <div className="mx-auto max-w-3xl space-y-5 px-2 py-2 md:px-3 md:py-8">
-      {/* HERO */}
+      {/* HERO — wrapped in the readiness gate so an un-installed /
+         un-subscribed driver sees the install + push-permission
+         walkthrough INSTEAD of the online toggle. Once both
+         requirements are met, the gate transparently renders the
+         original hero (children) below. */}
       <FadeUp>
+        <DriverReadinessGate>
         <div
           className={`relative overflow-hidden rounded-3xl p-6 text-white shadow-2xl md:p-8 ${
             online
@@ -427,7 +459,54 @@ export default function DriverHomePage() {
             )}
           </div>
         </div>
+        </DriverReadinessGate>
       </FadeUp>
+
+      {/* Surface server-side rejections from the online toggle (e.g.
+          412 push_required). Lives just below the hero so it's the
+          first thing a driver sees if their flip didn't take. */}
+      {onlineError && (
+        <FadeUp delay={0.04}>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+            <p className="font-bold">Couldn&apos;t go online</p>
+            <p className="mt-1">{onlineError}</p>
+          </div>
+        </FadeUp>
+      )}
+
+      {/* Backgrounded-while-online warning. Browsers stop running
+          JavaScript timers when the tab is fully hidden or the screen
+          locks — there is no web equivalent of native background GPS.
+          We can't prevent this, but we can be explicit so drivers
+          don't think the app is silently working when it isn't. */}
+      {online && wake.backgrounded && (
+        <FadeUp delay={0.04}>
+          <div className="rounded-2xl border border-rajlo-red/40 bg-primary-soft px-4 py-3 text-xs leading-relaxed text-rajlo-black">
+            <p className="font-bold text-rajlo-red">Rajlo is in the background</p>
+            <p className="mt-1">
+              Riders&apos; hails won&apos;t reach you while another app is on
+              top or your screen is locked. Bring Rajlo back to the front to
+              keep accepting work.
+            </p>
+          </div>
+        </FadeUp>
+      )}
+
+      {/* Wake-lock unsupported notice — Firefox Android and very old
+          browsers fall through here. Most drivers will be on Chrome
+          or Safari which support it. */}
+      {online && !wake.supported && (
+        <FadeUp delay={0.04}>
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
+            <p className="font-bold">Heads-up: this browser can&apos;t keep the screen awake</p>
+            <p className="mt-1">
+              Your phone may dim and lock on its own, which stops Rajlo from
+              listening. For best results use Chrome (Android) or Safari
+              (iOS — installed from the home screen).
+            </p>
+          </div>
+        </FadeUp>
+      )}
 
       {/* GPS / fleet warning */}
       {online && fleetError && (
