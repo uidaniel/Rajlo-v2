@@ -21,6 +21,10 @@ export type AdminActor = {
   userId: string;
   label: string;
   email: string | null;
+  /** Set when the gate accepted a non-admin role (safety_officer).
+   *  Endpoints can branch on this to restrict which fields a non-
+   *  admin caller is allowed to mutate. */
+  role: "admin" | "safety_officer";
 };
 
 type RequireAdminResult =
@@ -65,6 +69,65 @@ export async function requireAdmin(): Promise<RequireAdminResult> {
       userId: user.id,
       label: profile.full_name ?? user.email ?? "Admin",
       email: user.email ?? null,
+      role: "admin",
+    },
+    supabase,
+  };
+}
+
+/**
+ * Same shape as `requireAdmin()` but also accepts callers whose
+ * profiles.role is `safety_officer`. Use for endpoints that should
+ * be reachable by both admins and the dedicated safety-ops team —
+ * e.g. the safety queue, alert chat, live trips dashboard.
+ *
+ * The returned `actor.role` lets the handler still distinguish admin
+ * (full powers) from safety_officer (scoped to safety actions) when
+ * the difference matters (e.g. an admin can delete an alert; an
+ * officer can only resolve / message).
+ */
+export async function requireSafetyOfficerOrAdmin(): Promise<RequireAdminResult> {
+  const auth = await createSupabaseAuthServerClient();
+  const {
+    data: { user },
+  } = await auth.auth.getUser();
+  if (!user) {
+    return {
+      error: NextResponse.json({ error: "unauthorized" }, { status: 401 }),
+    };
+  }
+
+  const { data: profile } = await auth
+    .from("profiles")
+    .select("role, full_name")
+    .eq("id", user.id)
+    .single();
+
+  if (profile?.role !== "admin" && profile?.role !== "safety_officer") {
+    return {
+      error: NextResponse.json({ error: "forbidden" }, { status: 403 }),
+    };
+  }
+
+  const supabase = getSupabaseServerClient();
+  if (!supabase) {
+    return {
+      error: NextResponse.json(
+        { error: "Service role not configured" },
+        { status: 500 },
+      ),
+    };
+  }
+
+  return {
+    actor: {
+      userId: user.id,
+      label:
+        profile.full_name ??
+        user.email ??
+        (profile.role === "admin" ? "Admin" : "Safety officer"),
+      email: user.email ?? null,
+      role: profile.role as "admin" | "safety_officer",
     },
     supabase,
   };

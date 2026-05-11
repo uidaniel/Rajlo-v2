@@ -77,6 +77,9 @@ export const driverNav: NavItem[] = [
 // already flagged as misleading.
 export const adminNav: NavItem[] = [
   { label: "Operations", labelKey: "nav.admin.ops", href: "/admin", icon: "home" },
+  { label: "Safety", labelKey: "nav.admin.safety", href: "/admin/safety", icon: "shield-alert" },
+  { label: "Safety officers", labelKey: "nav.admin.safetyOfficers", href: "/admin/safety-officers", icon: "shield" },
+  { label: "Live trips", labelKey: "nav.admin.liveTrips", href: "/admin/live-trips", icon: "map-pin" },
   { label: "Analytics", labelKey: "nav.admin.analytics", href: "/admin/analytics", icon: "bar-chart" },
   { label: "Ride monitoring", labelKey: "nav.admin.monitoring", href: "/admin/ride-monitoring", icon: "activity" },
   { label: "Route Taxi sessions", labelKey: "nav.admin.routeSessions", href: "/admin/route-sessions", icon: "navigation" },
@@ -91,6 +94,17 @@ export const adminNav: NavItem[] = [
   { label: "Transactions", labelKey: "nav.admin.transactions", href: "/admin/transactions", icon: "trending-up" },
   { label: "Payouts", labelKey: "nav.admin.payouts", href: "/admin/wallet-withdrawals", icon: "trending-up" },
   { label: "Audit logs", labelKey: "nav.admin.audit", href: "/admin/audit-logs", icon: "history" },
+];
+
+/**
+ * Safety-officer scoped nav. Officers only see the safety queue and
+ * the live trips dashboard (so they can intervene on any in-flight
+ * ride). Everything else on the admin surface is admin-only because
+ * officers shouldn't be touching wallets, drivers, fare rules, etc.
+ */
+export const safetyOfficerNav: NavItem[] = [
+  { label: "Safety", labelKey: "nav.admin.safety", href: "/admin/safety", icon: "shield-alert" },
+  { label: "Live trips", labelKey: "nav.admin.liveTrips", href: "/admin/live-trips", icon: "map-pin" },
 ];
 
 export const parishes = [

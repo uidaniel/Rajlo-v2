@@ -6,21 +6,36 @@ import { sendEmail } from "@/lib/email";
 /**
  * POST /api/rider/rides/[id]/sos
  *
- * Rider raises a safety alert during a trip. Two flavours:
- *   - kind=sos  → panic; ops gets emailed and the alert hits the admin
- *                  dashboard with status='open' for triage.
- *   - kind=flag → softer "something feels off"; same plumbing, lower urgency.
+ * Rider raises a safety alert during a trip. Three flavours:
+ *   - kind=sos          → panic; ops gets emailed immediately and the
+ *                          alert lands on the admin dashboard.
+ *   - kind=flag         → softer "something feels off" report.
+ *   - kind=unusual_stop → auto-created by the rider's app when the
+ *                          driver has been stationary too long during
+ *                          an in-progress trip. Opens a check-in
+ *                          modal on the rider's side; if the rider
+ *                          confirms safe, the alert is resolved
+ *                          without paging ops. If the rider escalates
+ *                          (taps SOS or doesn't respond), ops gets the
+ *                          full context including the original
+ *                          unusual_stop coordinates.
  *
- * Body: { kind: "sos" | "flag", message?: string, lat?: number, lng?: number }
+ * Body: { kind, message?, lat?, lng? }
  *
  * Email is best-effort (failures don't block the DB write).
  */
 type SosRequest = {
-  kind: "sos" | "flag";
+  kind: "sos" | "flag" | "unusual_stop";
   message?: string;
   lat?: number;
   lng?: number;
 };
+
+const ALLOWED_KINDS: ReadonlyArray<SosRequest["kind"]> = [
+  "sos",
+  "flag",
+  "unusual_stop",
+];
 
 export async function POST(
   request: Request,
@@ -29,9 +44,9 @@ export async function POST(
   const { id } = await params;
   const body = (await request.json().catch(() => ({}))) as SosRequest;
 
-  if (body.kind !== "sos" && body.kind !== "flag") {
+  if (!ALLOWED_KINDS.includes(body.kind)) {
     return NextResponse.json(
-      { error: "kind must be 'sos' or 'flag'" },
+      { error: "kind must be 'sos', 'flag', or 'unusual_stop'" },
       { status: 400 },
     );
   }
@@ -92,6 +107,15 @@ export async function POST(
     );
   }
 
+  // Email gating: we only ping ops for SOS and flag events. The
+  // `unusual_stop` kind is a system-triggered check-in — the rider's
+  // app is asking them whether they're OK. If the rider escalates
+  // (taps SOS in the modal) the client fires a SECOND POST with
+  // kind=sos which emails ops then. If the rider dismisses with
+  // "I'm fine" they PATCH this alert to resolved without any email.
+  // This avoids alert fatigue from every red-light stop.
+  const shouldEmailOps = body.kind === "sos" || body.kind === "flag";
+
   // Best-effort ops email. We pull rider's display name from profiles for
   // the alert subject; fall back to "a rider" if missing.
   const { data: profile } = await supabase
@@ -102,7 +126,7 @@ export async function POST(
   const riderName = profile?.full_name?.trim() || "a rider";
 
   const opsEmail = process.env.SAFETY_OPS_EMAIL;
-  if (opsEmail) {
+  if (shouldEmailOps && opsEmail) {
     const subject =
       body.kind === "sos"
         ? `🚨 SOS — ${riderName} during trip ${ride.id.slice(0, 8)}`

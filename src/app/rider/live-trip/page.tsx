@@ -11,6 +11,8 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRidePosition } from "@/lib/use-ride-position";
 import { useBackgroundRefresh } from "@/lib/use-background-refresh";
 import { SafetySheet } from "@/components/safety-sheet";
+import { SafetyCheckModal } from "@/components/safety-check-modal";
+import { useUnusualStopDetector } from "@/lib/use-unusual-stop-detector";
 import { ChatLauncher } from "@/components/chat-launcher";
 import { DriverVehicleCard } from "@/components/driver-vehicle-card";
 import {
@@ -159,6 +161,15 @@ export default function RiderLiveTripPage() {
   const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [safetyOpen, setSafetyOpen] = useState(false);
+  // Safety check modal — opens automatically on detected unusual stops
+  // (4+ min stationary during in_progress) and also opens manually when
+  // the rider taps "Safety toolkit" in the hero. The two paths share
+  // the modal; we just toggle `safetyCheckAuto` to swap the framing.
+  const [safetyCheckOpen, setSafetyCheckOpen] = useState(false);
+  const [safetyCheckAuto, setSafetyCheckAuto] = useState(false);
+  const [safetyCheckAlertId, setSafetyCheckAlertId] = useState<string | null>(
+    null,
+  );
   const [completed, setCompleted] = useState<CompletedSnapshot | null>(null);
   // Tracks the most recent active-ride snapshot we saw, so when
   // refresh() returns `{ ride: null }` we can detect the active → done
@@ -188,6 +199,72 @@ export default function RiderLiveTripPage() {
     "rider",
     /* streamSelf */ trackingActive,
   );
+
+  // Unusual-stop detector. Fires once per stop event when the driver
+  // has been stationary >4 minutes during `in_progress`. We pre-create
+  // an `unusual_stop` safety_alert row server-side so admin/ops sees
+  // it in their queue even before the rider takes any action; the
+  // modal then lets the rider escalate (Call police / Notify ops),
+  // dismiss ("I'm fine"), or — if the 30-sec timer runs out — auto-
+  // escalates to a real SOS. The alert id flows through to the modal
+  // so the "I'm fine" path can mark this specific alert as resolved.
+  const fireUnusualStop = useRef(async () => {
+    if (!activeRideId) return;
+    try {
+      const res = await fetch(`/api/rider/rides/${activeRideId}/sos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "unusual_stop",
+          message: "Auto-detected: driver stationary >4 min during in_progress.",
+          lat: driverPosition?.lat,
+          lng: driverPosition?.lng,
+        }),
+      });
+      if (res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { alertId?: string };
+        setSafetyCheckAlertId(j.alertId ?? null);
+      }
+    } catch {
+      /* network blip — modal still opens so the rider can act */
+    }
+    setSafetyCheckAuto(true);
+    setSafetyCheckOpen(true);
+  });
+  // Keep the ref current with the latest activeRideId / driverPosition
+  // so the detector's stable callback closure always reads fresh values.
+  fireUnusualStop.current = async () => {
+    if (!activeRideId) return;
+    try {
+      const res = await fetch(`/api/rider/rides/${activeRideId}/sos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "unusual_stop",
+          message: "Auto-detected: driver stationary >4 min during in_progress.",
+          lat: driverPosition?.lat,
+          lng: driverPosition?.lng,
+        }),
+      });
+      if (res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { alertId?: string };
+        setSafetyCheckAlertId(j.alertId ?? null);
+      }
+    } catch {
+      /* network blip — modal still opens so the rider can act */
+    }
+    setSafetyCheckAuto(true);
+    setSafetyCheckOpen(true);
+  };
+
+  useUnusualStopDetector({
+    driverPosition,
+    rideStatus: data?.ride?.status ?? null,
+    enabled: !!activeRideId,
+    onUnusualStop: () => {
+      void fireUnusualStop.current();
+    },
+  });
 
   // Pulled out so the Realtime subscription effect can call it without
   // recreating the function (and without re-subscribing on every
@@ -742,6 +819,27 @@ export default function RiderLiveTripPage() {
           onClose={() => setSafetyOpen(false)}
         />
       )}
+
+      {/* Auto-trigger safety-check modal — fires on unusual stops or
+         when the rider opens it manually. Always-mounted so the
+         component owns its own state transitions; `open` controls
+         visibility. */}
+      <SafetyCheckModal
+        open={safetyCheckOpen}
+        rideId={ride.id}
+        alertId={safetyCheckAlertId}
+        auto={safetyCheckAuto}
+        currentPosition={
+          riderPosition
+            ? { lat: riderPosition.lat, lng: riderPosition.lng }
+            : null
+        }
+        onClose={() => {
+          setSafetyCheckOpen(false);
+          setSafetyCheckAlertId(null);
+          setSafetyCheckAuto(false);
+        }}
+      />
 
       {/* The chat launcher (icon + sheet + toast) lives inside the
          driver card above. Nothing more to mount here. */}
