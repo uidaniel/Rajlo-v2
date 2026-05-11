@@ -9,15 +9,23 @@ import { createSupabaseAuthServerClient } from "./supabase-auth-server";
  *
  *   "Book a ride"
  *     - signed in as rider  → /rider              (their dashboard)
- *     - everyone else       → /auth/rider/signup  (the existing path)
+ *     - everyone else       → /auth/rider/login   (sign-in first;
+ *                                                  the login page
+ *                                                  links to signup)
  *
  *   "Drive with Rajlo"
  *     - signed in as driver → /driver             (their dashboard)
  *     - everyone else       → /driver-join        (the marketing page)
  *
+ * Why login instead of signup for the rider default: returning users
+ * are the majority of taps once you've onboarded any cohort, and
+ * forcing every tap through the signup form is friction for them.
+ * New users still get there via the "Create account" link that lives
+ * on the login page.
+ *
  * We deliberately don't try to be clever for cross-role cases (e.g.
  * a driver tapping "Book a ride") — they fall through to the default
- * signup/marketing flow, which is what they'd want anyway since their
+ * login/marketing flow, which is what they'd want anyway since their
  * driver account isn't a rider account on this platform.
  *
  * Reads through the auth client (anon key + cookies). Safe to call
@@ -34,7 +42,7 @@ export type LandingCtaTargets = {
 };
 
 const DEFAULTS: LandingCtaTargets = {
-  riderHref: "/auth/rider/signup",
+  riderHref: "/auth/rider/login",
   driverHref: "/driver-join",
   riderIsDashboard: false,
   driverIsDashboard: false,
