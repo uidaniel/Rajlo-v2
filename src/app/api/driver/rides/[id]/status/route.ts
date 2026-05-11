@@ -417,15 +417,42 @@ export async function POST(
 
   // In-app inbox + push for arrival / start. Trip completion has its
   // own bespoke push below alongside the receipt email.
+  //
+  // For "arrived" we deliberately include the vehicle make / model /
+  // colour / plate in the body so the rider has all the visual
+  // identifiers on their lock screen — they can confirm the right
+  // car before they get in without unlocking their phone.
   if (action === "arrived" || action === "start") {
     void (async () => {
       try {
         const ids = updated.map((u) => u.id);
-        const { data: rideRows } = await supabase
-          .from("rides")
-          .select("id, rider_id, dropoff_name")
-          .in("id", ids);
+        const [{ data: rideRows }, { data: driverFull }] = await Promise.all([
+          supabase
+            .from("rides")
+            .select("id, rider_id, dropoff_name")
+            .in("id", ids),
+          supabase
+            .from("drivers")
+            .select(
+              "plate_number, vehicle_make, vehicle_model, vehicle_year, vehicle_color",
+            )
+            .eq("id", driver.id)
+            .maybeSingle(),
+        ]);
         if (!rideRows) return;
+
+        const vehicle = driverFull
+          ? [
+              driverFull.vehicle_year ? String(driverFull.vehicle_year) : null,
+              driverFull.vehicle_color,
+              driverFull.vehicle_make,
+              driverFull.vehicle_model,
+            ]
+              .filter(Boolean)
+              .join(" ") || null
+          : null;
+        const plate = driverFull?.plate_number ?? null;
+
         await Promise.all(
           rideRows.map((row) =>
             notifyRider(supabase, {
@@ -437,7 +464,15 @@ export async function POST(
                   : "Trip started",
               body:
                 action === "arrived"
-                  ? "Confirm the plate before you step in. Let's go!"
+                  ? // Lead with what to look for: "Look for the
+                    // 2022 Silver Honda Civic · plate JM-AB-1234".
+                    [
+                      vehicle ? `Look for the ${vehicle}` : null,
+                      plate ? `plate ${plate}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") ||
+                    "Confirm the plate before you step in. Let's go!"
                   : `On the way to ${row.dropoff_name}.`,
               href: `/rider/live-trip?id=${row.id}`,
               cta:

@@ -269,13 +269,29 @@ export async function POST(
           const fullName = profileMap.get(row.rider_id)?.full_name ?? null;
           const tasks: Array<Promise<unknown>> = [
             // In-app inbox + web push to the rider's devices.
+            // Body is packed into a single line because web push (no
+            // BigTextStyle) shows ~80 chars on the lock screen. Order
+            // chosen so the most useful info ("what car am I looking
+            // for") wins if the body gets truncated:
+            //   "{Year Color Make Model} · plate {plate} · ETA {N} min"
+            // Full driver card lives one tap away on /rider/live-trip.
             notifyRider(supabase, {
               riderId: row.rider_id,
               kind: "trip",
               title: `${driverName.split(" ")[0]} is on the way`,
-              body: `${driverName}${driverFull.plate_number ? ` · plate ${driverFull.plate_number}` : ""}${row.estimated_eta_minutes != null ? ` · ETA ~${row.estimated_eta_minutes} min` : ""}`,
+              body: [
+                vehicle,
+                driverFull.plate_number
+                  ? `plate ${driverFull.plate_number}`
+                  : null,
+                row.estimated_eta_minutes != null
+                  ? `ETA ~${row.estimated_eta_minutes} min`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · "),
               href: `/rider/live-trip?id=${row.id}`,
-              cta: "Track on map",
+              cta: "View trip details",
               pushTag: `ride-${row.id}-status`,
             }),
           ];

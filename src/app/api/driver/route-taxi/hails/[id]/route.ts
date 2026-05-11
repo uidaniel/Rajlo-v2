@@ -84,10 +84,15 @@ export async function PATCH(
     );
   }
 
-  // Resolve driver row.
+  // Resolve driver row. We pull the full vehicle profile (not just
+  // plate) because the rider-facing accept notification packs
+  // "{Year Color Make Model} · plate" into the body so they can
+  // identify the car at a glance from the lock screen.
   const { data: driver } = await supabase
     .from("drivers")
-    .select("id, first_name, last_name, plate_number")
+    .select(
+      "id, first_name, last_name, plate_number, vehicle_make, vehicle_model, vehicle_year, vehicle_color",
+    )
     .eq("user_id", user.id)
     .maybeSingle();
   if (!driver) {
@@ -186,14 +191,31 @@ export async function PATCH(
       );
     }
 
-    // Best-effort rider notification.
+    // Best-effort rider notification. Body lays out the car the
+    // rider should look out for: "2022 Silver Toyota Hiace · plate
+    // JM-AB-1234". Most route taxis are visually identifiable by
+    // colour + make/model from the kerbside, so this is the highest-
+    // value info to surface on the lock screen.
+    const vehicleDesc = [
+      driver.vehicle_year ? String(driver.vehicle_year) : null,
+      driver.vehicle_color,
+      driver.vehicle_make,
+      driver.vehicle_model,
+    ]
+      .filter(Boolean)
+      .join(" ");
+    const bodyParts = [
+      vehicleDesc || null,
+      driver.plate_number ? `plate ${driver.plate_number}` : null,
+    ].filter(Boolean);
     void notifyRider(supabase, {
       riderId: hail.rider_id,
       kind: "trip",
-      title: "Driver on the way",
-      body: `${driver.first_name ?? "Your driver"} accepted your route taxi. ${
-        driver.plate_number ? `Plate ${driver.plate_number}.` : ""
-      }`,
+      title: `${driver.first_name ?? "Driver"} is on the way`,
+      body:
+        bodyParts.length > 0
+          ? bodyParts.join(" · ")
+          : `${driver.first_name ?? "Your driver"} accepted your route taxi.`,
       href: "/rider/route-taxi",
       cta: "View hail",
       pushTag: `route-hail-${hail.id}`,
