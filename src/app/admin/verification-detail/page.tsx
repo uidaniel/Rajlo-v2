@@ -27,19 +27,12 @@ type ReviewedDoc = {
    *  it's a permanent doc / not yet stamped. The single source of truth
    *  for renewal countdowns + expiry alerts on the driver side. */
   expiresOn: string | null;
-  /** > 0 → admin must enter a future expiry date when approving. */
+  /** > 0 → this doc renews on a schedule (annual, biennial, etc).
+   *  The driver enters the expiry on upload — admin only displays it. */
   renewalPeriodDays: number;
 };
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-
-function todayIso(): string {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, "0");
-  const d = String(now.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
 
 const STATUS_STYLES: Record<ReviewState, { bg: string; text: string; ring: string; label: string }> = {
   approved: { bg: "bg-emerald-50", text: "text-emerald-700", ring: "ring-emerald-200", label: "Approved" },
@@ -201,6 +194,9 @@ function VerificationDetailInner() {
   const previewDoc = previewDocId ? docs.find((d) => d.id === previewDocId) ?? null : null;
 
   // Track which docs have changed since initial load — drives the action bar.
+  // Expiry is intentionally NOT in the dirty check: only the driver sets
+  // the expiry date (during upload / renewal). The admin can SEE it on
+  // each doc card but can't edit it, so it never changes here.
   const changeStats = useMemo(() => {
     const initialById = new Map(initialDocs.map((d) => [d.id, d]));
     let changed = 0;
@@ -211,28 +207,13 @@ function VerificationDetailInner() {
       if (
         !initial ||
         initial.status !== d.status ||
-        initial.note !== d.note ||
-        initial.expiresOn !== d.expiresOn
+        initial.note !== d.note
       ) {
         changed++;
       }
     });
     return { changed, counts };
   }, [docs, initialDocs]);
-
-  // Block submission if any doc the admin is approving needs a renewal
-  // date and doesn't have one. Mirrors the server-side check so the
-  // admin gets immediate feedback rather than a round-trip error.
-  const missingExpiries = useMemo(
-    () =>
-      docs.filter(
-        (d) =>
-          d.status === "approved" &&
-          d.renewalPeriodDays > 0 &&
-          (!d.expiresOn || !ISO_DATE.test(d.expiresOn)),
-      ),
-    [docs],
-  );
 
   const hasChanges =
     changeStats.changed > 0 || (adminNote.trim().length > 0 && !saving);
@@ -250,36 +231,19 @@ function VerificationDetailInner() {
     setDocs((prev) => prev.map((d) => (d.id === id ? { ...d, note } : d)));
   };
 
-  const updateExpiry = (id: string, expiresOn: string) => {
-    setDocs((prev) =>
-      prev.map((d) =>
-        d.id === id ? { ...d, expiresOn: expiresOn || null } : d,
-      ),
-    );
-  };
-
   const submitDecision = async () => {
-    if (missingExpiries.length > 0) {
-      setStatusMessage(
-        `Add an expiry date for: ${missingExpiries
-          .map((d) => d.label)
-          .join(", ")} before approving.`,
-      );
-      return;
-    }
     setSaving(true);
     setStatusMessage(null);
     try {
       // Trim the docs payload to just the fields the decision endpoint
-      // cares about — keeps the request small and avoids leaking transient
-      // UI fields that would be ignored anyway.
+      // cares about. We deliberately DO NOT send `expiresOn` — the
+      // driver owns that field via the onboarding / renewal upload
+      // forms. The server preserves the existing value when the field
+      // is absent (it's `undefined` rather than `null`).
       const payloadDocs = docs.map((d) => ({
         id: d.id,
         status: d.status,
         note: d.note,
-        ...(d.renewalPeriodDays > 0
-          ? { expiresOn: d.expiresOn ?? null }
-          : {}),
       }));
 
       const res = await fetch("/api/admin/verification/decision", {
@@ -672,40 +636,34 @@ function VerificationDetailInner() {
                       </DecisionButton>
                     </div>
 
+                    {/* Read-only expiry display for docs that renew.
+                       The driver owns this field — they enter it during
+                       upload / renewal. Admin sees it here so they can
+                       sanity-check it matches what's on the actual
+                       document, but can't edit it. If it's wrong the
+                       admin marks the doc "resubmit" and asks the
+                       driver to re-upload with the right date. */}
                     {doc.renewalPeriodDays > 0 && (
                       <div className="mt-4 rounded-xl border border-line bg-surface-soft px-3 py-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <label
-                            htmlFor={`expiry-${doc.id}`}
-                            className="text-[11px] font-semibold uppercase tracking-wider text-muted"
-                          >
-                            Expiry on document
-                          </label>
-                          {doc.status === "approved" &&
-                            (!doc.expiresOn ||
-                              !ISO_DATE.test(doc.expiresOn)) && (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-900 ring-1 ring-amber-300">
-                                <Icon
-                                  name="alert-triangle"
-                                  className="h-2.5 w-2.5"
-                                />
-                                Required to approve
-                              </span>
-                            )}
-                        </div>
-                        <input
-                          id={`expiry-${doc.id}`}
-                          type="date"
-                          min={todayIso()}
-                          value={doc.expiresOn ?? ""}
-                          onChange={(e) =>
-                            updateExpiry(doc.id, e.target.value)
-                          }
-                          className="mt-1.5 block w-full rounded-lg border border-line bg-surface px-3 py-2 text-xs font-medium text-foreground outline-none focus:border-rajlo-red focus:ring-2 focus:ring-rajlo-red/15"
-                        />
-                        <p className="mt-1.5 text-[10px] leading-relaxed text-muted">
-                          Stamps the renewal countdown on the driver portal.
-                          Take this from the document itself — not today&apos;s
+                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted">
+                          Expiry on document
+                        </p>
+                        <p className="mt-1.5 text-sm font-bold text-foreground">
+                          {doc.expiresOn && ISO_DATE.test(doc.expiresOn)
+                            ? new Date(doc.expiresOn).toLocaleDateString(
+                                "en-JM",
+                                {
+                                  year: "numeric",
+                                  month: "long",
+                                  day: "numeric",
+                                },
+                              )
+                            : "— not provided by driver —"}
+                        </p>
+                        <p className="mt-1 text-[10px] leading-relaxed text-muted">
+                          Entered by the driver at upload. If it&apos;s
+                          wrong, mark the document <strong>Resubmit</strong>{" "}
+                          and the driver will re-upload with a corrected
                           date.
                         </p>
                       </div>
@@ -809,7 +767,6 @@ function VerificationDetailInner() {
           onDiscard={discardChanges}
           onSubmit={submitDecision}
           saving={saving}
-          missingExpiries={missingExpiries.map((d) => d.label)}
         />
       )}
 
@@ -966,7 +923,6 @@ function DecisionActionBar({
   onDiscard,
   onSubmit,
   saving,
-  missingExpiries,
 }: {
   hasChanges: boolean;
   changeCount: number;
@@ -977,7 +933,6 @@ function DecisionActionBar({
   onDiscard: () => void;
   onSubmit: () => void;
   saving: boolean;
-  missingExpiries: string[];
 }) {
   const [noteOpen, setNoteOpen] = useState(false);
   const totalDecided = counts.approved + counts.rejected + counts.resubmit;
@@ -1091,14 +1046,7 @@ function DecisionActionBar({
             <button
               type="button"
               onClick={onSubmit}
-              disabled={
-                saving || !hasChanges || missingExpiries.length > 0
-              }
-              title={
-                missingExpiries.length > 0
-                  ? `Add an expiry date for: ${missingExpiries.join(", ")}`
-                  : undefined
-              }
+              disabled={saving || !hasChanges}
               className={`group inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-bold text-white shadow-md transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:-translate-y-0 ${
                 allApproved && totalDecided > 0
                   ? "bg-emerald-600 shadow-emerald-600/30 hover:bg-emerald-700"
@@ -1127,13 +1075,11 @@ function DecisionActionBar({
 
         {/* Sub-line: what happens when you click send */}
         <p className="mx-auto mt-2 max-w-6xl text-[11px] text-muted">
-          {missingExpiries.length > 0
-            ? `Add an expiry date on each renewable document before approving (${missingExpiries.join(", ")}).`
-            : allApproved && totalDecided > 0
-              ? "All documents approved. Sending will activate the driver and they'll be notified by email."
-              : counts.rejected > 0 || counts.resubmit > 0
-                ? "Driver will be notified of the documents needing changes and prompted to resubmit."
-                : "Mark each document approved, rejected, or resubmit, then send the decision."}
+          {allApproved && totalDecided > 0
+            ? "All documents approved. Sending will activate the driver and they'll be notified by email."
+            : counts.rejected > 0 || counts.resubmit > 0
+              ? "Driver will be notified of the documents needing changes and prompted to resubmit."
+              : "Mark each document approved, rejected, or resubmit, then send the decision."}
         </p>
       </div>
     </div>

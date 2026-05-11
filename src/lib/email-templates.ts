@@ -1083,3 +1083,288 @@ export async function sendWalletTransferOtpEmail(
   const t = walletTransferOtpTemplate(args);
   return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
 }
+
+/* ──────────────────────────────────────────────────────────────────────
+   Supabase Auth emails
+   ──────────────────────────────────────────────────────────────────────
+
+   These replace Supabase's barebones built-in templates by intercepting
+   every auth-email event through the "Send Email Hook" webhook
+   (configured in Supabase Dashboard → Auth → Hooks → Send Email Hook).
+   The webhook lands at /api/auth/email-hook, verifies the signature,
+   and dispatches to one of the helpers below based on
+   `email_action_type`.
+
+   Variables we receive from Supabase per event:
+     - `confirmationUrl`  pre-built URL the user should tap. We build
+                          this in the route handler from
+                          {site_url, token_hash, action_type, redirect_to}.
+     - `token`            the raw 6-digit OTP (only for OTP-style flows
+                          like reauthentication; URL flows don't show it).
+     - `email`            recipient address.
+     - `firstName`        derived from user metadata if available.
+   ────────────────────────────────────────────────────────────────────── */
+
+export function authSignupConfirmTemplate(args: {
+  firstName: string | null;
+  confirmationUrl: string;
+}) {
+  const subject = "Confirm your Rajlo account · Let's go!";
+  const html = renderEmail({
+    preheader: "Tap below to confirm your email and start riding.",
+    eyebrow: "WELCOME · CONFIRM YOUR EMAIL",
+    title: `Welcome to Rajlo, ${firstNameOf(args.firstName)}.`,
+    sections: [
+      {
+        type: "intro",
+        text:
+          "You're one tap away from your first ride. Confirm your email below and we'll bring you straight to your dashboard. The link is good for 24 hours.",
+      },
+      {
+        type: "cta",
+        href: args.confirmationUrl,
+        label: "Confirm my email",
+      },
+      { type: "linkRow", href: args.confirmationUrl, label: args.confirmationUrl },
+      {
+        type: "footnote",
+        text:
+          "Didn't sign up for Rajlo? Ignore this email and the account will be removed automatically.",
+      },
+    ],
+  });
+  const text = plaintext([
+    `Welcome to Rajlo, ${firstNameOf(args.firstName)}.`,
+    "Confirm your email to finish setting up your account.",
+    `Confirm: ${args.confirmationUrl}`,
+    "Didn't sign up? Ignore this email.",
+  ]);
+  return { subject, html, text };
+}
+
+export async function sendAuthSignupConfirmEmail(
+  to: string,
+  args: Parameters<typeof authSignupConfirmTemplate>[0],
+) {
+  const t = authSignupConfirmTemplate(args);
+  return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
+}
+
+export function authMagicLinkTemplate(args: {
+  firstName: string | null;
+  confirmationUrl: string;
+}) {
+  const subject = "Your Rajlo sign-in link";
+  const html = renderEmail({
+    preheader: "Tap to sign in. Link expires in 60 minutes.",
+    eyebrow: "SIGN IN",
+    title: `Sign in to Rajlo, ${firstNameOf(args.firstName)}.`,
+    sections: [
+      {
+        type: "intro",
+        text:
+          "Tap the button below to sign in to Rajlo. This link expires in 60 minutes for your security.",
+      },
+      {
+        type: "cta",
+        href: args.confirmationUrl,
+        label: "Sign me in",
+      },
+      { type: "linkRow", href: args.confirmationUrl, label: args.confirmationUrl },
+      {
+        type: "footnote",
+        text:
+          "If you didn't request this link, you can safely ignore this email — no changes were made to your account.",
+      },
+    ],
+  });
+  const text = plaintext([
+    "Sign in to Rajlo.",
+    `Sign in: ${args.confirmationUrl}`,
+    "Expires in 60 minutes.",
+  ]);
+  return { subject, html, text };
+}
+
+export async function sendAuthMagicLinkEmail(
+  to: string,
+  args: Parameters<typeof authMagicLinkTemplate>[0],
+) {
+  const t = authMagicLinkTemplate(args);
+  return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
+}
+
+export function authPasswordRecoveryTemplate(args: {
+  firstName: string | null;
+  confirmationUrl: string;
+}) {
+  const subject = "Reset your Rajlo password";
+  const html = renderEmail({
+    preheader: "Tap below to set a new password.",
+    eyebrow: "PASSWORD RESET",
+    title: "Reset your password",
+    sections: [
+      {
+        type: "intro",
+        text: `Hi ${firstNameOf(args.firstName)} — someone (hopefully you) asked to reset your Rajlo password. Tap the button below to set a new one. The link expires in 60 minutes.`,
+      },
+      {
+        type: "cta",
+        href: args.confirmationUrl,
+        label: "Set a new password",
+      },
+      { type: "linkRow", href: args.confirmationUrl, label: args.confirmationUrl },
+      {
+        type: "highlight",
+        tone: "warning",
+        eyebrow: "Didn't request this?",
+        text:
+          "Ignore this email and your password stays the same. If you keep getting these unexpectedly, reply to this email and we'll secure your account.",
+      },
+    ],
+  });
+  const text = plaintext([
+    "Reset your Rajlo password.",
+    `Reset link: ${args.confirmationUrl}`,
+    "Expires in 60 minutes. Didn't request this? Ignore — your password is unchanged.",
+  ]);
+  return { subject, html, text };
+}
+
+export async function sendAuthPasswordRecoveryEmail(
+  to: string,
+  args: Parameters<typeof authPasswordRecoveryTemplate>[0],
+) {
+  const t = authPasswordRecoveryTemplate(args);
+  return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
+}
+
+export function authInviteTemplate(args: {
+  firstName: string | null;
+  confirmationUrl: string;
+}) {
+  const subject = "You're invited to Rajlo · Let's go!";
+  const html = renderEmail({
+    preheader: "Accept your invitation to join Rajlo.",
+    eyebrow: "INVITATION",
+    title: `You're invited to Rajlo${args.firstName ? `, ${firstNameOf(args.firstName)}` : ""}.`,
+    sections: [
+      {
+        type: "intro",
+        text:
+          "Welcome to Rajlo — Jamaica's red-plate rideshare network. Tap below to accept your invitation, set a password, and finish setting up your account.",
+      },
+      {
+        type: "cta",
+        href: args.confirmationUrl,
+        label: "Accept invitation",
+      },
+      { type: "linkRow", href: args.confirmationUrl, label: args.confirmationUrl },
+      {
+        type: "footnote",
+        text:
+          "This invitation expires in 7 days. If you weren't expecting it, you can ignore this email.",
+      },
+    ],
+  });
+  const text = plaintext([
+    "You're invited to Rajlo.",
+    `Accept your invitation: ${args.confirmationUrl}`,
+    "Expires in 7 days.",
+  ]);
+  return { subject, html, text };
+}
+
+export async function sendAuthInviteEmail(
+  to: string,
+  args: Parameters<typeof authInviteTemplate>[0],
+) {
+  const t = authInviteTemplate(args);
+  return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
+}
+
+export function authEmailChangeTemplate(args: {
+  firstName: string | null;
+  confirmationUrl: string;
+  newEmail: string;
+}) {
+  const subject = "Confirm your new Rajlo email";
+  const html = renderEmail({
+    preheader: "Tap to confirm your new email address.",
+    eyebrow: "CONFIRM EMAIL CHANGE",
+    title: "Confirm your new email",
+    sections: [
+      {
+        type: "intro",
+        text: `Hi ${firstNameOf(args.firstName)} — you asked to change the email on your Rajlo account to ${args.newEmail}. Tap below to confirm it. The link expires in 24 hours.`,
+      },
+      {
+        type: "cta",
+        href: args.confirmationUrl,
+        label: "Confirm new email",
+      },
+      { type: "linkRow", href: args.confirmationUrl, label: args.confirmationUrl },
+      {
+        type: "footnote",
+        text:
+          "If you didn't ask to change your email, ignore this and the change won't go through — your current email stays the same.",
+      },
+    ],
+  });
+  const text = plaintext([
+    `Confirm your new email: ${args.newEmail}`,
+    `Confirm: ${args.confirmationUrl}`,
+    "Expires in 24 hours.",
+  ]);
+  return { subject, html, text };
+}
+
+export async function sendAuthEmailChangeEmail(
+  to: string,
+  args: Parameters<typeof authEmailChangeTemplate>[0],
+) {
+  const t = authEmailChangeTemplate(args);
+  return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
+}
+
+export function authReauthenticationTemplate(args: {
+  firstName: string | null;
+  token: string;
+}) {
+  const subject = `${args.token} — your Rajlo confirmation code`;
+  const html = renderEmail({
+    preheader: "Enter this 6-digit code to confirm it's you.",
+    eyebrow: "SECURITY CHECK",
+    title: "Confirm it's you",
+    sections: [
+      {
+        type: "intro",
+        text: `Hi ${firstNameOf(args.firstName)} — for your security, Rajlo needs to confirm it's really you. Enter this 6-digit code in the app to proceed.`,
+      },
+      {
+        type: "code",
+        value: args.token,
+        description: "Valid for 10 minutes. Never share this code with anyone.",
+      },
+      {
+        type: "footnote",
+        text:
+          "If you didn't trigger this, someone may be trying to access your account. Reset your password from the sign-in page immediately and email safety@rajlo.com.",
+      },
+    ],
+  });
+  const text = plaintext([
+    "Your Rajlo confirmation code:",
+    args.token,
+    "Valid for 10 minutes. Never share this code.",
+  ]);
+  return { subject, html, text };
+}
+
+export async function sendAuthReauthenticationEmail(
+  to: string,
+  args: Parameters<typeof authReauthenticationTemplate>[0],
+) {
+  const t = authReauthenticationTemplate(args);
+  return sendEmail({ to, subject: t.subject, html: t.html, text: t.text });
+}
