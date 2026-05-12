@@ -40,6 +40,12 @@ export const SAFETY_TIPS: SafetyTip[] = [
     body: "Can you describe what's around you right now? Street name, business signs, landmarks — anything helps us pinpoint your exact location.",
   },
   {
+    id: "off-route-check",
+    category: "share",
+    label: "Ask about the route",
+    body: "I noticed the route looks a bit different — is the driver taking a detour for traffic, or heading somewhere unexpected? Anything they've said about why?",
+  },
+  {
     id: "stay-in-car",
     category: "act",
     label: "Stay in the vehicle",

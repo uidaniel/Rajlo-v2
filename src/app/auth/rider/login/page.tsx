@@ -66,8 +66,10 @@ function RiderLoginInner() {
         profile?.role === "driver"
           ? "This is a driver account. Please use the driver sign-in instead."
           : profile?.role === "admin"
-            ? "This is an admin account. Please use the admin sign-in instead."
-            : "This account isn't authorized for the rider portal.";
+            ? "This is an admin account. Please use the staff sign-in instead."
+            : profile?.role === "safety_officer"
+              ? "This is a safety officer account. Please use the staff sign-in instead."
+              : "This account isn't authorized for the rider portal.";
       setError(wrongRole);
       setIsLoading(false);
       return;

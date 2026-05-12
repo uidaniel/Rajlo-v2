@@ -13,6 +13,7 @@ import { useBackgroundRefresh } from "@/lib/use-background-refresh";
 import { SafetySheet } from "@/components/safety-sheet";
 import { SafetyCheckModal } from "@/components/safety-check-modal";
 import { useUnusualStopDetector } from "@/lib/use-unusual-stop-detector";
+import { useOffRouteDetector } from "@/lib/use-off-route-detector";
 import { ChatLauncher } from "@/components/chat-launcher";
 import { DriverVehicleCard } from "@/components/driver-vehicle-card";
 import {
@@ -170,6 +171,16 @@ export default function RiderLiveTripPage() {
   const [safetyCheckAlertId, setSafetyCheckAlertId] = useState<string | null>(
     null,
   );
+  // Which detector raised the auto-check (drives modal copy: "car
+  // stopped" vs "car off route" vs generic).
+  const [safetyCheckKind, setSafetyCheckKind] = useState<
+    "unusual_stop" | "off_route" | "manual"
+  >("manual");
+  // Planned route polyline — fetched once per trip from /route-plan
+  // when the ride is in flight. Null means the API hasn't returned
+  // yet OR Directions is unavailable; the off-route detector is a
+  // no-op in either case.
+  const [plannedPolyline, setPlannedPolyline] = useState<string | null>(null);
   const [completed, setCompleted] = useState<CompletedSnapshot | null>(null);
   // Tracks the most recent active-ride snapshot we saw, so when
   // refresh() returns `{ ride: null }` we can detect the active → done
@@ -228,6 +239,7 @@ export default function RiderLiveTripPage() {
     } catch {
       /* network blip — modal still opens so the rider can act */
     }
+    setSafetyCheckKind("unusual_stop");
     setSafetyCheckAuto(true);
     setSafetyCheckOpen(true);
   });
@@ -253,6 +265,7 @@ export default function RiderLiveTripPage() {
     } catch {
       /* network blip — modal still opens so the rider can act */
     }
+    setSafetyCheckKind("unusual_stop");
     setSafetyCheckAuto(true);
     setSafetyCheckOpen(true);
   };
@@ -265,6 +278,146 @@ export default function RiderLiveTripPage() {
       void fireUnusualStop.current();
     },
   });
+
+  // Off-route detector — fires once per sustained off-route event
+  // (>300m off the planned polyline for >2 min during in_progress).
+  // Same UX as unusual-stop: pre-create an `off_route` alert server-
+  // side so officers see it instantly, then pop the modal so the
+  // rider can either confirm safety or escalate.
+  const fireOffRoute = useRef(async () => {
+    if (!activeRideId) return;
+    try {
+      const res = await fetch(`/api/rider/rides/${activeRideId}/sos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "off_route",
+          message:
+            "Auto-detected: driver >300m off the planned route for >2 min during in_progress.",
+          lat: driverPosition?.lat,
+          lng: driverPosition?.lng,
+        }),
+      });
+      if (res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { alertId?: string };
+        setSafetyCheckAlertId(j.alertId ?? null);
+      }
+    } catch {
+      /* network blip — modal still opens so the rider can act */
+    }
+    setSafetyCheckKind("off_route");
+    setSafetyCheckAuto(true);
+    setSafetyCheckOpen(true);
+  });
+  // Keep the ref fresh on every render so the detector's stable
+  // callback always reads the latest activeRideId / driverPosition.
+  fireOffRoute.current = async () => {
+    if (!activeRideId) return;
+    try {
+      const res = await fetch(`/api/rider/rides/${activeRideId}/sos`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          kind: "off_route",
+          message:
+            "Auto-detected: driver >300m off the planned route for >2 min during in_progress.",
+          lat: driverPosition?.lat,
+          lng: driverPosition?.lng,
+        }),
+      });
+      if (res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { alertId?: string };
+        setSafetyCheckAlertId(j.alertId ?? null);
+      }
+    } catch {
+      /* network blip — modal still opens so the rider can act */
+    }
+    setSafetyCheckKind("off_route");
+    setSafetyCheckAuto(true);
+    setSafetyCheckOpen(true);
+  };
+
+  useOffRouteDetector({
+    driverPosition,
+    rideStatus: data?.ride?.status ?? null,
+    plannedPolyline,
+    enabled: !!activeRideId,
+    onOffRoute: () => {
+      void fireOffRoute.current();
+    },
+  });
+
+  // Fetch the planned route polyline once per active ride. The endpoint
+  // is idempotent — first caller triggers the Directions API hit, every
+  // subsequent caller (and every page reload) reads the cached row.
+  useEffect(() => {
+    if (!activeRideId) {
+      setPlannedPolyline(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    fetch(`/api/rider/rides/${activeRideId}/route-plan`, {
+      signal: ctrl.signal,
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j: { polyline?: string } | null) => {
+        if (j?.polyline) setPlannedPolyline(j.polyline);
+      })
+      .catch(() => {
+        /* Directions unavailable — detector stays disabled, no retry. */
+      });
+    return () => ctrl.abort();
+  }, [activeRideId]);
+
+  // Persistent safety chat — poll for open alerts on the current ride
+  // so the rider can re-enter the conversation after the auto-popup
+  // closes (and so the thread survives a page refresh mid-incident).
+  // When no alerts are open the pill disappears on its own.
+  const [activeAlert, setActiveAlert] = useState<{
+    id: string;
+    kind: "sos" | "flag" | "unusual_stop" | "off_route";
+    acknowledged: boolean;
+  } | null>(null);
+  useEffect(() => {
+    if (!activeRideId) {
+      setActiveAlert(null);
+      return;
+    }
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const res = await fetch(
+          `/api/rider/rides/${activeRideId}/active-alerts`,
+          { cache: "no-store" },
+        );
+        if (!res.ok || cancelled) return;
+        const data = (await res.json()) as {
+          alerts: Array<{
+            id: string;
+            kind: "sos" | "flag" | "unusual_stop" | "off_route";
+            acknowledged: boolean;
+          }>;
+        };
+        if (cancelled) return;
+        const top = data.alerts[0] ?? null;
+        setActiveAlert(top);
+        // Keep modal's pointer aligned with what's actually open in
+        // the DB. When the rider resolves via "I'm fine" (alert flips
+        // to resolved server-side), the next poll clears the id so a
+        // future manual open doesn't accidentally point at the
+        // closed thread.
+        if (top === null) setSafetyCheckAlertId(null);
+      } catch {
+        /* silent — chat pill is best-effort */
+      }
+    };
+    void poll();
+    const timer = setInterval(poll, 10_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [activeRideId]);
 
   // Pulled out so the Realtime subscription effect can call it without
   // recreating the function (and without re-subscribing on every
@@ -829,6 +982,7 @@ export default function RiderLiveTripPage() {
         rideId={ride.id}
         alertId={safetyCheckAlertId}
         auto={safetyCheckAuto}
+        kind={safetyCheckKind}
         currentPosition={
           riderPosition
             ? { lat: riderPosition.lat, lng: riderPosition.lng }
@@ -836,10 +990,41 @@ export default function RiderLiveTripPage() {
         }
         onClose={() => {
           setSafetyCheckOpen(false);
-          setSafetyCheckAlertId(null);
+          // Intentionally keep `safetyCheckAlertId` so the persistent
+          // chat pill below can reopen the modal pointed at the same
+          // alert. The alertId is cleared by the active-alerts poll
+          // once the underlying alert flips to resolved.
           setSafetyCheckAuto(false);
         }}
       />
+
+      {/* Persistent safety-chat pill — visible while any alert is
+          open or acknowledged on this ride. Tap to reopen the chat
+          thread without re-triggering the auto-escalation timer. */}
+      {activeAlert && !safetyCheckOpen && (
+        <button
+          type="button"
+          onClick={() => {
+            setSafetyCheckAlertId(activeAlert.id);
+            setSafetyCheckKind("manual");
+            setSafetyCheckAuto(false);
+            setSafetyCheckOpen(true);
+          }}
+          className="fixed bottom-5 right-5 z-[70] inline-flex items-center gap-2 rounded-full bg-rajlo-red px-4 py-3 text-sm font-bold text-white shadow-2xl shadow-rajlo-red/40 transition-transform hover:-translate-y-0.5"
+        >
+          <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15">
+            <Icon name="mail" className="h-4 w-4" />
+          </span>
+          <span className="flex flex-col items-start leading-tight">
+            <span>Rajlo Safety chat</span>
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-white/85">
+              {activeAlert.acknowledged
+                ? "Officer is on it"
+                : "Open thread"}
+            </span>
+          </span>
+        </button>
+      )}
 
       {/* The chat launcher (icon + sheet + toast) lives inside the
          driver card above. Nothing more to mount here. */}

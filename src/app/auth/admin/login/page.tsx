@@ -20,7 +20,11 @@ export default function AdminLoginPage() {
 function AdminLoginInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const next = searchParams.get("next") ?? "/admin";
+  // `next` is honoured for both admins and officers if explicitly set
+  // (e.g. they bookmarked /admin/safety/[id] and got bounced to login).
+  // Otherwise we route by role below — admins to the ops dashboard,
+  // officers to their scoped safety queue.
+  const nextParam = searchParams.get("next");
   const urlError = searchParams.get("error");
 
   const [email, setEmail] = useState("");
@@ -44,28 +48,33 @@ function AdminLoginInner() {
       return;
     }
 
-    // Verify the user actually has the admin role; otherwise sign back out.
+    // Verify the user has admin OR safety_officer role; otherwise sign
+    // back out. Officers go to the safety queue, admins to the ops
+    // dashboard — both live under /admin/* and share the same layout
+    // which scopes the sidebar per role.
     const { data: profile } = await supabase
       .from("profiles")
       .select("role")
       .eq("id", data.user.id)
       .single();
 
-    if (profile?.role !== "admin") {
+    if (profile?.role !== "admin" && profile?.role !== "safety_officer") {
       await supabase.auth.signOut();
-      setError("This account doesn't have admin access.");
+      setError("This account doesn't have admin or safety officer access.");
       setIsLoading(false);
       return;
     }
 
-    router.push(next);
+    const fallback =
+      profile.role === "safety_officer" ? "/admin/safety" : "/admin";
+    router.push(nextParam ?? fallback);
     router.refresh();
   };
 
   return (
     <AuthShell
-      title="Admin sign in"
-      subtitle="Operations console — Rajlo staff only."
+      title="Staff sign in"
+      subtitle="Operations console + safety officers — Rajlo staff only."
       audience="admin"
     >
       <div className="space-y-5">
@@ -107,7 +116,8 @@ function AdminLoginInner() {
           Sign in
         </AuthSubmit>
         <p className="text-center text-xs text-muted">
-          Admin accounts are created manually by Rajlo. If you need access, contact the operations team.
+          Admin and safety-officer accounts are created by Rajlo. If you
+          need access, contact the operations team.
         </p>
       </div>
     </AuthShell>

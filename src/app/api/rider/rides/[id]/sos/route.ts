@@ -25,7 +25,7 @@ import { sendEmail } from "@/lib/email";
  * Email is best-effort (failures don't block the DB write).
  */
 type SosRequest = {
-  kind: "sos" | "flag" | "unusual_stop";
+  kind: "sos" | "flag" | "unusual_stop" | "off_route";
   message?: string;
   lat?: number;
   lng?: number;
@@ -35,6 +35,7 @@ const ALLOWED_KINDS: ReadonlyArray<SosRequest["kind"]> = [
   "sos",
   "flag",
   "unusual_stop",
+  "off_route",
 ];
 
 export async function POST(
@@ -46,7 +47,9 @@ export async function POST(
 
   if (!ALLOWED_KINDS.includes(body.kind)) {
     return NextResponse.json(
-      { error: "kind must be 'sos', 'flag', or 'unusual_stop'" },
+      {
+        error: "kind must be 'sos', 'flag', 'unusual_stop', or 'off_route'",
+      },
       { status: 400 },
     );
   }

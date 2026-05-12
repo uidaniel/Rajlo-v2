@@ -65,6 +65,11 @@ export type SafetyCheckModalProps = {
    *  countdown + the "Are you OK?" framing. Manual opens skip the
    *  countdown and use a more general "Safety toolkit" framing. */
   auto: boolean;
+  /** Which detector triggered this check. Drives the body copy:
+   *   - `unusual_stop` → "The car hasn't moved in a few minutes."
+   *   - `off_route`    → "Your driver may have gone off the planned route."
+   *   - `manual`       → no body (rider opened the toolkit themselves). */
+  kind?: "unusual_stop" | "off_route" | "manual";
   /** Rider's current GPS (best-effort) — included in any escalation
    *  so ops sees the latest position, not just the original stop. */
   currentPosition: { lat: number; lng: number } | null;
@@ -77,6 +82,7 @@ export function SafetyCheckModal({
   rideId,
   alertId,
   auto,
+  kind = "manual",
   currentPosition,
   onClose,
 }: SafetyCheckModalProps) {
@@ -342,9 +348,11 @@ export function SafetyCheckModal({
           </div>
           {auto && (
             <p className="mt-3 text-sm leading-relaxed text-white/90">
-              The car hasn&apos;t moved in a few minutes. Tap an option
-              below — if you don&apos;t respond, we&apos;ll notify
-              Rajlo&apos;s safety team automatically{" "}
+              {kind === "off_route"
+                ? "Your driver appears to have left the planned route. "
+                : "The car hasn't moved in a few minutes. "}
+              Tap an option below — if you don&apos;t respond, we&apos;ll
+              notify Rajlo&apos;s safety team automatically{" "}
               <strong className="font-extrabold">in {secondsLeft}s</strong>.
             </p>
           )}

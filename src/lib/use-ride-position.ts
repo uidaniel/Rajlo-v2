@@ -48,6 +48,13 @@ type Role = "driver" | "rider";
  *  cadence used by the fleet broadcaster (`use-fleet.ts`). */
 const HEARTBEAT_MS = 5_000;
 
+/** Server-cache cadence — driver posts their position to the rides
+ *  row at this interval so admin / officer / refreshed-rider tabs
+ *  see the car instantly on first paint instead of waiting for the
+ *  next Realtime ping. Lower frequency than the broadcast heartbeat
+ *  (which is essentially free) since each call is a DB write. */
+const SERVER_CACHE_MS = 10_000;
+
 export function useRidePosition(
   rideId: string | null,
   role: Role,
@@ -94,6 +101,7 @@ export function useRidePosition(
 
     let watchId: number | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    let serverCacheTimer: ReturnType<typeof setInterval> | null = null;
 
     const eventName: "driver-position" | "rider-position" =
       role === "driver" ? "driver-position" : "rider-position";
@@ -170,6 +178,23 @@ export function useRidePosition(
       // every 5s. Doesn't deplete battery (no extra GPS read — just
       // re-sends the cached fix).
       heartbeatTimer = setInterval(broadcastLatest, HEARTBEAT_MS);
+
+      // Server-side cache — only the driver writes to /rides/[id]/position
+      // (riders don't have a cache field). Lower cadence than the
+      // broadcast because it's a real DB write. Failures are silent;
+      // the broadcast channel remains the primary live signal.
+      if (role === "driver") {
+        const pushToServer = () => {
+          const fix = latestFixRef.current;
+          if (!fix) return;
+          void fetch(`/api/driver/rides/${rideId}/position`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ lat: fix.lat, lng: fix.lng }),
+          }).catch(() => null);
+        };
+        serverCacheTimer = setInterval(pushToServer, SERVER_CACHE_MS);
+      }
     });
 
     return () => {
@@ -177,6 +202,7 @@ export function useRidePosition(
         navigator.geolocation.clearWatch(watchId);
       }
       if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (serverCacheTimer) clearInterval(serverCacheTimer);
       supabase.removeChannel(channel);
       latestFixRef.current = null;
       lastSentRef.current = null;

@@ -159,6 +159,12 @@ export function MapView({
   // Static polyline (pickup → stops → dropoff). Hidden when `liveRoute`
   // is engaged — the live route has its own polyline.
   const polylineRef = useRef<google.maps.Polyline | null>(null);
+  // Signature of the last route we drew, so we can skip the tear-down
+  // + Directions re-fetch when a polling parent re-renders with the
+  // same pickup / stops / dropoff content but new array/object refs.
+  // Without this guard the polyline visibly blinked every 8s on any
+  // live-polling surface (admin live-trips, alert detail, etc.).
+  const lastRouteSignatureRef = useRef<string>("");
   // Live route polyline (driver → target). Tracked separately so the
   // static-route effect doesn't accidentally clear it on every status flip.
   const livePolylineRef = useRef<google.maps.Polyline | null>(null);
@@ -271,6 +277,29 @@ export function MapView({
     const map = mapRef.current;
     if (!map) return;
     if (typeof window === "undefined" || !window.google) return;
+
+    // Build content-only signature so we can early-out when a polling
+    // parent re-rendered with new prop refs but the actual route is
+    // unchanged. Coords rounded to 6dp (≈11cm precision — well below
+    // any meaningful route change).
+    const fmt = (p: Place) =>
+      `${p.lat.toFixed(6)},${p.lng.toFixed(6)}`;
+    const signature = [
+      pickup ? `p:${fmt(pickup)}` : "p:",
+      stops.map((s, i) => `s${i}:${fmt(s)}`).join("|"),
+      dropoff ? `d:${fmt(dropoff)}` : "d:",
+      liveRoute ? "live" : "static",
+    ].join("|");
+    if (
+      signature === lastRouteSignatureRef.current &&
+      // Only short-circuit if we've actually drawn the previous run's
+      // overlays — otherwise the very first render after mapReady
+      // would skip drawing because the signature was already set.
+      (polylineRef.current || liveRoute || markersRef.current.length > 0)
+    ) {
+      return;
+    }
+    lastRouteSignatureRef.current = signature;
 
     // Wipe previous overlays.
     markersRef.current.forEach((m) => m.setMap(null));

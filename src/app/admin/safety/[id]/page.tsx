@@ -31,7 +31,7 @@ type AlertDetail = {
     rideId: string;
     riderId: string;
     driverId: string | null;
-    kind: "sos" | "flag" | "unusual_stop";
+    kind: "sos" | "flag" | "unusual_stop" | "off_route";
     message: string | null;
     lat: number | null;
     lng: number | null;
@@ -77,12 +77,14 @@ const KIND_LABEL: Record<AlertDetail["alert"]["kind"], string> = {
   sos: "SOS",
   flag: "Flag",
   unusual_stop: "Unusual stop",
+  off_route: "Off route",
 };
 
 const KIND_TINT: Record<AlertDetail["alert"]["kind"], string> = {
   sos: "bg-rajlo-red text-white",
   flag: "bg-amber-500 text-white",
   unusual_stop: "bg-amber-200 text-amber-900",
+  off_route: "bg-orange-500 text-white",
 };
 
 export default function AdminSafetyAlertDetailPage() {
@@ -182,7 +184,13 @@ export default function AdminSafetyAlertDetailPage() {
               className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${KIND_TINT[alert.kind]}`}
             >
               <Icon
-                name={alert.kind === "sos" ? "shield-alert" : "map-pin"}
+                name={
+                  alert.kind === "sos"
+                    ? "shield-alert"
+                    : alert.kind === "off_route"
+                      ? "navigation"
+                      : "map-pin"
+                }
                 className="h-5 w-5"
               />
             </span>

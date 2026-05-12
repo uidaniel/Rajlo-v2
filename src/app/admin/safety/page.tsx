@@ -25,7 +25,7 @@ type Alert = {
   riderId: string;
   riderName: string;
   driverId: string | null;
-  kind: "sos" | "flag" | "unusual_stop";
+  kind: "sos" | "flag" | "unusual_stop" | "off_route";
   message: string | null;
   lat: number | null;
   lng: number | null;
@@ -55,6 +55,11 @@ const KIND_META: Record<
     label: "Unusual stop",
     icon: "map-pin",
     tint: "bg-amber-200 text-amber-900",
+  },
+  off_route: {
+    label: "Off route",
+    icon: "navigation",
+    tint: "bg-orange-500 text-white",
   },
 };
 
@@ -151,6 +156,7 @@ export default function AdminSafetyPage() {
             { value: "sos", label: "SOS" },
             { value: "flag", label: "Flags" },
             { value: "unusual_stop", label: "Unusual stops" },
+            { value: "off_route", label: "Off route" },
           ]}
           onChange={(v) => setKind(v as typeof kind)}
         />

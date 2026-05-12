@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdmin } from "@/lib/admin-auth";
+import { requireSafetyOfficerOrAdmin } from "@/lib/admin-auth";
 
 /**
  * GET /api/admin/live-trips
@@ -69,7 +69,7 @@ type LiveHail = {
 type LiveTrip = LiveRide | LiveHail;
 
 export async function GET() {
-  const gate = await requireAdmin();
+  const gate = await requireSafetyOfficerOrAdmin();
   if (gate.error) return gate.error;
   const { supabase } = gate;
 
@@ -77,7 +77,7 @@ export async function GET() {
   const { data: rideRows } = await supabase
     .from("rides")
     .select(
-      "id, status, rider_id, driver_id, pickup_name, pickup_lat, pickup_lng, dropoff_name, dropoff_lat, dropoff_lng, estimated_fare_jmd, final_fare_jmd, accepted_at",
+      "id, status, rider_id, driver_id, pickup_name, pickup_lat, pickup_lng, dropoff_name, dropoff_lat, dropoff_lng, estimated_fare_jmd, final_fare_jmd, accepted_at, driver_last_lat, driver_last_lng, driver_last_position_at",
     )
     .in("status", ["accepted", "arrived", "in_progress"])
     .order("accepted_at", { ascending: false })
@@ -189,6 +189,14 @@ export async function GET() {
 
   const liveRides: LiveRide[] = (rideRows ?? []).map((r) => {
     const driver = r.driver_id ? driverMap.get(r.driver_id) : null;
+    // Use the cached position written by /api/driver/rides/[id]/position
+    // every ~10s. Realtime broadcasts still overlay fresh pings on top
+    // of this on the client; the cache just makes sure first paint
+    // shows a marker instead of "Waiting for driver GPS".
+    const cachedDriverPos: Pos =
+      r.driver_last_lat !== null && r.driver_last_lng !== null
+        ? { lat: Number(r.driver_last_lat), lng: Number(r.driver_last_lng) }
+        : null;
     return {
       id: r.id as string,
       kind: "private",
@@ -202,10 +210,7 @@ export async function GET() {
       riderName: profileMap.get(r.rider_id as string) ?? "Rider",
       driverName: driver?.name ?? "Driver",
       driverPlate: driver?.plate ?? null,
-      // Private rides don't cache driver GPS in DB — the realtime
-      // channel is the only source. Map will start with no marker
-      // until the first ping arrives (typically within 5s heartbeat).
-      driverPosition: null,
+      driverPosition: cachedDriverPos,
       fareJmd: Number(r.final_fare_jmd ?? r.estimated_fare_jmd ?? 0),
       acceptedAt: (r.accepted_at as string | null) ?? null,
     };
