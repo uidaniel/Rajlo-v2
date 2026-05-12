@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "419100402819",
+    "project_id": "rajlo-23f6b",
+    "storage_bucket": "rajlo-23f6b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:419100402819:android:1cffcf41c50e1ebff627b6",
+        "android_client_info": {
+          "package_name": "com.rajlo.driver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyD1WYZ85g_DXAWEu6s2HCvjD-s7yup3D9c"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
