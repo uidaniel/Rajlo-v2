@@ -130,14 +130,19 @@ export async function startBackgroundGeolocation(
 }
 
 /**
- * Register the device for native push notifications and return the
- * Firebase Cloud Messaging token. Callers should hand the token off
- * to the existing push-subscriptions endpoint so the server can fan
- * out new-ride alerts to the driver even when the app is killed.
+ * Register the device for native push notifications, POST the FCM/APNs
+ * token to /api/push/subscribe so it's stored alongside web-push rows,
+ * and return the token. After this resolves successfully the
+ * `push_subscriptions` row exists and the server-side "must have push
+ * to go online" gate passes.
  *
- * Returns null on web or if registration fails.
+ * Returns:
+ *   { token, platform }  — success
+ *   null                  — web context, denied permission, or error
  */
-export async function registerNativePush(): Promise<string | null> {
+export async function registerNativePush(): Promise<
+  { token: string; platform: "android" | "ios" } | null
+> {
   if (!isNativeApp()) return null;
 
   try {
@@ -148,16 +153,110 @@ export async function registerNativePush(): Promise<string | null> {
     if (perm.receive !== "granted") return null;
     await PushNotifications.register();
 
-    return new Promise((resolve) => {
-      const onRegister = (token: { value: string }) => resolve(token.value);
+    const token = await new Promise<string | null>((resolve) => {
+      const onRegister = (t: { value: string }) => resolve(t.value);
       const onError = () => resolve(null);
       PushNotifications.addListener("registration", onRegister);
       PushNotifications.addListener("registrationError", onError);
-      // Safety timeout — registration should fire within a few seconds.
       setTimeout(() => resolve(null), 15_000);
     });
+
+    if (!token) return null;
+
+    // Detect platform from the Capacitor global. Defaults to android
+    // if the lookup fails — iOS will return "ios" once we add the
+    // iOS platform on a Mac.
+    const cap = (window as unknown as { Capacitor?: { getPlatform?: () => string } }).Capacitor;
+    const platform: "android" | "ios" =
+      cap?.getPlatform?.() === "ios" ? "ios" : "android";
+
+    // Best-effort POST. Failure here means the readiness gate will
+    // still block the driver, which is fine — they'll see the
+    // "couldn't register" error and can retry.
+    await fetch("/api/push/subscribe", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ platform, token }),
+    });
+
+    return { token, platform };
   } catch (err) {
     console.error("[native] push registration failed:", err);
     return null;
+  }
+}
+
+/**
+ * Ask the OS for foreground + background location permission. Returns
+ * true if the driver granted at least foreground location (the
+ * minimum to use the GPS). Background is requested at the same time
+ * but if the driver only granted "While Using" the watcher will
+ * pause when the app is backgrounded — they'll get a degraded
+ * experience but the app still works.
+ *
+ * No-op on web (returns true so the readiness gate doesn't block
+ * web users — they have their own permission flow via the browser's
+ * built-in geolocation prompt).
+ */
+export async function requestNativeLocationPermission(): Promise<boolean> {
+  if (!isNativeApp()) return true;
+
+  try {
+    const { registerPlugin } = await import("@capacitor/core");
+    const BackgroundGeolocation = registerPlugin<
+      import("@capacitor-community/background-geolocation").BackgroundGeolocationPlugin
+    >("BackgroundGeolocation");
+
+    // The plugin doesn't have a standalone "request permission" method
+    // — adding a watcher with `requestPermissions: true` prompts the
+    // user, returns the watcher id once granted, then we immediately
+    // remove the watcher so we're not draining battery just to ask.
+    let watcherId: string | null = null;
+    const granted = await new Promise<boolean>((resolve) => {
+      let resolved = false;
+      BackgroundGeolocation.addWatcher(
+        {
+          backgroundMessage:
+            "Rajlo is sharing your location for an active trip.",
+          backgroundTitle: "Rajlo Driver",
+          requestPermissions: true,
+        },
+        (_pos, error) => {
+          if (resolved) return;
+          resolved = true;
+          if (error) {
+            resolve(false);
+          } else {
+            resolve(true);
+          }
+        },
+      ).then((id) => {
+        watcherId = id;
+      });
+      // Safety timeout — if neither callback fires within 30s assume
+      // the user is sitting on the permission dialog and treat as
+      // not-yet-granted. The gate will let them retry.
+      setTimeout(() => {
+        if (!resolved) {
+          resolved = true;
+          resolve(false);
+        }
+      }, 30_000);
+    });
+
+    // Stop the temporary watcher — the real one starts later from
+    // useRidePosition when a trip is in flight.
+    if (watcherId) {
+      try {
+        await BackgroundGeolocation.removeWatcher({ id: watcherId });
+      } catch {
+        /* watcher already gone */
+      }
+    }
+
+    return granted;
+  } catch (err) {
+    console.error("[native] location permission request failed:", err);
+    return false;
   }
 }

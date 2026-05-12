@@ -11,6 +11,11 @@ import { Icon } from "./icons";
 import { ArcWatermark } from "./arc-pattern";
 import { usePush } from "@/lib/use-push";
 import { isIOS, isSafari, isStandalone } from "@/lib/platform-detect";
+import {
+  isNativeApp,
+  registerNativePush,
+  requestNativeLocationPermission,
+} from "@/lib/native";
 
 /**
  * Driver readiness gate.
@@ -76,6 +81,21 @@ function subscribeInstallState(callback: () => void): () => void {
 }
 
 export function DriverReadinessGate({ children }: { children: React.ReactNode }) {
+  // When the driver is running inside the Capacitor native app, the
+  // "install as PWA + enable web push" dance is irrelevant — they
+  // already have the app installed from the Play Store and push is
+  // handled natively via FCM. Branch to a much simpler permission
+  // prompter that asks the OS for location + notifications, registers
+  // an FCM token with the server (satisfying the push-required gate),
+  // and gets out of the way.
+  if (isNativeApp()) {
+    return <NativeReadinessGate>{children}</NativeReadinessGate>;
+  }
+
+  return <WebReadinessGate>{children}</WebReadinessGate>;
+}
+
+function WebReadinessGate({ children }: { children: React.ReactNode }) {
   const push = usePush();
   const [deferredPrompt, setDeferredPrompt] =
     useState<BeforeInstallPromptEvent | null>(null);
@@ -577,5 +597,137 @@ function PushDeniedRecovery() {
         </ol>
       )}
     </div>
+  );
+}
+
+/* ──────────────────────── Native readiness gate ──────────────────────── */
+
+/**
+ * Capacitor-app version of the readiness gate.
+ *
+ * The web gate has two steps (install PWA + enable push). Both are
+ * meaningless inside the native shell — the driver got the app from
+ * the Play Store, and push is delivered via FCM. So this gate is
+ * just a single-screen "tap to grant permissions" prompt that:
+ *
+ *   1. Requests location permission (background-capable on Android 14+)
+ *   2. Requests push permission + registers an FCM token with the
+ *      server (writes to push_subscriptions so the "must have push"
+ *      gate on /api/driver/online passes)
+ *
+ * Once both are granted, the children (the actual online toggle) render.
+ *
+ * If a driver denies either, they see a brief explainer and a "Try
+ * again" button. Permanent denial is recovered via the OS Settings
+ * app — we show the path.
+ */
+function NativeReadinessGate({ children }: { children: React.ReactNode }) {
+  const [locationGranted, setLocationGranted] = useState<boolean | null>(null);
+  const [pushGranted, setPushGranted] = useState<boolean | null>(null);
+  const [working, setWorking] = useState<"location" | "push" | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const askLocation = useCallback(async () => {
+    setWorking("location");
+    setError(null);
+    const ok = await requestNativeLocationPermission();
+    setLocationGranted(ok);
+    setWorking(null);
+    if (!ok) {
+      setError(
+        "Location is required for Rajlo — riders can't be matched to a driver without it.",
+      );
+    }
+  }, []);
+
+  const askPush = useCallback(async () => {
+    setWorking("push");
+    setError(null);
+    const result = await registerNativePush();
+    const ok = !!result;
+    setPushGranted(ok);
+    setWorking(null);
+    if (!ok) {
+      setError(
+        "Notifications are required so we can wake you up when a rider hails.",
+      );
+    }
+  }, []);
+
+  // Both granted → render the actual online toggle.
+  if (locationGranted && pushGranted) {
+    return <>{children}</>;
+  }
+
+  return (
+    <ReadinessShell tone="action">
+      <StepHeader
+        number={1}
+        title="Allow location"
+        subtitle="Rajlo needs your GPS to match you with riders nearby and to share your live position during a trip. We only track while you're online."
+      />
+      <div className="mt-3 mb-4 flex flex-col gap-3 sm:flex-row">
+        {locationGranted ? (
+          <DoneStep number={1} text="Location allowed" />
+        ) : (
+          <button
+            type="button"
+            onClick={askLocation}
+            disabled={working !== null}
+            className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-rajlo-black shadow-lg transition-all hover:-translate-y-0.5 disabled:opacity-60"
+          >
+            {working === "location" ? (
+              <span className="h-4 w-4 animate-spin rounded-full border-2 border-rajlo-red border-t-transparent" />
+            ) : (
+              <Icon name="map-pin" className="h-4 w-4" />
+            )}
+            {working === "location" ? "Asking…" : "Allow location"}
+          </button>
+        )}
+      </div>
+
+      {locationGranted ? (
+        <StepHeader
+          number={2}
+          title="Allow notifications"
+          subtitle="Your phone will ring when a rider hails. Without this, you'd have to keep Rajlo open on screen to see new work."
+        />
+      ) : (
+        <PendingStep number={2} text="Allow notifications" />
+      )}
+
+      {locationGranted && (
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+          {pushGranted ? (
+            <DoneStep number={2} text="Notifications allowed" />
+          ) : (
+            <button
+              type="button"
+              onClick={askPush}
+              disabled={working !== null}
+              className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-bold text-rajlo-black shadow-lg transition-all hover:-translate-y-0.5 disabled:opacity-60"
+            >
+              {working === "push" ? (
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-rajlo-red border-t-transparent" />
+              ) : (
+                <Icon name="bell" className="h-4 w-4" />
+              )}
+              {working === "push" ? "Asking…" : "Allow notifications"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {error && (
+        <p className="mt-4 rounded-xl border border-amber-300/40 bg-amber-300/10 p-3 text-sm font-medium text-amber-100">
+          {error}{" "}
+          <span className="block mt-1 text-amber-100/85 text-xs">
+            If you denied by accident, open your phone&apos;s{" "}
+            <strong>Settings → Apps → Rajlo Driver → Permissions</strong>{" "}
+            and turn them on, then come back.
+          </span>
+        </p>
+      )}
+    </ReadinessShell>
   );
 }

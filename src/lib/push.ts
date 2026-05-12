@@ -86,10 +86,16 @@ export async function pushToUser(
     };
   }
 
+  // Only web rows go through `webpush.sendNotification` — native FCM/APNs
+  // rows live in the same table but need a separate delivery channel
+  // (TODO: wire FCM fan-out for `platform = 'android'`). Filtering them
+  // out here is critical because webpush would treat them as dead and
+  // delete them via the 404/410 prune path below.
   const { data: subs, error } = await supabase
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")
-    .eq("user_id", userId);
+    .eq("user_id", userId)
+    .eq("platform", "web");
 
   if (error) {
     return { ok: false, error: error.message };

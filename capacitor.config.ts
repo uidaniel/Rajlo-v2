@@ -49,6 +49,11 @@ const config: CapacitorConfig = {
       // Brand-red status bar to match the in-app top strip.
       backgroundColor: "#f10100",
       style: "DARK",
+      // Without this Android draws the WebView edge-to-edge under the
+      // status bar, hiding the top of the page behind the battery/wifi
+      // icons. Setting it false reserves the status bar's height for
+      // itself so app content always starts below.
+      overlaysWebView: false,
     },
     BackgroundGeolocation: {
       // Background geolocation is the whole reason we wrap. The plugin
