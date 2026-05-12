@@ -2,21 +2,122 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
- * Refreshes the auth session cookie on every request and gates protected
- * portals.
+ * Two responsibilities, executed in order:
  *
- * Routes:
- *   /rider/*          requires any logged-in user (defaults to rider portal)
- *   /driver/*         requires logged-in user
- *   /admin/*          requires logged-in user with role='admin'
+ * 1. Subdomain gating (host-based)
+ *    Production runs three subdomains off the same Next app:
+ *      rider.rajlo.com   → only /, /rider/*, /auth/rider/*, shared pages
+ *      driver.rajlo.com  → only /, /driver/*, /auth/driver/*, shared pages
+ *      admin.rajlo.com   → only /, /admin/*, /auth/admin/*, shared pages
+ *    Hitting the wrong portal on the wrong subdomain redirects to the
+ *    correct subdomain (preserving the path) so deep links still work.
+ *    On any other host (rajlo.com apex, *.vercel.app preview deploys,
+ *    localhost dev) the subdomain rules are bypassed — paths just route
+ *    however they're requested. That's how the same code works on real
+ *    domains AND Vercel previews without two deployments.
  *
- * Anonymous visitors get bounced to the matching login page; logged-in users
- * who try to access a portal that doesn't match their role get redirected to
- * a 403 page.
+ * 2. Auth + role gating (path-based, identical to before)
+ *    Anonymous visitors hitting a protected portal get bounced to the
+ *    matching login. Logged-in users with the wrong role get a 403.
+ *    Officer role (safety_officer) is treated like admin for the /admin
+ *    surface — the per-page nav scoping inside the admin layout limits
+ *    what they actually see and the API endpoints enforce the rest.
  *
  * Static assets, API routes, and public marketing pages are not gated.
  */
+
+type Portal = "rider" | "driver" | "admin";
+
+/** Pages that any subdomain may serve — auth helpers, legal text,
+ *  Supabase OAuth callback, common public pages. */
+const SHARED_PATH_PREFIXES = [
+  "/auth/forgot-password",
+  "/auth/reset-password",
+  "/auth/callback",
+  "/auth/confirm",
+  "/legal/",
+  "/support",
+  "/403",
+  "/trip/", // public trip-share link
+];
+
+const PORTAL_PATH_PREFIXES: Record<Portal, string[]> = {
+  rider: ["/rider", "/auth/rider"],
+  driver: ["/driver", "/auth/driver"],
+  admin: ["/admin", "/auth/admin"],
+};
+
+/** Determine which portal (if any) this request's host is scoped to.
+ *  Returns null for the apex domain, Vercel preview URLs, localhost,
+ *  and anything else without a known portal prefix. */
+function portalForHost(host: string | null): Portal | null {
+  if (!host) return null;
+  const hostname = host.split(":")[0].toLowerCase();
+  if (hostname.startsWith("rider.")) return "rider";
+  if (hostname.startsWith("driver.")) return "driver";
+  if (hostname.startsWith("admin.")) return "admin";
+  return null;
+}
+
+/** Figure out which portal owns a given path. Returns null for
+ *  shared / unrecognised paths so the caller can decide whether to
+ *  allow or pass-through. */
+function portalForPath(path: string): Portal | null {
+  for (const [portal, prefixes] of Object.entries(PORTAL_PATH_PREFIXES) as [
+    Portal,
+    string[],
+  ][]) {
+    if (prefixes.some((p) => path === p || path.startsWith(`${p}/`))) {
+      return portal;
+    }
+  }
+  return null;
+}
+
 export async function proxy(request: NextRequest) {
+  const host = request.headers.get("host");
+  const portal = portalForHost(host);
+  const path = request.nextUrl.pathname;
+
+  // ─── 1. Subdomain gating ────────────────────────────────────────
+  if (portal) {
+    // Root path → driver/admin go straight to their login screen;
+    // rider keeps the marketing landing.
+    if (path === "/") {
+      if (portal === "driver") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/auth/driver/login";
+        return NextResponse.redirect(url);
+      }
+      if (portal === "admin") {
+        const url = request.nextUrl.clone();
+        url.pathname = "/auth/admin/login";
+        return NextResponse.redirect(url);
+      }
+    }
+
+    const owner = portalForPath(path);
+    if (owner && owner !== portal) {
+      // Path belongs to a different portal — bounce to that subdomain
+      // on the same path so deep links like
+      //   rider.rajlo.com/admin/safety/abc
+      // become
+      //   admin.rajlo.com/admin/safety/abc
+      const url = new URL(request.url);
+      const baseDomain = (host ?? "").replace(
+        /^(rider|driver|admin)\./i,
+        "",
+      );
+      url.host = `${owner}.${baseDomain}`;
+      // `url.host` keeps any :port suffix. In production Vercel handles
+      // that; in dev it preserves the local port so cross-subdomain
+      // redirects still work when testing.
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // ─── 2. Auth + role gating ──────────────────────────────────────
+  // (Unchanged from the prior path-only proxy.)
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -40,22 +141,21 @@ export async function proxy(request: NextRequest) {
     },
   );
 
-  // Refreshes the session if expired and exposes the user.
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const path = request.nextUrl.pathname;
-
   const isAdminRoute = path.startsWith("/admin");
-  const isDriverRoute =
-    path.startsWith("/driver") && path !== "/driver-join";
+  const isDriverRoute = path.startsWith("/driver") && path !== "/driver-join";
   const isRiderRoute = path.startsWith("/rider");
   const isProtected = isAdminRoute || isDriverRoute || isRiderRoute;
 
+  // Shared paths bypass auth entirely.
+  if (SHARED_PATH_PREFIXES.some((p) => path.startsWith(p))) {
+    return response;
+  }
   if (!isProtected) return response;
 
-  // Anonymous visitor → bounce to the appropriate login page.
   if (!user) {
     const loginPath = isAdminRoute
       ? "/auth/admin/login"
@@ -68,7 +168,6 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Logged-in: check role for portal gating.
   const { data: profile } = await supabase
     .from("profiles")
     .select("role")
@@ -77,11 +176,12 @@ export async function proxy(request: NextRequest) {
 
   const role = profile?.role ?? "rider";
 
-  // Strict role separation — each portal is reserved for its role.
-  // (Admins access /admin only; if you want admin to peek into other portals,
-  // grant a separate "support" role and gate that here.)
+  // Strict role separation. safety_officer counts as admin-tier for
+  // the admin surface (the per-page nav + API checks scope what they
+  // can actually do).
+  const adminAllowed = role === "admin" || role === "safety_officer";
   if (
-    (isAdminRoute && role !== "admin") ||
+    (isAdminRoute && !adminAllowed) ||
     (isDriverRoute && role !== "driver") ||
     (isRiderRoute && role !== "rider")
   ) {
@@ -94,7 +194,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Match everything except: Next internals, static assets, fonts, images.
+  // Match everything except Next internals + obvious static assets.
   matcher: [
     "/((?!_next/static|_next/image|favicon.ico|fonts/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|css|js|woff2?|ttf)$).*)",
   ],

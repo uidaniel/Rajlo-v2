@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "./supabase-browser";
 import { isIOS } from "./platform-detect";
+import { isNativeApp, startBackgroundGeolocation } from "./native";
 
 export type LivePosition = {
   lat: number;
@@ -102,6 +103,10 @@ export function useRidePosition(
     let watchId: number | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     let serverCacheTimer: ReturnType<typeof setInterval> | null = null;
+    // Native background-GPS watcher (Capacitor only). Null on web.
+    // Disposed alongside the browser watch in the cleanup function so
+    // the foreground service / battery drain stops when the trip ends.
+    let nativeGeoStop: (() => Promise<void>) | null = null;
 
     const eventName: "driver-position" | "rider-position" =
       role === "driver" ? "driver-position" : "rider-position";
@@ -115,74 +120,65 @@ export function useRidePosition(
       channel.send({ type: "broadcast", event: eventName, payload });
     };
 
+    /** Common handler for either source of GPS fixes (browser
+     *  watchPosition OR native background-geolocation). Dedupes, mirrors
+     *  to local state, and broadcasts. */
+    const handleFix = (next: LivePosition) => {
+      latestFixRef.current = next;
+
+      // Mirror into local state so the sender's own marker shows up
+      // on their map too.
+      if (role === "driver") setDriverPosition(next);
+      else setRiderPosition(next);
+
+      // Skip near-duplicate pings (< ~5 m of drift). The heartbeat
+      // below still keeps the marker fresh.
+      const last = lastSentRef.current;
+      if (
+        last &&
+        Math.abs(last.lat - next.lat) < 0.00005 &&
+        Math.abs(last.lng - next.lng) < 0.00005
+      ) {
+        return;
+      }
+      lastSentRef.current = { lat: next.lat, lng: next.lng };
+      broadcastLatest();
+    };
+
     channel.subscribe((status) => {
       if (status !== "SUBSCRIBED") return;
       if (!streamSelf) return;
-      if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
-        setGeoError("Your browser doesn't support live location.");
-        return;
+
+      // When running inside the Capacitor driver shell, use the native
+      // background-geolocation plugin instead of navigator.geolocation —
+      // browsers pause `watchPosition` the moment the screen locks,
+      // which is exactly when drivers most need to keep streaming.
+      // Falls back to browser geolocation if the plugin fails to start
+      // (e.g., permission denied — we still want partial coverage).
+      if (isNativeApp() && role === "driver") {
+        void startBackgroundGeolocation((p) => {
+          handleFix({
+            lat: p.lat,
+            lng: p.lng,
+            heading: p.heading,
+            speed: p.speed,
+            ts: p.ts,
+          });
+        }).then((stop) => {
+          nativeGeoStop = stop;
+          // If the plugin returned null (permission denied / unsupported)
+          // fall back to the browser watcher so the driver still has
+          // coverage while the app is foregrounded.
+          if (!stop) startBrowserWatcher();
+        });
+      } else {
+        startBrowserWatcher();
       }
 
-      watchId = navigator.geolocation.watchPosition(
-        (pos) => {
-          const next: LivePosition = {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            heading:
-              typeof pos.coords.heading === "number" &&
-              !Number.isNaN(pos.coords.heading)
-                ? pos.coords.heading
-                : null,
-            speed:
-              typeof pos.coords.speed === "number" &&
-              !Number.isNaN(pos.coords.speed)
-                ? pos.coords.speed
-                : null,
-            ts: Date.now(),
-          };
-          latestFixRef.current = next;
-
-          // Mirror into local state so the sender's own marker shows up
-          // on their map too.
-          if (role === "driver") setDriverPosition(next);
-          else setRiderPosition(next);
-
-          // Skip near-duplicate pings (< ~5 m of drift). The heartbeat
-          // below still keeps the marker fresh.
-          const last = lastSentRef.current;
-          if (
-            last &&
-            Math.abs(last.lat - next.lat) < 0.00005 &&
-            Math.abs(last.lng - next.lng) < 0.00005
-          ) {
-            return;
-          }
-          lastSentRef.current = { lat: next.lat, lng: next.lng };
-          broadcastLatest();
-        },
-        (err) => {
-          // Code 1 = denied, 2 = unavailable, 3 = timeout. iOS users
-          // see the denied case most often and the fix is buried in
-          // their iOS Settings, not in Safari — give them the path.
-          setGeoError(buildGeoErrorMessage(err.code));
-        },
-        {
-          enableHighAccuracy: true,
-          maximumAge: 5_000,
-          timeout: 15_000,
-        },
-      );
-
-      // Heartbeat — keeps the rider's marker fresh even when the
-      // driver hasn't moved. Cheap: a broadcast message of <100 bytes
-      // every 5s. Doesn't deplete battery (no extra GPS read — just
-      // re-sends the cached fix).
+      // Heartbeat + server-cache timers are independent of which GPS
+      // source we used — they just re-broadcast / cache the latest fix.
       heartbeatTimer = setInterval(broadcastLatest, HEARTBEAT_MS);
 
-      // Server-side cache — only the driver writes to /rides/[id]/position
-      // (riders don't have a cache field). Lower cadence than the
-      // broadcast because it's a real DB write. Failures are silent;
-      // the broadcast channel remains the primary live signal.
       if (role === "driver") {
         const pushToServer = () => {
           const fix = latestFixRef.current;
@@ -197,12 +193,53 @@ export function useRidePosition(
       }
     });
 
+    function startBrowserWatcher() {
+      if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+        setGeoError("Your browser doesn't support live location.");
+        return;
+      }
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          handleFix({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            heading:
+              typeof pos.coords.heading === "number" &&
+              !Number.isNaN(pos.coords.heading)
+                ? pos.coords.heading
+                : null,
+            speed:
+              typeof pos.coords.speed === "number" &&
+              !Number.isNaN(pos.coords.speed)
+                ? pos.coords.speed
+                : null,
+            ts: Date.now(),
+          });
+        },
+        (err) => {
+          // Code 1 = denied, 2 = unavailable, 3 = timeout. iOS users
+          // see the denied case most often and the fix is buried in
+          // their iOS Settings, not in Safari — give them the path.
+          setGeoError(buildGeoErrorMessage(err.code));
+        },
+        {
+          enableHighAccuracy: true,
+          maximumAge: 5_000,
+          timeout: 15_000,
+        },
+      );
+    }
+
     return () => {
       if (watchId !== null && typeof navigator !== "undefined") {
         navigator.geolocation.clearWatch(watchId);
       }
       if (heartbeatTimer) clearInterval(heartbeatTimer);
       if (serverCacheTimer) clearInterval(serverCacheTimer);
+      // Stop the native background-geolocation watcher (Android
+      // foreground service goes away with it). Fire-and-forget — by
+      // the time the cleanup runs the trip is over, nothing else to do.
+      if (nativeGeoStop) void nativeGeoStop();
       supabase.removeChannel(channel);
       latestFixRef.current = null;
       lastSentRef.current = null;
