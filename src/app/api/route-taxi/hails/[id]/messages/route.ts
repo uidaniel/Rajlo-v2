@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import { notifyRider, notifyDriver } from "@/lib/notify";
 
 /**
  * /api/route-taxi/hails/[id]/messages
@@ -170,6 +171,65 @@ export async function POST(
       { error: error?.message ?? "Send failed" },
       { status: 500 },
     );
+  }
+
+  // Push notification to the OTHER party. Mirror of the private-ride
+  // chat handler — keeps the route-taxi flow in feature-parity. The
+  // resolve helper above already gave us a hail + session pair; we
+  // re-look up the driver user_id here so we can address the push.
+  // Failures are silent — the realtime channel still delivers the
+  // message in-app; the push is only for waking a backgrounded phone.
+  const previewBody = body.slice(0, 120);
+  if (role === "rider") {
+    // Resolve the driver's auth user id via session_id → drivers.user_id.
+    const { data: hailRow } = await supabase
+      .from("route_hails")
+      .select("session_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (hailRow?.session_id) {
+      const { data: sess } = await supabase
+        .from("driver_sessions")
+        .select("driver_id")
+        .eq("id", hailRow.session_id)
+        .maybeSingle();
+      if (sess?.driver_id) {
+        const { data: drv } = await supabase
+          .from("drivers")
+          .select("user_id")
+          .eq("id", sess.driver_id)
+          .maybeSingle();
+        if (drv?.user_id) {
+          void notifyDriver(supabase, {
+            driverUserId: drv.user_id,
+            kind: "trip_update",
+            title: "New message from your rider",
+            body: previewBody,
+            href: "/driver/route-taxi",
+            pushTag: `hail-${id}-chat`,
+            pushRenotify: true,
+          }).catch(() => null);
+        }
+      }
+    }
+  } else {
+    // Driver sent — notify the rider via the hail's rider_id.
+    const { data: hailRow } = await supabase
+      .from("route_hails")
+      .select("rider_id")
+      .eq("id", id)
+      .maybeSingle();
+    if (hailRow?.rider_id) {
+      void notifyRider(supabase, {
+        riderId: hailRow.rider_id,
+        kind: "trip",
+        title: "New message from your driver",
+        body: previewBody,
+        href: "/rider/route-taxi/live",
+        pushTag: `hail-${id}-chat`,
+        pushRenotify: true,
+      }).catch(() => null);
+    }
   }
 
   return NextResponse.json({

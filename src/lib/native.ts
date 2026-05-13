@@ -130,6 +130,54 @@ export async function startBackgroundGeolocation(
 }
 
 /**
+ * Notification channel ID used by FCM messages from our server. We
+ * create it client-side with IMPORTANCE_HIGH so notifications pop up
+ * as a heads-up banner (instead of just landing silently in the tray).
+ *
+ * The same ID is referenced server-side in `src/lib/push.ts` when
+ * building the FCM message — keep them in sync if you ever rename it.
+ */
+export const RAJLO_NOTIFICATION_CHANNEL_ID = "rajlo_alerts";
+
+/**
+ * Create the notification channel the FCM server messages target.
+ * Idempotent on Android — calling createChannel for an existing ID
+ * is a no-op. No-op on web.
+ *
+ * Must be called once per app launch, BEFORE the first FCM message
+ * arrives — otherwise Android creates a default low-importance
+ * channel and our notifications won't pop up as heads-up.
+ */
+export async function setupNotificationChannels(): Promise<void> {
+  if (!isNativeApp()) return;
+  try {
+    const { PushNotifications } = await import(
+      "@capacitor/push-notifications"
+    );
+    // Importance 4 = HIGH — shows heads-up banner + sound. 5 = MAX is
+    // reserved for full-screen intents (incoming calls etc) and is
+    // overkill for chat / ride updates.
+    await PushNotifications.createChannel({
+      id: RAJLO_NOTIFICATION_CHANNEL_ID,
+      name: "Rajlo alerts",
+      description:
+        "Ride requests, chat messages, safety alerts, and status updates.",
+      importance: 4,
+      sound: "default",
+      vibration: true,
+      visibility: 1,
+      lights: true,
+    });
+    console.log("[native] Notification channel ready");
+  } catch (err) {
+    console.error(
+      "[native] Failed to create notification channel: " +
+        JSON.stringify(err),
+    );
+  }
+}
+
+/**
  * Localstorage flag the gate writes after the driver successfully
  * grants location permission. Used to skip the readiness gate on
  * subsequent app launches without re-prompting.

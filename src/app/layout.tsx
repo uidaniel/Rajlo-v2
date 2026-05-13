@@ -3,6 +3,7 @@ import { Inter, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { MotionProvider } from "@/components/motion-provider";
 import { NativeDriverGuard } from "@/components/native-driver-guard";
+import { NativePushHandler } from "@/components/native-push-handler";
 import { NO_FOUC_SCRIPT } from "@/lib/preferences-client";
 
 /**
@@ -105,6 +106,10 @@ export default function RootLayout({
           {/* No-op on web. In the Capacitor driver app it snaps any
               off-portal navigation back to /driver. */}
           <NativeDriverGuard />
+          {/* No-op on web. In the Capacitor app it sets up the
+              high-importance notification channel + routes taps to
+              the right page via the FCM payload's `url` field. */}
+          <NativePushHandler />
           <div className="min-h-screen">{children}</div>
         </MotionProvider>
       </body>

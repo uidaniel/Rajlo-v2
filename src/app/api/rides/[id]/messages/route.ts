@@ -270,7 +270,11 @@ export async function POST(
           kind: "trip_update",
           title: "New message from your rider",
           body: previewBody,
-          href: "/driver/active-trip",
+          // `?chat=1` is picked up by ChatLauncher in the active-trip
+          // page — auto-opens the chat sheet so the driver lands
+          // straight in the conversation instead of just on the trip
+          // page.
+          href: "/driver/active-trip?chat=1",
           pushTag: `ride-${id}-chat`,
           pushRenotify: true,
         }).catch(() => null);
@@ -281,7 +285,7 @@ export async function POST(
         kind: "trip",
         title: "New message from your driver",
         body: previewBody,
-        href: "/rider/live-trip",
+        href: "/rider/live-trip?chat=1",
         pushTag: `ride-${id}-chat`,
         pushRenotify: true,
       }).catch(() => null);

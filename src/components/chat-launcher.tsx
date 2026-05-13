@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Icon } from "./icons";
 import { ChatSheet } from "./chat-sheet";
 import { useRideChat, type ChatMessage } from "@/lib/use-ride-chat";
@@ -48,7 +49,25 @@ export function ChatLauncher({
   variant?: "dark" | "soft";
   iconSize?: number;
 }) {
-  const [open, setOpen] = useState(false);
+  const searchParams = useSearchParams();
+  // Auto-open the chat when the page is reached via a push-notification
+  // deep-link (`?chat=1` query param). Reading from searchParams at
+  // render time and seeding the state lazily avoids React 19's
+  // setState-in-effect rule — we never have to flip the state from an
+  // effect, the initial state IS the deep-link signal.
+  const [open, setOpen] = useState(() => searchParams?.get("chat") === "1");
+
+  // Once-per-mount cleanup: strip `?chat=1` from the URL so a tab
+  // refresh or back/forward doesn't re-open the chat sheet over and
+  // over. Pure side-effect, no setState.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("chat")) {
+      url.searchParams.delete("chat");
+      window.history.replaceState({}, "", url.toString());
+    }
+  }, []);
 
   const {
     messages,

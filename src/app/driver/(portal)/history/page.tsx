@@ -262,9 +262,10 @@ function DriverHistoryCard({
   const cancelled = row.status === "cancelled";
 
   return (
-    <div
+    <Link
       id={`trip-${row.id}`}
-      className="rajlo-deep-link-target scroll-mt-6 rounded-2xl border border-line bg-surface p-5"
+      href={`/driver/history/${row.id}`}
+      className="rajlo-deep-link-target scroll-mt-6 block rounded-2xl border border-line bg-surface p-5 transition-all hover:-translate-y-0.5 hover:border-rajlo-red/40 hover:shadow-md"
     >
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
@@ -357,7 +358,13 @@ function DriverHistoryCard({
             ) : (
               <button
                 type="button"
-                onClick={onRate}
+                onClick={(e) => {
+                  // Don't navigate to the detail page when the user
+                  // taps Rate — open the inline rate dialog instead.
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onRate();
+                }}
                 className="inline-flex items-center gap-1 rounded-full border border-rajlo-red/40 bg-primary-soft px-3 py-1 text-[11px] font-bold text-rajlo-red transition-colors hover:bg-rajlo-red hover:text-white"
               >
                 <Icon name="star" className="h-3 w-3" />
@@ -373,6 +380,6 @@ function DriverHistoryCard({
           {row.cancellationReason}
         </p>
       )}
-    </div>
+    </Link>
   );
 }

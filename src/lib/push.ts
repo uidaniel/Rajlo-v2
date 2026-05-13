@@ -214,10 +214,13 @@ async function sendNativeFcmBatch(
             // requests + safety alerts — both time-sensitive.
             priority: "high",
             notification: {
-              // Default channel — Capacitor's PushNotifications plugin
-              // doesn't register a custom one and Android 8+ requires
-              // a channel for the notification to show. Tapping opens
-              // the app via the plugin's default click handler.
+              // Target the high-importance `rajlo_alerts` channel
+              // created client-side at app start. Without referencing
+              // this channel explicitly the notification falls back
+              // to Android's default which has IMPORTANCE_DEFAULT
+              // (no heads-up banner). The channel ID is mirrored
+              // in src/lib/native.ts so keep them in sync.
+              channelId: "rajlo_alerts",
               tag: payload.tag,
             },
           },

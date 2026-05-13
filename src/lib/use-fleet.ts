@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createSupabaseBrowserClient } from "./supabase-browser";
 import { isIOS } from "./platform-detect";
+import { isNativeApp, startBackgroundGeolocation } from "./native";
 
 /**
  * Driver-facing version of the geolocation error mapper. Same iOS
@@ -168,6 +169,11 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
 
     let watchId: number | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    // Native background-GPS watcher. Only set when running inside the
+    // Capacitor driver app; null on the web. Cleaned up alongside the
+    // browser watcher so the foreground service / sticky notification
+    // disappears when the driver goes offline.
+    let nativeGeoStop: (() => Promise<void>) | null = null;
 
     const broadcastLatest = () => {
       const fix = lastFixRef.current;
@@ -189,52 +195,104 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
       });
     };
 
+    /** Records a position fix from either GPS source. We can't reuse
+     *  a single `GeolocationCoordinates` shape because the native
+     *  plugin returns `latitude`/`longitude`/`bearing` — slightly
+     *  different field names. Normalising into the same ref keeps the
+     *  broadcast/heartbeat code source-agnostic. */
+    const recordFix = (lat: number, lng: number, heading: number | null) => {
+      lastFixRef.current = {
+        latitude: lat,
+        longitude: lng,
+        heading,
+        // Fields the broadcast code doesn't read but the type needs.
+        altitude: null,
+        altitudeAccuracy: null,
+        accuracy: 0,
+        speed: null,
+      } as unknown as GeolocationCoordinates;
+    };
+
     channel.subscribe((status) => {
       if (status !== "SUBSCRIBED") return;
 
-      // Step 1: prime lastFixRef with whatever cached fix the browser has,
-      // and broadcast immediately so the rider sees the marker right
-      // away. `maximumAge: Infinity` returns any cached fix without
-      // waiting for fresh GPS — typically <200ms vs the 1-3s warm-up of
-      // a high-accuracy watchPosition cold start.
+      // Native (Capacitor driver app) path — the background-geolocation
+      // plugin survives screen-lock so the driver's marker stays alive
+      // on the rider's map even while their phone is in their pocket.
+      // Falls back to the browser watcher if the plugin can't start
+      // (permission denied, etc.) so we still get foreground tracking.
+      if (isNativeApp()) {
+        void startBackgroundGeolocation((p) => {
+          recordFix(p.lat, p.lng, p.heading);
+        }).then((stop) => {
+          nativeGeoStop = stop;
+          if (!stop) startBrowserWatch();
+          // Fire an immediate broadcast even before the first native
+          // fix arrives so the channel is "warm" — riders see the
+          // marker as soon as we have any data.
+          broadcastLatest();
+        });
+      } else {
+        startBrowserWatch();
+      }
+
+      // Heartbeat — every BROADCAST_THROTTLE_MS we re-send the latest
+      // known fix regardless of movement. Keeps the rider's marker
+      // alive ("still parked" looks the same as "moving slowly" from
+      // their staleness sweep's perspective).
+      heartbeatTimer = setInterval(broadcastLatest, BROADCAST_THROTTLE_MS);
+    });
+
+    /** Browser geolocation path — used on the web, or as fallback
+     *  inside Capacitor when the native plugin can't start (denied,
+     *  Play Services missing, etc.). */
+    function startBrowserWatch() {
+      // Step 1: prime lastFixRef with cached fix so we can broadcast
+      // immediately — typically <200ms vs the 1-3s warm-up of a
+      // high-accuracy cold start.
       navigator.geolocation.getCurrentPosition(
         (pos) => {
-          lastFixRef.current = pos.coords;
+          recordFix(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            typeof pos.coords.heading === "number" && !Number.isNaN(pos.coords.heading)
+              ? pos.coords.heading
+              : null,
+          );
           broadcastLatest();
         },
         () => {
-          // Silent — watchPosition below will populate lastFixRef shortly.
+          /* silent — watchPosition will populate shortly */
         },
         { enableHighAccuracy: false, maximumAge: Infinity, timeout: 5_000 },
       );
 
       // Step 2: keep lastFixRef updated whenever the device moves.
-      // watchPosition is a "position changed" event stream — it does NOT
-      // fire on a regular schedule, which is why we can't rely on it
-      // alone for the heartbeat.
       watchId = navigator.geolocation.watchPosition(
         (pos) => {
-          lastFixRef.current = pos.coords;
+          recordFix(
+            pos.coords.latitude,
+            pos.coords.longitude,
+            typeof pos.coords.heading === "number" && !Number.isNaN(pos.coords.heading)
+              ? pos.coords.heading
+              : null,
+          );
         },
         (err) => {
           setRuntimeError(driverGeoErrorMessage(err.code));
         },
         { enableHighAccuracy: true, maximumAge: 5_000, timeout: 15_000 },
       );
-
-      // Step 3: heartbeat. Every BROADCAST_THROTTLE_MS we re-send the
-      // latest known fix, regardless of whether the driver has moved.
-      // This is what keeps the rider's marker alive — "still parked"
-      // looks the same as "moving slowly" from their staleness sweep's
-      // perspective, so we have to keep refreshing the ts.
-      heartbeatTimer = setInterval(broadcastLatest, BROADCAST_THROTTLE_MS);
-    });
+    }
 
     return () => {
       if (watchId !== null && typeof navigator !== "undefined") {
         navigator.geolocation.clearWatch(watchId);
       }
       if (heartbeatTimer) clearInterval(heartbeatTimer);
+      // Stop the native background watcher (Android foreground service
+      // + sticky notification disappear with it). Fire-and-forget.
+      if (nativeGeoStop) void nativeGeoStop();
       // Tell subscribers we're going offline before tearing the channel
       // down. Fire-and-forget — the message goes out on the existing
       // websocket, then removeChannel closes the subscription. If we
