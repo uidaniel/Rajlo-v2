@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { isNativeApp, setupNotificationChannels } from "@/lib/native";
 
 /**
@@ -20,6 +20,55 @@ import { isNativeApp, setupNotificationChannels } from "@/lib/native";
  */
 export function NativePushHandler() {
   const router = useRouter();
+  const pathname = usePathname();
+
+  // Hardware Android back button — Capacitor surfaces it on the App
+  // plugin. Default behavior (do nothing OR minimize the app) is
+  // jarring inside a WebView. We want browser-like semantics: go
+  // back in history if there's anything to go back to, otherwise
+  // exit the app when at the root dashboard. Without this, the back
+  // button feels broken — a Play Store reject in a review reviewer's
+  // eyes and a guaranteed 1-star review from regular users.
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    let remove: (() => Promise<void>) | null = null;
+    (async () => {
+      try {
+        const { App } = await import("@capacitor/app");
+        const handle = await App.addListener("backButton", async (event) => {
+          // `canGoBack` reflects the WebView's browser-style history
+          // stack. True when the user has navigated forward from the
+          // initial route; false when they're at the entry point.
+          if (event.canGoBack) {
+            router.back();
+            return;
+          }
+          // We're at the WebView's history root. If the user is on
+          // the driver dashboard, exiting feels right. If they're
+          // somewhere unexpected (a deep page they landed on via a
+          // notification, an auth page), pop them back to /driver
+          // instead of quitting outright — less surprising.
+          if (pathname === "/driver" || pathname === "/") {
+            await App.exitApp();
+          } else {
+            router.replace("/driver");
+          }
+        });
+        remove = async () => {
+          try {
+            await handle.remove();
+          } catch {
+            /* listener already gone */
+          }
+        };
+      } catch {
+        /* App plugin missing — fall back to system default behaviour */
+      }
+    })();
+    return () => {
+      if (remove) void remove();
+    };
+  }, [router, pathname]);
 
   useEffect(() => {
     if (!isNativeApp()) return;
@@ -27,6 +76,17 @@ export function NativePushHandler() {
     let cancelled = false;
 
     (async () => {
+      // 0. Drop the native splash the moment React paints. The
+      // splash config has a 2.5s safety ceiling but on a warm cache
+      // the WebView is usually ready well before then; hiding
+      // explicitly here cuts the perceived load by 1-2 seconds.
+      try {
+        const { SplashScreen } = await import("@capacitor/splash-screen");
+        void SplashScreen.hide({ fadeOutDuration: 200 });
+      } catch {
+        /* plugin missing — fall through, splash auto-hides on the ceiling */
+      }
+
       // 1. Make sure the channel exists before any FCM arrives.
       await setupNotificationChannels();
       if (cancelled) return;

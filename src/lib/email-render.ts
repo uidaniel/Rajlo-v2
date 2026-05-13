@@ -31,8 +31,11 @@ const BRAND = {
   textMuted: "#6b7077",
   textBody: "#3f4640",
   textTitle: "#111906",
-  headerStart: "#111906",
-  headerEnd: "#1f2418",
+  // Brand-red header band — the same colour as the in-app status
+  // bar + primary CTA. `headerEnd` is a slightly darker red so the
+  // gradient still reads as "header" instead of a flat colour block.
+  headerStart: "#f10100",
+  headerEnd: "#c00d0c",
   footerBg: "#0d1107",
 } as const;
 

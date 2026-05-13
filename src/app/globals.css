@@ -300,3 +300,59 @@ body {
 .rajlo-pending-bar {
   animation: rajlo-pending-slide 1.2s linear infinite;
 }
+
+/* ─────────── Capacitor native-app polish ─────────────────────────── */
+
+/*
+ * Reserve space at the bottom of every page for the fixed
+ * NativeBottomNav. The component flips this attribute on the <body>
+ * only when it's actually rendering the bar (Capacitor + driver
+ * routes), so web users see zero extra padding.
+ *
+ * The 72px figure is the nav's height (~64px) + a hair of breathing
+ * room. The safe-area-inset accommodates the gesture handle on
+ * modern Android phones.
+ */
+body[data-rajlo-bottom-nav="1"] {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+}
+
+/*
+ * Native-feel UI — disable text selection on chrome elements that
+ * don't carry actual content. Native apps don't show a text-cursor
+ * on buttons / nav / cards.
+ *
+ * The body still allows selection by default; we only suppress it on
+ * elements marked with `.rajlo-native-noselect` (applied selectively
+ * to nav, toolbars, etc.) and on buttons globally — buttons should
+ * NEVER let the user accidentally select their label text on a
+ * long press.
+ */
+button {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+/*
+ * Smooth scrolling + iOS-style overscroll behaviour. `contain`
+ * prevents the rubber-band bounce from propagating to the parent
+ * page when scrolling inside a modal / sheet — feels much more
+ * native than the default propagation.
+ */
+html,
+body {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/*
+ * Hide the WebView's default focus ring on native — Android draws a
+ * thick blue outline on tap-focused elements that doesn't match the
+ * Rajlo brand. Keyboard focus rings (the visible "tab" ring) stay
+ * via `:focus-visible`.
+ */
+*:focus:not(:focus-visible) {
+  outline: none;
+}

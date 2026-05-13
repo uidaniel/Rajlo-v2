@@ -52,6 +52,10 @@ const FLEET_OFFLINE_EVENT = "driver-offline";
 
 /** How often a broadcasting driver pushes a new position (in ms). */
 const BROADCAST_THROTTLE_MS = 5_000;
+/** How often the driver's last-known position is written to the
+ *  server-side cache (drivers.last_lat/lng). Slower than the realtime
+ *  broadcast — only the new-ride matcher reads it, no live UI. */
+const SERVER_POSITION_CACHE_MS = 30_000;
 /** Subscribers drop driver markers we haven't heard from in this long.
  *  This is the safety net for cases where the explicit "offline" message
  *  never made it (browser crash, network drop, app force-quit). */
@@ -169,6 +173,7 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
 
     let watchId: number | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    let serverCacheTimer: ReturnType<typeof setInterval> | null = null;
     // Native background-GPS watcher. Only set when running inside the
     // Capacitor driver app; null on the web. Cleaned up alongside the
     // browser watcher so the foreground service / sticky notification
@@ -241,6 +246,28 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
       // alive ("still parked" looks the same as "moving slowly" from
       // their staleness sweep's perspective).
       heartbeatTimer = setInterval(broadcastLatest, BROADCAST_THROTTLE_MS);
+
+      // Server-side position cache — slower cadence than the realtime
+      // broadcast since the only consumer is /api/rider/rides's new-
+      // ride radius matcher. Without this the matcher would have no
+      // idea where any driver is sitting and would fall back to
+      // pinging every online driver in the country.
+      const pushPositionToServer = () => {
+        const fix = lastFixRef.current;
+        if (!fix) return;
+        void fetch("/api/driver/position", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: fix.latitude, lng: fix.longitude }),
+        }).catch(() => null);
+      };
+      // Fire once immediately so the matcher sees us within a few
+      // seconds of going online, then settle into the slow cadence.
+      pushPositionToServer();
+      serverCacheTimer = setInterval(
+        pushPositionToServer,
+        SERVER_POSITION_CACHE_MS,
+      );
     });
 
     /** Browser geolocation path — used on the web, or as fallback
@@ -290,6 +317,7 @@ export function useFleetBroadcaster(driverId: string | null, online: boolean) {
         navigator.geolocation.clearWatch(watchId);
       }
       if (heartbeatTimer) clearInterval(heartbeatTimer);
+      if (serverCacheTimer) clearInterval(serverCacheTimer);
       // Stop the native background watcher (Android foreground service
       // + sticky notification disappear with it). Fire-and-forget.
       if (nativeGeoStop) void nativeGeoStop();

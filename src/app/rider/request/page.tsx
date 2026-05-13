@@ -476,7 +476,21 @@ export default function RiderRequestPage() {
             kind="pickup"
             label="A"
             place={pickup}
-            onSelect={setPickup}
+            onSelect={(p) => {
+              setPickup(p);
+              // Auto-focus the dropoff input the moment a pickup is
+              // picked from the dropdown — saves a tap on the
+              // typical "Pickup → Where to?" flow. queueMicrotask
+              // lets React commit the pickup-selected state first so
+              // the dropoff input is mounted + visible.
+              if (!dropoff) {
+                queueMicrotask(() => {
+                  document
+                    .getElementById("waypoint-dropoff")
+                    ?.focus();
+                });
+              }
+            }}
             onClear={() => setPickup(null)}
           />
 
@@ -514,6 +528,7 @@ export default function RiderRequestPage() {
             place={dropoff}
             onSelect={setDropoff}
             onClear={() => setDropoff(null)}
+            inputId="waypoint-dropoff"
           />
         </div>
       </FadeUp>
@@ -880,6 +895,7 @@ function WaypointSlot({
   onRemove,
   onMoveUp,
   onMoveDown,
+  inputId,
 }: {
   kind: "pickup" | "stop" | "dropoff";
   label: string;
@@ -892,6 +908,9 @@ function WaypointSlot({
    *  onMoveDown). Only ever passed for kind="stop". */
   onMoveUp?: () => void;
   onMoveDown?: () => void;
+  /** DOM id forwarded to the autocomplete input so external code can
+   *  focus it (e.g., after pickup is selected we focus the dropoff). */
+  inputId?: string;
 }) {
   const tone =
     kind === "pickup"
@@ -1057,6 +1076,7 @@ function WaypointSlot({
                 ? "map-pin"
                 : "flag"
           }
+          inputId={inputId}
         />
 
         {/* Use my current location — pickup field only, hidden once a

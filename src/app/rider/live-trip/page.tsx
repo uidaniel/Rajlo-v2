@@ -950,9 +950,9 @@ export default function RiderLiveTripPage() {
                 type="button"
                 onClick={handleCancel}
                 disabled={cancelling}
-                className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full border border-line bg-surface px-4 py-3 text-xs font-bold text-muted transition-colors hover:bg-surface-soft hover:text-rajlo-red disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none sm:px-5 sm:text-sm"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-full border border-line bg-surface px-5 py-3 text-sm font-bold text-muted transition-colors hover:bg-surface-soft hover:text-rajlo-red disabled:cursor-not-allowed disabled:opacity-60 sm:flex-none"
               >
-                <Icon name="x" className="h-3.5 w-3.5" />
+                <Icon name="x" className="h-4 w-4" />
                 {cancelling ? "Cancelling…" : "Cancel ride"}
               </button>
             )}

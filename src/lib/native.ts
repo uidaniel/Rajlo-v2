@@ -1,6 +1,63 @@
 "use client";
 
 /**
+ * ─────────────────────────── Haptic helpers ───────────────────────────
+ *
+ * Thin wrappers around @capacitor/haptics so the rest of the app can
+ * tap, success-pulse, or warn without remembering the plugin import.
+ * No-ops on web (and silently when the OS rejects the call, which it
+ * does inside a non-user-gesture context).
+ */
+
+export const haptics = {
+  /** Subtle click — use on every meaningful button tap. */
+  async tap(): Promise<void> {
+    if (!isNativeApp()) return;
+    try {
+      const { Haptics, ImpactStyle } = await import("@capacitor/haptics");
+      await Haptics.impact({ style: ImpactStyle.Light });
+    } catch {
+      /* plugin missing / no permission — silent */
+    }
+  },
+  /** Slightly more pronounced — use on commit actions (sent, posted). */
+  async medium(): Promise<void> {
+    if (!isNativeApp()) return;
+    try {
+      const { Haptics, ImpactStyle } = await import("@capacitor/haptics");
+      await Haptics.impact({ style: ImpactStyle.Medium });
+    } catch {
+      /* silent */
+    }
+  },
+  /** Three-beat success pulse — use after a successful big action
+   *  (trip accepted, ride completed, payment confirmed). */
+  async success(): Promise<void> {
+    if (!isNativeApp()) return;
+    try {
+      const { Haptics, NotificationType } = await import(
+        "@capacitor/haptics"
+      );
+      await Haptics.notification({ type: NotificationType.Success });
+    } catch {
+      /* silent */
+    }
+  },
+  /** Warning pulse — use on errors, denied actions, or safety triggers. */
+  async warn(): Promise<void> {
+    if (!isNativeApp()) return;
+    try {
+      const { Haptics, NotificationType } = await import(
+        "@capacitor/haptics"
+      );
+      await Haptics.notification({ type: NotificationType.Warning });
+    } catch {
+      /* silent */
+    }
+  },
+};
+
+/**
  * Capacitor / native bridge — a thin shim so the rest of the
  * codebase can stay platform-agnostic.
  *

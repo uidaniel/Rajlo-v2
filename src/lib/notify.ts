@@ -240,31 +240,123 @@ export async function notifyDriver(
  * Caps at 50 drivers per call (the realistic Phase 1A pool); paging
  * is a nice-to-have for later.
  */
+/**
+ * Default radius (km) inside which a driver is considered "close
+ * enough" to receive a new-ride push. 8km is the sweet spot for
+ * Jamaican cities: tight enough that pings reach drivers who can
+ * realistically pick the rider up in <15 minutes, generous enough
+ * that small-town pockets with thinner driver coverage still
+ * surface something. Uber/Bolt-equivalent figure for urban dispatch.
+ */
+const NEARBY_DRIVER_RADIUS_KM = 8;
+
+/**
+ * How fresh a driver's cached position has to be before we'll
+ * dispatch to them. 5 minutes — old enough that a driver who
+ * pushed once then lost signal still gets one shot, tight enough
+ * that a driver who quit-killed their app yesterday doesn't.
+ */
+const POSITION_FRESHNESS_MIN = 5;
+
+/** Haversine distance between two lat/lng pairs in kilometres. */
+function distanceKm(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
+  const R = 6371;
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+/**
+ * Fan-out helper for new ride requests. Filters to drivers who are:
+ *   - activated and not deactivated (they're allowed to drive)
+ *   - currently online (toggled on; without this we'd ping drivers
+ *     who explicitly told the system they're not taking trips)
+ *   - within `NEARBY_DRIVER_RADIUS_KM` of the rider's pickup,
+ *     computed from drivers.last_lat/lng written by the fleet
+ *     broadcaster every ~30s
+ *   - cached position is fresh (<5 minutes old) so we don't ping
+ *     drivers whose phones died last hour
+ *
+ * If `riderPickup` is omitted (back-compat), falls back to "any
+ * online driver" — used for non-geolocated notifications, but
+ * callers should pass the pickup whenever possible.
+ *
+ * Caps at 50 drivers to keep the per-ride dispatch cost bounded.
+ */
 export async function notifyAllAvailableDrivers(
   supabase: SupabaseClient,
-  args: Omit<DriverNotifyArgs, "driverUserId">,
+  args: Omit<DriverNotifyArgs, "driverUserId"> & {
+    riderPickup?: { lat: number; lng: number };
+  },
 ): Promise<{ notified: number }> {
-  const { data: drivers } = await supabase
+  const positionCutoff = new Date(
+    Date.now() - POSITION_FRESHNESS_MIN * 60 * 1000,
+  ).toISOString();
+
+  const query = supabase
     .from("drivers")
-    .select("user_id")
+    .select("user_id, last_lat, last_lng, last_position_at")
     .eq("activated", true)
+    .eq("is_online", true)
     .is("deactivated_at", null)
     .not("user_id", "is", null)
-    .limit(50);
+    .gte("last_position_at", positionCutoff);
 
-  if (!drivers || drivers.length === 0) {
-    return { notified: 0 };
+  // Without a known pickup, we can't compute distances — fall back to
+  // online + activated. Capped to 50 to bound the worst-case payload.
+  if (!args.riderPickup) {
+    const { data: drivers } = await query.limit(50);
+    if (!drivers || drivers.length === 0) return { notified: 0 };
+    await Promise.all(
+      drivers.map((d) =>
+        d.user_id
+          ? notifyDriver(supabase, {
+              ...args,
+              driverUserId: d.user_id as string,
+            })
+          : null,
+      ),
+    );
+    return { notified: drivers.length };
   }
 
+  // With a pickup: pull a wider candidate set, then filter to those
+  // within radius in app code. Postgres earthdistance would be more
+  // surgical but pulling 100 rows and filtering in JS is cheap.
+  const { data: drivers } = await query.limit(100);
+  if (!drivers || drivers.length === 0) return { notified: 0 };
+
+  const { lat: pLat, lng: pLng } = args.riderPickup;
+  const nearby = drivers.filter((d) => {
+    const lat = d.last_lat as number | null;
+    const lng = d.last_lng as number | null;
+    if (lat === null || lng === null) return false;
+    return distanceKm(lat, lng, pLat, pLng) <= NEARBY_DRIVER_RADIUS_KM;
+  });
+
+  if (nearby.length === 0) return { notified: 0 };
+
   await Promise.all(
-    drivers.map((d) =>
+    nearby.slice(0, 50).map((d) =>
       d.user_id
-        ? notifyDriver(supabase, { ...args, driverUserId: d.user_id })
+        ? notifyDriver(supabase, {
+            ...args,
+            driverUserId: d.user_id as string,
+          })
         : null,
     ),
   );
 
-  return { notified: drivers.length };
+  return { notified: Math.min(nearby.length, 50) };
 }
 
 /**

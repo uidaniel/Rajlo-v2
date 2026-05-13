@@ -43,6 +43,7 @@ export function PlacesAutocomplete({
   required,
   hint,
   autoFocus,
+  inputId,
 }: {
   label?: string;
   placeholder?: string;
@@ -56,6 +57,10 @@ export function PlacesAutocomplete({
   required?: boolean;
   hint?: string;
   autoFocus?: boolean;
+  /** Optional DOM `id` on the underlying input so external code can
+   *  focus it (e.g., focusing the dropoff field after the rider picks
+   *  a pickup). */
+  inputId?: string;
 }) {
   const [query, setQuery] = useState<string>(value?.name ?? "");
   const [suggestions, setSuggestions] = useState<
@@ -261,6 +266,7 @@ export function PlacesAutocomplete({
         </span>
         <input
           ref={inputRef}
+          id={inputId}
           type="text"
           value={query}
           autoComplete="off"

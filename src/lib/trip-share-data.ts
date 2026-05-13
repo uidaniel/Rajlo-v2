@@ -70,6 +70,15 @@ export async function getTripShareData(
     .maybeSingle();
   if (!ride) return null;
 
+  // Auto-expire once the trip is in a terminal state. Returning null
+  // here makes the API endpoint respond with 404 "Trip no longer
+  // available" — the share recipient can't view past trip details
+  // (privacy / data minimisation). The link record stays in the DB
+  // for audit purposes; we just stop serving it.
+  if (ride.status === "completed" || ride.status === "cancelled") {
+    return null;
+  }
+
   /* Driver block — same precedence as the live-trip endpoint:
      verified TA selfie if available, else OAuth profile picture. */
   let driver: TripShareView["driver"] = null;

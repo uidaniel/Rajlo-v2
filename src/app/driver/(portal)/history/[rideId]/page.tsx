@@ -316,15 +316,10 @@ export default function DriverHistoryDetailPage({
                   )}
                 </div>
               </div>
-              {rider.phone && (
-                <a
-                  href={`tel:${rider.phone}`}
-                  className="inline-flex items-center gap-1 rounded-full bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-700"
-                >
-                  <Icon name="phone" className="h-3 w-3" />
-                  Call
-                </a>
-              )}
+              {/* No call button on historical trips — driver shouldn't
+                  reach out to the rider once the ride has ended.
+                  Live-trip chat remains the only contact channel and
+                  closes when the trip transitions to completed. */}
             </div>
           </div>
         </FadeUp>

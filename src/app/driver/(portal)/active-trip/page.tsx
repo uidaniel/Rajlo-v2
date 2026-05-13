@@ -10,6 +10,7 @@ import { ChatLauncher } from "@/components/chat-launcher";
 import { CancelReasonDialog } from "@/components/cancel-reason-dialog";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRidePosition } from "@/lib/use-ride-position";
+import { useLocationViolationMonitor } from "@/lib/use-location-violation-monitor";
 import { useBackgroundRefresh } from "@/lib/use-background-refresh";
 import { formatJMD, type Place } from "@/lib/jamaica";
 import { HeroSkeleton, MapSkeleton, Skeleton } from "@/components/skeleton";
@@ -120,6 +121,16 @@ export default function DriverActiveTripPage() {
     "driver",
     /* streamSelf */ true,
   );
+
+  // Watches location permission during an in_progress trip. If the
+  // driver turns location off, vibrates the phone + POSTs a violation
+  // record server-side. 2 unresolved violations auto-deactivate the
+  // driver (they have to contact support to reinstate).
+  useLocationViolationMonitor({
+    rideId: activeRideId,
+    rideStatus: data?.ride?.status ?? null,
+    enabled: !!activeRideId,
+  });
 
   const refresh = async () => {
     try {
@@ -763,9 +774,9 @@ export default function DriverActiveTripPage() {
               type="button"
               onClick={() => handleCancel(ride.id)}
               disabled={acting}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-full border border-line bg-surface px-4 py-2 text-xs font-bold text-muted transition-colors hover:bg-surface-soft hover:text-rajlo-red"
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-line bg-surface px-5 py-3 text-sm font-bold text-muted transition-colors hover:bg-surface-soft hover:text-rajlo-red disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Icon name="x" className="h-3 w-3" />
+              <Icon name="x" className="h-4 w-4" />
               Cancel ride
             </button>
           )}

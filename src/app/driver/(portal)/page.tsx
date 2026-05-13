@@ -224,9 +224,77 @@ export default function DriverHomePage() {
 
   /* ─── Online toggle persistence ─── */
   const [onlineError, setOnlineError] = React.useState<string | null>(null);
+
+  /** Quick pre-flight: does the browser/OS have location enabled?
+   *  If not we can't dispatch trips to this driver — the rider's map
+   *  would show a frozen marker the moment a hail came in. We refuse
+   *  the online flip and tell them to fix it. Returns true if OK. */
+  const checkLocationReady = React.useCallback(async (): Promise<boolean> => {
+    if (typeof navigator === "undefined" || !("geolocation" in navigator)) {
+      setOnlineError(
+        "Your browser doesn't support location. Use Chrome or Safari and try again.",
+      );
+      return false;
+    }
+    // Permissions API: explicit denied → refuse. We still try a fix
+    // afterward because some Android WebViews say "granted" while the
+    // OS-level location service is off — only an actual fix attempt
+    // reveals that.
+    try {
+      if ("permissions" in navigator) {
+        const status = await (
+          navigator.permissions as Permissions
+        ).query({ name: "geolocation" as PermissionName });
+        if (status.state === "denied") {
+          setOnlineError(
+            "Location is blocked. Enable it in your phone's Settings → Apps → Rajlo Driver → Permissions → Location, then try again.",
+          );
+          return false;
+        }
+      }
+    } catch {
+      /* Permissions API unavailable — fall through */
+    }
+    // Try a fix with a tight timeout. PERMISSION_DENIED or
+    // POSITION_UNAVAILABLE → off.
+    try {
+      await new Promise<void>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          () => resolve(),
+          (err) => reject(err),
+          { enableHighAccuracy: false, maximumAge: 60_000, timeout: 6_000 },
+        );
+      });
+      return true;
+    } catch (err) {
+      const code = (err as GeolocationPositionError | null)?.code;
+      if (code === 1) {
+        setOnlineError(
+          "Allow location access for Rajlo, then try again.",
+        );
+      } else if (code === 2) {
+        setOnlineError(
+          "Turn on your phone's location service in your settings, then try again.",
+        );
+      } else {
+        setOnlineError(
+          "Couldn't read your location. Move outside or to a window and try again.",
+        );
+      }
+      return false;
+    }
+  }, []);
+
   const setOnline = React.useCallback(
     async (next: boolean) => {
       if (online === next || onlineSyncing) return;
+      // Going online: require location to be live first. Going
+      // offline doesn't need this check (a driver should always be
+      // able to drop offline regardless of location state).
+      if (next) {
+        const ok = await checkLocationReady();
+        if (!ok) return;
+      }
       const prev = online;
       setOnlineState(next);
       setOnlineSyncing(true);
@@ -258,8 +326,43 @@ export default function DriverHomePage() {
         setOnlineSyncing(false);
       }
     },
-    [online, onlineSyncing],
+    [online, onlineSyncing, checkLocationReady],
   );
+
+  /* ─── Auto-offline on location revoke ───
+   *
+   * Once online, watch for the user disabling location at the OS
+   * level. If permission flips to "denied" mid-session, drop them
+   * offline immediately so they don't keep receiving ride pings
+   * they can't fulfil. They'll see the error message and have to
+   * fix permission before going online again. */
+  React.useEffect(() => {
+    if (online !== true) return;
+    if (typeof navigator === "undefined" || !("permissions" in navigator)) return;
+    let cancelled = false;
+    let permStatus: PermissionStatus | null = null;
+    const onChange = () => {
+      if (!permStatus || cancelled) return;
+      if (permStatus.state === "denied") {
+        setOnlineError(
+          "Location was turned off — you've been taken offline. Re-enable location, then go online again.",
+        );
+        void setOnline(false);
+      }
+    };
+    void (navigator.permissions as Permissions)
+      .query({ name: "geolocation" as PermissionName })
+      .then((status) => {
+        if (cancelled) return;
+        permStatus = status;
+        status.addEventListener("change", onChange);
+      })
+      .catch(() => null);
+    return () => {
+      cancelled = true;
+      permStatus?.removeEventListener("change", onChange);
+    };
+  }, [online, setOnline]);
 
   /* ─── Fleet broadcaster ─── */
   const { error: fleetError } = useFleetBroadcaster(

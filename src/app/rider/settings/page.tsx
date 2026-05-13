@@ -17,6 +17,7 @@ import {
   type Locale as PrefsLocale,
 } from "@/lib/preferences-client";
 import { useT } from "@/lib/i18n";
+import { DeleteAccountDialog } from "@/components/delete-account-dialog";
 
 /**
  * Rider settings — account profile + push preferences + app
@@ -86,6 +87,7 @@ export default function RiderSettingsPage() {
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const push = usePush();
   const { t, setLocale: setLocaleI18n } = useT();
 
@@ -549,28 +551,63 @@ export default function RiderSettingsPage() {
 
       {/* Danger zone */}
       <FadeUp delay={0.25}>
-        <div className="rounded-2xl border border-rajlo-red/20 bg-primary-soft/40 p-5">
-          <div className="flex items-start gap-3">
-            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rajlo-red text-white">
-              <Icon name="log-out" className="h-4 w-4" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-extrabold tracking-tight">Sign out</p>
-              <p className="mt-0.5 text-xs text-muted">
-                You&apos;ll need to sign in again on this device.
-              </p>
+        <div className="space-y-3">
+          <div className="rounded-2xl border border-rajlo-red/20 bg-primary-soft/40 p-5">
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rajlo-red text-white">
+                <Icon name="log-out" className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-extrabold tracking-tight">
+                  Sign out
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  You&apos;ll need to sign in again on this device.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleSignOut}
+                disabled={signingOut}
+                className="rounded-full bg-rajlo-red px-5 py-2 text-xs font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-primary-hover disabled:opacity-60"
+              >
+                {signingOut ? "Signing out…" : "Sign out"}
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={handleSignOut}
-              disabled={signingOut}
-              className="rounded-full bg-rajlo-red px-5 py-2 text-xs font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-primary-hover disabled:opacity-60"
-            >
-              {signingOut ? "Signing out…" : "Sign out"}
-            </button>
+          </div>
+
+          {/* Delete account — required by Google Play. Permanent. */}
+          <div className="rounded-2xl border border-rajlo-red/40 bg-surface p-5">
+            <div className="flex items-start gap-3">
+              <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rajlo-red text-white">
+                <Icon name="alert-triangle" className="h-4 w-4" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-extrabold tracking-tight">
+                  Delete account
+                </p>
+                <p className="mt-0.5 text-xs text-muted">
+                  Permanently remove your Rajlo profile, ride history,
+                  wallet, and saved data. This can&apos;t be undone.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDeleteDialogOpen(true)}
+                className="rounded-full border border-rajlo-red bg-surface px-5 py-2 text-xs font-bold text-rajlo-red transition-all hover:-translate-y-0.5 hover:bg-rajlo-red hover:text-white"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         </div>
       </FadeUp>
+
+      <DeleteAccountDialog
+        open={deleteDialogOpen}
+        role="rider"
+        onClose={() => setDeleteDialogOpen(false)}
+      />
 
       <FadeUp delay={0.3}>
         <p className="text-center text-[11px] text-muted">

@@ -306,6 +306,11 @@ export async function POST(request: Request) {
     pushRenotify: true,
     requireInteraction: true,
     pushOnly: true,
+    // Filter the fan-out to drivers within radius (8km) of pickup
+    // AND currently toggled online. Without this, a driver in
+    // Mandeville gets pinged for a ride in Kingston, and offline
+    // drivers get woken up for trips they never wanted.
+    riderPickup: { lat: body.pickup.lat, lng: body.pickup.lng },
   }).catch(() => null);
 
   if (user.email) {

@@ -5,6 +5,8 @@ import { MotionProvider } from "@/components/motion-provider";
 import { NativeDriverGuard } from "@/components/native-driver-guard";
 import { NativePushHandler } from "@/components/native-push-handler";
 import { AuthFetchGuard } from "@/components/auth-fetch-guard";
+import { NativeBottomNav } from "@/components/native-bottom-nav";
+import { NativePageTransition } from "@/components/native-page-transition";
 import { NO_FOUC_SCRIPT } from "@/lib/preferences-client";
 
 /**
@@ -114,7 +116,14 @@ export default function RootLayout({
           {/* Global 401 interceptor — any /api/* call that returns
               unauthorized bounces the user to the right login page. */}
           <AuthFetchGuard />
-          <div className="min-h-screen">{children}</div>
+          {/* Native-only bottom tab bar for the driver app. No-op on
+              web and on auth / verification screens. */}
+          <NativeBottomNav />
+          {/* Native-only slide-fade transition between pages. No-op
+              on web so the marketing site doesn't feel jittery. */}
+          <NativePageTransition>
+            <div className="min-h-screen">{children}</div>
+          </NativePageTransition>
         </MotionProvider>
       </body>
     </html>

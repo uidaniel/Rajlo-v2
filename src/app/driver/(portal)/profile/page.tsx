@@ -7,6 +7,7 @@ import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { HeroSkeleton, Skeleton } from "@/components/skeleton";
 import { usePush } from "@/lib/use-push";
+import { DeleteAccountDialog } from "@/components/delete-account-dialog";
 
 /**
  * Driver self-edit profile page. Drivers update the fields they own:
@@ -43,6 +44,7 @@ export default function DriverProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const push = usePush();
 
   // Editable form state — kept separate from the loaded `driver` so we
@@ -633,6 +635,46 @@ export default function DriverProfilePage() {
           </div>
         </div>
       </FadeUp>
+
+      {/* Delete account — required by Google Play. Permanent. The
+          dialog handles the two-step confirmation + API call. Sitting
+          BELOW the save-changes block so it's never the first thing
+          a driver reaches for. */}
+      <FadeUp delay={0.3}>
+        <div className="rounded-2xl border border-rajlo-red/40 bg-surface p-5">
+          <div className="flex items-start gap-3">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-rajlo-red text-white">
+              <Icon name="alert-triangle" className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-extrabold tracking-tight">
+                Delete account
+              </p>
+              <p className="mt-0.5 text-xs text-muted">
+                Permanently removes your driver record, uploaded TA
+                documents, trip history, ratings, and wallet. Can&apos;t
+                be undone. Make sure no trip is in progress first.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                setDeleteDialogOpen(true);
+              }}
+              className="rounded-full border border-rajlo-red bg-surface px-5 py-2 text-xs font-bold text-rajlo-red transition-all hover:-translate-y-0.5 hover:bg-rajlo-red hover:text-white"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      </FadeUp>
+
+      <DeleteAccountDialog
+        open={deleteDialogOpen}
+        role="driver"
+        onClose={() => setDeleteDialogOpen(false)}
+      />
     </form>
   );
 }

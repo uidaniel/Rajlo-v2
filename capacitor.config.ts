@@ -24,6 +24,11 @@ const config: CapacitorConfig = {
   appName: "Rajlo Driver",
   // Minimal offline-fallback shell. The real UI loads from server.url.
   webDir: "capacitor-shell",
+  // Drop Capacitor's verbose logging in production builds — every
+  // bridge call writes to Logcat at high frequency on hot paths
+  // (every GPS ping, every chat realtime event). On long-lived
+  // sessions this adds measurable WebView jank.
+  loggingBehavior: "production",
   // Loading the live Next.js app instead of bundling. The driver
   // portal logic, auth gates, and proxy all live there.
   //
@@ -38,7 +43,11 @@ const config: CapacitorConfig = {
   },
   plugins: {
     SplashScreen: {
-      launchShowDuration: 1500,
+      // Max ceiling — the WebView usually paints within ~600-900ms
+      // on a warm cache. Our root layout calls SplashScreen.hide()
+      // the moment React mounts to drop the splash sooner; this
+      // duration is just the failsafe for very slow first launches.
+      launchShowDuration: 2500,
       launchAutoHide: true,
       backgroundColor: "#111906", // Rajlo black — primary dark brand colour
       androidSplashResourceName: "splash",
@@ -77,6 +86,10 @@ const config: CapacitorConfig = {
     // Match the launch screen colour so there's no flash of white
     // between the splash and the WebView painting.
     backgroundColor: "#111906",
+    // Disable the WebView remote-debugging bridge in production —
+    // it adds attach overhead even when no debugger is connected.
+    // Re-enable temporarily by setting this to `true` when debugging.
+    webContentsDebuggingEnabled: false,
   },
 };
 

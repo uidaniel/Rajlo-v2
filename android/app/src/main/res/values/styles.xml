@@ -27,7 +27,14 @@
     -->
     <style name="AppTheme.NoActionBarLaunch" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#111906</item>
-        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher_foreground</item>
+        <!--
+          Vector splash icon rather than the launcher foreground PNG.
+          The launcher foreground (a wide wordmark image) was being
+          cropped by Android 12+'s circular mask down to almost
+          nothing visible. The vector renders at proper scale inside
+          the safe zone with the wordmark intact.
+        -->
+        <item name="windowSplashScreenAnimatedIcon">@drawable/rajlo_splash_logo</item>
         <item name="postSplashScreenTheme">@style/AppTheme.NoActionBar</item>
         <item name="android:background">@drawable/splash</item>
     </style>

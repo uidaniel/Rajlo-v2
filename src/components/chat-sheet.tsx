@@ -175,8 +175,14 @@ export function ChatSheet({
       }
       setDraft("");
       // Realtime will refresh, but optimistically append for snappier UX.
+      // Dedup by id — if the realtime echo already landed, our optimistic
+      // append would otherwise duplicate the bubble (the double-text bug).
       const json = (await res.json()) as { message: ChatMessage };
-      setMessages((m) => [...m, json.message]);
+      setMessages((m) =>
+        m.find((existing) => existing.id === json.message.id)
+          ? m
+          : [...m, json.message],
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't send message.");
     } finally {
@@ -360,11 +366,18 @@ export function ChatSheet({
         throw new Error(j.error ?? `HTTP ${res.status}`);
       }
       const json = (await res.json()) as { message: ChatMessage };
-      // Swap the optimistic bubble for the server-confirmed one.
-      // Revoke the blob URL so the browser frees the memory.
-      setMessages((m) =>
-        m.map((msg) => (msg.id === optimisticId ? json.message : msg)),
-      );
+      // Swap the optimistic bubble for the server-confirmed one. If
+      // the realtime echo for this message already landed (race),
+      // just drop the optimistic placeholder rather than duplicating.
+      setMessages((m) => {
+        const alreadyHasReal = m.some((msg) => msg.id === json.message.id);
+        if (alreadyHasReal) {
+          return m.filter((msg) => msg.id !== optimisticId);
+        }
+        return m.map((msg) =>
+          msg.id === optimisticId ? json.message : msg,
+        );
+      });
       URL.revokeObjectURL(blobUrl);
     } catch (e) {
       // Roll back the optimistic insertion + free the blob URL.
@@ -684,7 +697,17 @@ function MessageBubble({ m, mine }: { m: ChatMessage; mine: boolean }) {
               controls
               src={m.body}
               className="h-9 max-w-[180px]"
-              preload="metadata"
+              // `preload="auto"` is more aggressive than the previous
+              // `metadata` value — some WebViews (Android) wouldn't
+              // load the audio at all on metadata mode, so the controls
+              // rendered but pressing play did nothing. `auto` makes
+              // the WebView fetch the audio data up front so play
+              // works on first tap.
+              preload="auto"
+              // iOS Safari + the iOS WebView won't autoplay or even
+              // load buffered audio inline without playsInline.
+              // Harmless on Android.
+              playsInline
             />
           )}
           {m.durationMs !== null && (
