@@ -636,15 +636,24 @@ function NativeReadinessGate({ children }: { children: React.ReactNode }) {
   // Re-hydrate from OS state on mount. Location uses a localStorage
   // cache (the background-geolocation plugin has no checkPermissions);
   // push reads the live OS permission via the plugin's checkPermissions
-  // call. Without this the gate would re-appear on every app launch
-  // even though the OS-level grants are still in place.
+  // call. If OS-level push permission is granted we ALSO re-run the
+  // FCM registration silently — a previous run can fail to land the
+  // token on the server (race condition, network blip), and we don't
+  // want the user permanently stranded with OS-granted but server-
+  // unregistered push. The register call is idempotent server-side.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const [pushOk] = await Promise.all([checkNativePushPermission()]);
+      const pushOk = await checkNativePushPermission();
       if (cancelled) return;
       setLocationGranted(hasNativeLocationBeenGranted());
       setPushGranted(pushOk);
+      if (pushOk) {
+        // Fire-and-forget — re-register the FCM token. If we already
+        // have one server-side the upsert is a no-op. If we don't (the
+        // common case after a failed first registration), this lands it.
+        void registerNativePush();
+      }
     })();
     return () => {
       cancelled = true;

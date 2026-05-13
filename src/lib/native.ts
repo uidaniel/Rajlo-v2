@@ -199,17 +199,45 @@ export async function registerNativePush(): Promise<
       "@capacitor/push-notifications"
     );
     const perm = await PushNotifications.requestPermissions();
-    if (perm.receive !== "granted") return null;
-    await PushNotifications.register();
+    if (perm.receive !== "granted") {
+      console.warn("[native] push permission not granted:", perm.receive);
+      return null;
+    }
 
-    const token = await new Promise<string | null>((resolve) => {
-      const onRegister = (t: { value: string }) => resolve(t.value);
-      const onError = () => resolve(null);
-      PushNotifications.addListener("registration", onRegister);
-      PushNotifications.addListener("registrationError", onError);
-      setTimeout(() => resolve(null), 15_000);
+    // CRITICAL: attach listeners BEFORE calling register(). Capacitor
+    // fires the `registration` event the moment Android returns an
+    // FCM token, which can happen between `register()` resolving and
+    // us getting a chance to attach a handler — race-condition city.
+    // Attaching first guarantees we catch it.
+    const tokenPromise = new Promise<string | null>((resolve) => {
+      let resolved = false;
+      const finish = (value: string | null) => {
+        if (resolved) return;
+        resolved = true;
+        resolve(value);
+      };
+      void PushNotifications.addListener("registration", (t) => {
+        console.log("[native] FCM registration token received");
+        finish(t.value);
+      });
+      void PushNotifications.addListener("registrationError", (err) => {
+        console.error("[native] FCM registration error:", err);
+        finish(null);
+      });
+      // 30s — Firebase token generation on a cold install can be slow
+      // on flaky networks. Better to wait than fail too fast.
+      setTimeout(() => {
+        if (!resolved) {
+          console.warn(
+            "[native] FCM registration timed out after 30s — no token",
+          );
+        }
+        finish(null);
+      }, 30_000);
     });
 
+    await PushNotifications.register();
+    const token = await tokenPromise;
     if (!token) return null;
 
     // Detect platform from the Capacitor global. Defaults to android
