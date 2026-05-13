@@ -217,11 +217,19 @@ export async function registerNativePush(): Promise<
         resolve(value);
       };
       void PushNotifications.addListener("registration", (t) => {
-        console.log("[native] FCM registration token received");
+        console.log(
+          `[native] FCM registration token received (len=${t.value.length})`,
+        );
         finish(t.value);
       });
       void PushNotifications.addListener("registrationError", (err) => {
-        console.error("[native] FCM registration error:", err);
+        // Capacitor's console bridge stringifies objects as
+        // "[object Object]" — JSON.stringify keeps the actual error
+        // message visible in Logcat.
+        console.error(
+          "[native] FCM registration error: " +
+            JSON.stringify(err, null, 2),
+        );
         finish(null);
       });
       // 30s — Firebase token generation on a cold install can be slow
@@ -247,15 +255,39 @@ export async function registerNativePush(): Promise<
     const platform: "android" | "ios" =
       cap?.getPlatform?.() === "ios" ? "ios" : "android";
 
-    // Best-effort POST. Failure here means the readiness gate will
-    // still block the driver, which is fine — they'll see the
-    // "couldn't register" error and can retry.
-    await fetch("/api/push/subscribe", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ platform, token }),
-    });
+    // POST the token to the server so push_subscriptions has a row.
+    // Failures here are why the readiness gate sometimes shows "all
+    // green" yet pushes never arrive — surface them via console so
+    // Logcat (or browser DevTools) shows exactly what went wrong.
+    let res: Response | null = null;
+    try {
+      res = await fetch("/api/push/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ platform, token }),
+      });
+    } catch (err) {
+      console.error("[native] /api/push/subscribe network error:", err);
+      return null;
+    }
 
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      console.error(
+        `[native] /api/push/subscribe failed: ${res.status} ${res.statusText}`,
+        text.slice(0, 200),
+      );
+      // Treat as a failed registration so the gate doesn't show "ready"
+      // when the server has no token to dispatch FCM to. The most
+      // common cause is a missing/expired auth cookie (401) — which
+      // is also what triggers the Capacitor cookie persistence bug.
+      return null;
+    }
+
+    console.log(
+      `[native] FCM token registered server-side (${platform})`,
+    );
     return { token, platform };
   } catch (err) {
     console.error("[native] push registration failed:", err);
