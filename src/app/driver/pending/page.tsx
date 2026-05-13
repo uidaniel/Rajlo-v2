@@ -5,6 +5,7 @@ import { Logo } from "@/components/logo";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { Icon } from "@/components/icons";
 import { SignOutButton } from "@/components/sign-out-button";
+import { NativeUnverifiedRedirect } from "@/components/native-unverified-redirect";
 
 export default async function DriverPendingPage() {
   const status = await getDriverStatus();
@@ -57,6 +58,8 @@ export default async function DriverPendingPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-surface-soft">
+      {/* Native unverified → kick to the verify-on-web screen. No-op on web. */}
+      <NativeUnverifiedRedirect />
       {/* ────── Top bar ────── */}
       <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-2 py-3 md:px-3 md:py-4">

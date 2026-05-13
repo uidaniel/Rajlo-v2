@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/skeleton";
 import { VehiclePicker } from "@/components/vehicle-picker";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { uploadDriverDocument, removeDriverDocument } from "@/lib/storage";
+import { NativeUnverifiedRedirect } from "@/components/native-unverified-redirect";
 
 const DRAFT_KEY = "rajlo-driver-onboarding-draft";
 
@@ -714,9 +715,14 @@ function DriverOnboardingWizard() {
   const next = () => setStep((s) => Math.min(s + 1, STEPS.length));
   const back = () => setStep((s) => Math.max(s - 1, 1));
 
-  const saveAndExit = () => {
-    // Form + uploaded files auto-save on every change; this just navigates.
-    router.push("/driver");
+  const signOut = async () => {
+    // Form + uploaded files auto-save on every change, so we can clear
+    // the session and bounce to the login screen. The driver can pick
+    // up where they left off next sign-in.
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    router.push("/auth/driver/login");
+    router.refresh();
   };
 
   const submit = async () => {
@@ -802,6 +808,9 @@ function DriverOnboardingWizard() {
   /* ───────────────── Wizard ───────────────── */
   return (
     <div className="flex min-h-screen flex-col bg-surface-soft">
+      {/* Native unverified → kick to the verify-on-web screen so they
+          finish onboarding in a real browser. No-op on web. */}
+      <NativeUnverifiedRedirect />
       {/* ────── Top bar ────── */}
       <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-2 py-3 md:px-3 md:py-4">
@@ -818,12 +827,11 @@ function DriverOnboardingWizard() {
             )}
             <button
               type="button"
-              onClick={saveAndExit}
+              onClick={signOut}
               className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-muted hover:bg-surface-soft hover:text-foreground md:text-sm"
             >
-              <Icon name="x" className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">Save & exit</span>
-              <span className="sm:hidden">Exit</span>
+              <Icon name="log-out" className="h-3.5 w-3.5" />
+              <span>Sign out</span>
             </button>
           </div>
         </div>

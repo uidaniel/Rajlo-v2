@@ -105,11 +105,18 @@ export async function POST(
           .eq("id", cancelled.driver_id)
           .maybeSingle();
         if (!d?.user_id) return;
+        // Include the rider's cancellation reason in the body so the
+        // driver knows WHY the trip is gone (not just that it is).
+        // Truncated to keep the push payload + Android notification
+        // body readable on a phone.
+        const reasonLine = reason
+          ? `Reason: ${reason.slice(0, 120)}`
+          : "No reason given.";
         await notifyDriver(supabase, {
           driverUserId: d.user_id,
           kind: "trip_update",
           title: "Rider cancelled the trip",
-          body: `${cancelled.pickup_name} → ${cancelled.dropoff_name}. You can stand down — request is closed.`,
+          body: `${cancelled.pickup_name} → ${cancelled.dropoff_name}. ${reasonLine}`,
           href: "/driver",
           cta: "Back to inbox",
           pushTag: `ride-${cancelled.id}-status`,

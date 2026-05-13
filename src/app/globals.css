@@ -282,3 +282,21 @@ body {
     font-size: 16px;
   }
 }
+
+/*
+ * "Pending upload" rolling progress bar — used by the chat sheet's
+ * MessageBubble while an image / voice attachment is uploading.
+ * Indeterminate (Supabase Storage doesn't expose progress events),
+ * but the sliding gradient communicates "in flight" clearly enough.
+ */
+@keyframes rajlo-pending-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(400%);
+  }
+}
+.rajlo-pending-bar {
+  animation: rajlo-pending-slide 1.2s linear infinite;
+}

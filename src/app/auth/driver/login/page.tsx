@@ -13,6 +13,7 @@ import {
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { friendlyError } from "@/lib/auth-errors";
 import { setSessionPolicy } from "@/lib/session-policy";
+import { isNativeApp } from "@/lib/native";
 
 export default function DriverLoginPage() {
   // Suspense required by Next.js 16 for useSearchParams — without it, the
@@ -137,12 +138,29 @@ function DriverLoginInner() {
         <AuthSubmit onClick={handleLogin} loading={isLoading} disabled={!email || !password}>
           Sign in
         </AuthSubmit>
-        <p className="text-center text-sm text-muted">
-          New to Rajlo?{" "}
-          <Link href="/driver-join" className="font-semibold text-rajlo-red hover:underline">
-            Become a driver
-          </Link>
-        </p>
+        {/* Sign-up link is web-only. The Capacitor app is locked to
+            verified drivers — new applicants must onboard on the web
+            first. Showing the link in-app would just hit the
+            NativeDriverGuard and bounce back. */}
+        {!isNativeApp() && (
+          <p className="text-center text-sm text-muted">
+            New to Rajlo?{" "}
+            <Link
+              href="/driver-join"
+              className="font-semibold text-rajlo-red hover:underline"
+            >
+              Become a driver
+            </Link>
+          </p>
+        )}
+        {isNativeApp() && (
+          <p className="text-center text-xs text-muted">
+            Need to apply? Open{" "}
+            <span className="font-semibold text-foreground">rajlo.com</span>{" "}
+            on your phone&apos;s browser or computer to start the
+            onboarding application.
+          </p>
+        )}
       </div>
     </AuthShell>
   );

@@ -56,4 +56,22 @@
          fix when the screen is off. Required for reliable background
          tracking on aggressive battery-saving OEMs (Xiaomi, Huawei). -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <!-- Microphone: voice notes in the chat (MediaRecorder + getUserMedia).
+         Without RECORD_AUDIO declared, the WebView's getUserMedia call
+         silently fails — the OS never shows the permission dialog. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- Camera: in-app photo capture for chat attachments (`<input
+         type="file" capture="environment">` triggers the system camera). -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Photo gallery: Android 13+ split the old READ_EXTERNAL_STORAGE
+         into per-type media permissions. We only need image access for
+         chat attachments. Older Android falls back to the legacy
+         storage permission. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
+        android:maxSdkVersion="32" />
 </manifest>

@@ -4,6 +4,7 @@ import "./globals.css";
 import { MotionProvider } from "@/components/motion-provider";
 import { NativeDriverGuard } from "@/components/native-driver-guard";
 import { NativePushHandler } from "@/components/native-push-handler";
+import { AuthFetchGuard } from "@/components/auth-fetch-guard";
 import { NO_FOUC_SCRIPT } from "@/lib/preferences-client";
 
 /**
@@ -110,6 +111,9 @@ export default function RootLayout({
               high-importance notification channel + routes taps to
               the right page via the FCM payload's `url` field. */}
           <NativePushHandler />
+          {/* Global 401 interceptor — any /api/* call that returns
+              unauthorized bounces the user to the right login page. */}
+          <AuthFetchGuard />
           <div className="min-h-screen">{children}</div>
         </MotionProvider>
       </body>

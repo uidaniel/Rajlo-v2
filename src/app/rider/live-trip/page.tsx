@@ -11,6 +11,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRidePosition } from "@/lib/use-ride-position";
 import { useBackgroundRefresh } from "@/lib/use-background-refresh";
 import { SafetySheet } from "@/components/safety-sheet";
+import { CancelReasonDialog } from "@/components/cancel-reason-dialog";
 import { SafetyCheckModal } from "@/components/safety-check-modal";
 import { useUnusualStopDetector } from "@/lib/use-unusual-stop-detector";
 import { useOffRouteDetector } from "@/lib/use-off-route-detector";
@@ -160,6 +161,7 @@ export default function RiderLiveTripPage() {
   const [data, setData] = useState<ActiveResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [safetyOpen, setSafetyOpen] = useState(false);
   // Safety check modal — opens automatically on detected unusual stops
@@ -560,16 +562,20 @@ export default function RiderLiveTripPage() {
     lastStatusRef.current = next;
   }, [data?.ride?.status]);
 
-  const handleCancel = async () => {
+  const handleCancel = () => {
     if (!data?.ride) return;
-    if (!confirm("Cancel this ride?")) return;
+    setCancelDialogOpen(true);
+  };
+
+  const performCancel = async (reason: string) => {
+    if (!data?.ride) return;
     setCancelling(true);
     setError(null);
     try {
       const res = await fetch(`/api/rider/rides/${data.ride.id}/cancel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ reason: reason || undefined }),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
@@ -579,11 +585,16 @@ export default function RiderLiveTripPage() {
       setData((prev) =>
         prev?.ride
           ? {
-              ride: { ...prev.ride, status: "cancelled" },
+              ride: {
+                ...prev.ride,
+                status: "cancelled",
+                cancellationReason: reason || prev.ride.cancellationReason,
+              },
               driver: prev.driver,
             }
           : prev,
       );
+      setCancelDialogOpen(false);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't cancel ride");
     } finally {
@@ -996,6 +1007,14 @@ export default function RiderLiveTripPage() {
           // once the underlying alert flips to resolved.
           setSafetyCheckAuto(false);
         }}
+      />
+
+      <CancelReasonDialog
+        open={cancelDialogOpen}
+        role="rider"
+        busy={cancelling}
+        onClose={() => setCancelDialogOpen(false)}
+        onConfirm={performCancel}
       />
 
       {/* Persistent safety-chat pill — visible while any alert is

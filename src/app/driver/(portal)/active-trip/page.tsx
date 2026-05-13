@@ -7,6 +7,7 @@ import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { MapView } from "@/components/map-view";
 import { ChatLauncher } from "@/components/chat-launcher";
+import { CancelReasonDialog } from "@/components/cancel-reason-dialog";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRidePosition } from "@/lib/use-ride-position";
 import { useBackgroundRefresh } from "@/lib/use-background-refresh";
@@ -106,6 +107,9 @@ export default function DriverActiveTripPage() {
   // a star, see "saved", and the row stays visually un-rated. Keyed by
   // ride_id since a carpool produces two ratings.
   const [ratedRides, setRatedRides] = useState<Record<string, number>>({});
+  // When the driver taps Cancel, we open the reason dialog and remember
+  // which ride id to cancel on confirm. Null = dialog closed.
+  const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
 
   // Live position channel: driver streams own GPS so the rider can watch
   // the car move on the map. Hook also receives the rider's position so
@@ -223,21 +227,28 @@ export default function DriverActiveTripPage() {
     }
   };
 
-  const handleCancel = async (rideId: string) => {
-    if (!confirm("Cancel this ride? The rider will be notified.")) return;
+  const handleCancel = (rideId: string) => {
+    // Pop the reason dialog; the actual cancel happens in performCancel
+    // once the driver confirms with a reason.
+    setCancelTargetId(rideId);
+  };
+
+  const performCancel = async (reason: string) => {
+    if (!cancelTargetId) return;
     setActing(true);
     setError(null);
     try {
-      const res = await fetch(`/api/driver/rides/${rideId}/cancel`, {
+      const res = await fetch(`/api/driver/rides/${cancelTargetId}/cancel`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ reason: reason || undefined }),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(err.error ?? `Server returned ${res.status}`);
       }
       setData({ ride: null, rider: null, carpool: null });
+      setCancelTargetId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't cancel ride");
     } finally {
@@ -763,6 +774,14 @@ export default function DriverActiveTripPage() {
 
       {/* The chat launcher (icon + sheet + toast) lives inside the
          rider card above. Nothing more to mount here. */}
+
+      <CancelReasonDialog
+        open={cancelTargetId !== null}
+        role="driver"
+        busy={acting}
+        onClose={() => setCancelTargetId(null)}
+        onConfirm={performCancel}
+      />
     </div>
   );
 }

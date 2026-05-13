@@ -305,6 +305,30 @@ export function ChatSheet({
   ) => {
     setSending(true);
     setError(null);
+
+    // Optimistic message — shows the file in the chat immediately
+    // with a rolling progress overlay so the user sees their image /
+    // voice note "land" the moment they tap send, not after the
+    // upload + POST round-trip. `id` is prefixed `optimistic-` so the
+    // render path can spot it; replaced by the server's authoritative
+    // message once the upload succeeds.
+    const optimisticId = `optimistic-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 8)}`;
+    const blobUrl = URL.createObjectURL(file);
+    const optimisticMessage: ChatMessage = {
+      id: optimisticId,
+      rideId,
+      senderId: "", // unknown until server confirms; render path doesn't care
+      senderRole: myRole,
+      kind,
+      body: blobUrl,
+      durationMs: durationMs ?? null,
+      readAt: null,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages((m) => [...m, optimisticMessage]);
+
     try {
       const supabase = createSupabaseBrowserClient();
       // Path inside the bucket — lead with the ride_id folder so the
@@ -336,8 +360,16 @@ export function ChatSheet({
         throw new Error(j.error ?? `HTTP ${res.status}`);
       }
       const json = (await res.json()) as { message: ChatMessage };
-      setMessages((m) => [...m, json.message]);
+      // Swap the optimistic bubble for the server-confirmed one.
+      // Revoke the blob URL so the browser frees the memory.
+      setMessages((m) =>
+        m.map((msg) => (msg.id === optimisticId ? json.message : msg)),
+      );
+      URL.revokeObjectURL(blobUrl);
     } catch (e) {
+      // Roll back the optimistic insertion + free the blob URL.
+      setMessages((m) => m.filter((msg) => msg.id !== optimisticId));
+      URL.revokeObjectURL(blobUrl);
       setError(
         e instanceof Error ? e.message : `Couldn't send ${kind}.`,
       );
@@ -577,6 +609,11 @@ export function ChatSheet({
 /* ─── Message bubble ─── */
 
 function MessageBubble({ m, mine }: { m: ChatMessage; mine: boolean }) {
+  // Optimistic messages (still uploading) carry a marker id and a
+  // local blob URL as the body. We dim them slightly and overlay an
+  // animated barber-pole progress bar so the user sees the upload is
+  // in flight.
+  const pending = m.id.startsWith("optimistic-");
   const time = new Date(m.createdAt).toLocaleTimeString("en-JM", {
     hour: "numeric",
     minute: "2-digit",
@@ -600,40 +637,62 @@ function MessageBubble({ m, mine }: { m: ChatMessage; mine: boolean }) {
         </div>
       )}
       {m.kind === "image" && m.body && (
-        <a
-          href={m.body}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={`block overflow-hidden rounded-2xl ${
+        <div
+          className={`relative block overflow-hidden rounded-2xl ${
             mine ? "ring-2 ring-rajlo-red/30" : "border border-line"
-          }`}
+          } ${pending ? "opacity-90" : ""}`}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={m.body}
-            alt="Photo"
-            className="block max-h-72 w-full max-w-xs object-cover"
-          />
-        </a>
+          {pending ? (
+            // Local blob preview during upload — clicking shouldn't
+            // open a new tab on a blob URL that may be revoked any
+            // moment, so we render an <img> only.
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={m.body}
+              alt="Uploading photo"
+              className="block max-h-72 w-full max-w-xs object-cover"
+            />
+          ) : (
+            <a
+              href={m.body}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block"
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={m.body}
+                alt="Photo"
+                className="block max-h-72 w-full max-w-xs object-cover"
+              />
+            </a>
+          )}
+          {pending && <PendingProgressBar />}
+        </div>
       )}
       {m.kind === "voice" && m.body && (
         <div
-          className={`flex items-center gap-2 rounded-2xl px-3 py-2 ${bubbleColor}`}
+          className={`relative flex items-center gap-2 rounded-2xl px-3 py-2 ${bubbleColor} ${pending ? "opacity-80" : ""}`}
         >
           <span className="grid h-7 w-7 place-items-center rounded-full bg-white/15">
             <MicIcon className="h-3.5 w-3.5" />
           </span>
-          <audio
-            controls
-            src={m.body}
-            className="h-9 max-w-[180px]"
-            preload="metadata"
-          />
+          {pending ? (
+            <span className="text-xs font-semibold">Sending voice note…</span>
+          ) : (
+            <audio
+              controls
+              src={m.body}
+              className="h-9 max-w-[180px]"
+              preload="metadata"
+            />
+          )}
           {m.durationMs !== null && (
             <span className="shrink-0 text-[11px] font-semibold opacity-80">
               {Math.max(1, Math.round(m.durationMs / 1000))}s
             </span>
           )}
+          {pending && <PendingProgressBar />}
         </div>
       )}
       <p className="mt-1 px-1 text-[10px] text-muted">
@@ -641,6 +700,21 @@ function MessageBubble({ m, mine }: { m: ChatMessage; mine: boolean }) {
         {mine && m.readAt && " · Read"}
       </p>
     </li>
+  );
+}
+
+/**
+ * Indeterminate "rolling" progress bar shown overlaid on an in-flight
+ * image / voice attachment. Supabase Storage doesn't expose upload
+ * progress events, so this is purely visual — a sliding gradient that
+ * loops every 1.2s. Disappears the moment the server-confirmed
+ * message replaces the optimistic one.
+ */
+function PendingProgressBar() {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-black/20">
+      <div className="rajlo-pending-bar h-full w-1/3 bg-white/80" />
+    </div>
   );
 }
 
