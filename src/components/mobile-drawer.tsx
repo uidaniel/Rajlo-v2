@@ -145,13 +145,26 @@ export function MobileDrawer({
     const role = profile?.role ?? "rider";
     // Drivers: flip them offline before clearing the session so the
     // persisted is_online flag matches their actual intent (won't be
-    // taking rides while signed out). Best-effort; no-ops for riders.
+    // taking rides while signed out). The offline endpoint refuses
+    // the flip if there's an active trip in flight — propagate that
+    // refusal up so the driver isn't accidentally signed out with
+    // a rider waiting on them.
     if (role === "driver") {
-      await fetch("/api/driver/online", {
+      const res = await fetch("/api/driver/online", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ online: false }),
       }).catch(() => null);
+      if (res && res.status === 409) {
+        const body = (await res.json().catch(() => ({}))) as {
+          message?: string;
+        };
+        alert(
+          body.message ??
+            "You can't sign out while a trip is in progress. Finish or cancel the current ride first.",
+        );
+        return;
+      }
     }
     await supabase.auth.signOut();
     clearSessionPolicy();

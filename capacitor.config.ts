@@ -40,14 +40,16 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchShowDuration: 1500,
       launchAutoHide: true,
-      backgroundColor: "#f10100", // Rajlo red
+      backgroundColor: "#111906", // Rajlo black — primary dark brand colour
       androidSplashResourceName: "splash",
       splashFullScreen: true,
       splashImmersive: true,
     },
     StatusBar: {
-      // Brand-red status bar to match the in-app top strip.
-      backgroundColor: "#f10100",
+      // Rajlo-black status bar so the system strip blends with the
+      // dark brand. White icons on top via `style: "DARK"` (Capacitor
+      // names: DARK = light icons, designed for dark backgrounds).
+      backgroundColor: "#111906",
       style: "DARK",
       // Without this Android draws the WebView edge-to-edge under the
       // status bar, hiding the top of the page behind the battery/wifi
@@ -74,7 +76,7 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
     // Match the launch screen colour so there's no flash of white
     // between the splash and the WebView painting.
-    backgroundColor: "#f10100",
+    backgroundColor: "#111906",
   },
 };
 

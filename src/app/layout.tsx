@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { MotionProvider } from "@/components/motion-provider";
+import { NativeDriverGuard } from "@/components/native-driver-guard";
 import { NO_FOUC_SCRIPT } from "@/lib/preferences-client";
 
 /**
@@ -101,6 +102,9 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: NO_FOUC_SCRIPT }}
         />
         <MotionProvider>
+          {/* No-op on web. In the Capacitor driver app it snaps any
+              off-portal navigation back to /driver. */}
+          <NativeDriverGuard />
           <div className="min-h-screen">{children}</div>
         </MotionProvider>
       </body>

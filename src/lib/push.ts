@@ -1,6 +1,7 @@
 import webpush from "web-push";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getSupabaseServerClient } from "./supabase-server";
+import { getFirebaseAdmin } from "./firebase-admin";
 
 /**
  * Server-side web push delivery.
@@ -78,30 +79,41 @@ export async function pushToUser(
   userId: string,
   payload: PushPayload,
 ): Promise<SendResult> {
+  // Fan out to both delivery channels in parallel. Web-push covers
+  // browser PWAs; FCM covers the Capacitor driver app on Android.
+  // The two channels share the same payload shape so callers don't
+  // care which devices the user has.
+  const [webResult, nativeResult] = await Promise.all([
+    sendWebPushBatch(supabase, userId, payload),
+    sendNativeFcmBatch(supabase, userId, payload),
+  ]);
+  return {
+    ok: true,
+    sent: webResult.sent + nativeResult.sent,
+    pruned: webResult.pruned + nativeResult.pruned,
+  };
+}
+
+/** Internal — sends to all `platform='web'` rows for the user using
+ *  the web-push protocol. Identical to the previous pushToUser body,
+ *  just factored so we can fan out web + native in parallel. */
+async function sendWebPushBatch(
+  supabase: SupabaseClient,
+  userId: string,
+  payload: PushPayload,
+): Promise<{ sent: number; pruned: number }> {
   if (!ensureConfigured()) {
-    return {
-      ok: false,
-      skipped: true,
-      reason: "VAPID keys not set — push disabled in dev",
-    };
+    return { sent: 0, pruned: 0 };
   }
 
-  // Only web rows go through `webpush.sendNotification` — native FCM/APNs
-  // rows live in the same table but need a separate delivery channel
-  // (TODO: wire FCM fan-out for `platform = 'android'`). Filtering them
-  // out here is critical because webpush would treat them as dead and
-  // delete them via the 404/410 prune path below.
   const { data: subs, error } = await supabase
     .from("push_subscriptions")
     .select("id, endpoint, p256dh, auth")
     .eq("user_id", userId)
     .eq("platform", "web");
 
-  if (error) {
-    return { ok: false, error: error.message };
-  }
-  if (!subs || subs.length === 0) {
-    return { ok: true, sent: 0, pruned: 0 };
+  if (error || !subs || subs.length === 0) {
+    return { sent: 0, pruned: 0 };
   }
 
   const body = JSON.stringify(serialize(payload));
@@ -114,7 +126,7 @@ export async function pushToUser(
         await webpush.sendNotification(
           {
             endpoint: s.endpoint,
-            keys: { p256dh: s.p256dh, auth: s.auth },
+            keys: { p256dh: s.p256dh ?? "", auth: s.auth ?? "" },
           },
           body,
         );
@@ -135,8 +147,6 @@ export async function pushToUser(
     await supabase.from("push_subscriptions").delete().in("id", deadIds);
   }
 
-  // Touch last_seen for surviving subs — used later for pruning very
-  // old never-seen subscriptions in a maintenance job.
   if (sent > 0) {
     const aliveIds = subs.map((s) => s.id).filter((id) => !deadIds.includes(id));
     if (aliveIds.length > 0) {
@@ -147,7 +157,119 @@ export async function pushToUser(
     }
   }
 
-  return { ok: true, sent, pruned: deadIds.length };
+  return { sent, pruned: deadIds.length };
+}
+
+/**
+ * Internal — sends to all `platform='android'`/`'ios'` rows for the
+ * user via Firebase Cloud Messaging using `firebase-admin`. Mirrors
+ * the dead-token pruning of the web-push path (FCM returns
+ * `messaging/registration-token-not-registered` for stale tokens).
+ *
+ * Returns `{ sent: 0, pruned: 0 }` silently if Firebase Admin isn't
+ * configured — dev environments stay quiet.
+ */
+async function sendNativeFcmBatch(
+  supabase: SupabaseClient,
+  userId: string,
+  payload: PushPayload,
+): Promise<{ sent: number; pruned: number }> {
+  const app = await getFirebaseAdmin();
+  if (!app) return { sent: 0, pruned: 0 };
+
+  const { data: subs } = await supabase
+    .from("push_subscriptions")
+    .select("id, native_token, platform")
+    .eq("user_id", userId)
+    .in("platform", ["android", "ios"]);
+
+  if (!subs || subs.length === 0) {
+    return { sent: 0, pruned: 0 };
+  }
+
+  const { getMessaging } = await import("firebase-admin/messaging");
+  const messaging = getMessaging(app);
+
+  let sent = 0;
+  const deadIds: string[] = [];
+
+  await Promise.all(
+    subs.map(async (s) => {
+      const token = s.native_token as string | null;
+      if (!token) return;
+      try {
+        // The notification payload (title/body) is what Android renders
+        // as a system notification when the app is backgrounded. The
+        // data payload is forwarded to the app for in-app handling
+        // (e.g., deep-linking to a chat thread).
+        await messaging.send({
+          token,
+          notification: {
+            title: payload.title,
+            body: payload.body,
+          },
+          data: buildFcmData(payload),
+          android: {
+            // `high` so FCM wakes the device from doze for ride
+            // requests + safety alerts — both time-sensitive.
+            priority: "high",
+            notification: {
+              // Default channel — Capacitor's PushNotifications plugin
+              // doesn't register a custom one and Android 8+ requires
+              // a channel for the notification to show. Tapping opens
+              // the app via the plugin's default click handler.
+              tag: payload.tag,
+            },
+          },
+        });
+        sent += 1;
+      } catch (err) {
+        // FCM marks tokens dead with these codes; prune to avoid
+        // retrying on every event.
+        const code = (err as { code?: string } | null)?.code ?? "";
+        if (
+          code === "messaging/registration-token-not-registered" ||
+          code === "messaging/invalid-registration-token"
+        ) {
+          deadIds.push(s.id as string);
+        }
+      }
+    }),
+  );
+
+  if (deadIds.length > 0) {
+    await supabase.from("push_subscriptions").delete().in("id", deadIds);
+  }
+
+  if (sent > 0) {
+    const aliveIds = subs
+      .map((s) => s.id as string)
+      .filter((id) => !deadIds.includes(id));
+    if (aliveIds.length > 0) {
+      await supabase
+        .from("push_subscriptions")
+        .update({ last_seen_at: new Date().toISOString() })
+        .in("id", aliveIds);
+    }
+  }
+
+  return { sent, pruned: deadIds.length };
+}
+
+/** Flattens the PushPayload's url/data/etc. into string values that
+ *  FCM accepts (FCM data payloads are strict: keys + values must be
+ *  strings, no nested objects). */
+function buildFcmData(p: PushPayload): Record<string, string> {
+  const data: Record<string, string> = {};
+  if (p.url) data.url = p.url;
+  if (p.tag) data.tag = p.tag;
+  if (p.data) {
+    for (const [key, value] of Object.entries(p.data)) {
+      data[key] =
+        typeof value === "string" ? value : JSON.stringify(value);
+    }
+  }
+  return data;
 }
 
 /**

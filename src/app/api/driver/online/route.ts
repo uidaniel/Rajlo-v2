@@ -91,6 +91,30 @@ export async function PATCH(request: Request) {
     );
   }
 
+  // Active-trip gate: a driver with an in-flight ride must NOT be
+  // able to flip themselves offline. The rider would see the marker
+  // freeze, the ETA would die, and ops would have to scramble. If
+  // the driver genuinely needs to bail mid-trip they should cancel
+  // the ride explicitly via the active-trip screen — that flow has
+  // proper notification + refund logic.
+  if (!desired) {
+    const { count: activeCount } = await supabase
+      .from("rides")
+      .select("id", { count: "exact", head: true })
+      .eq("driver_id", driver.id)
+      .in("status", ["accepted", "arrived", "in_progress"]);
+    if (activeCount && activeCount > 0) {
+      return NextResponse.json(
+        {
+          error: "active_trip",
+          message:
+            "You can't go offline while a trip is in progress. Finish or cancel the current ride first.",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   // Push-subscription gate: a driver going online MUST have at least
   // one active web-push subscription on file. Without it they'd never
   // get the wake-up notification when a rider hails — they'd have to
@@ -100,9 +124,6 @@ export async function PATCH(request: Request) {
   // The UI also enforces this client-side (DriverReadinessGate), but
   // the server is the source of truth — a tampered or stale client
   // can't sneak past.
-  //
-  // Only enforced on the offline→online flip. Going OFFLINE is always
-  // allowed regardless (a driver should never be trapped online).
   if (desired) {
     const { count: pushCount } = await supabase
       .from("push_subscriptions")

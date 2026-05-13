@@ -145,6 +145,49 @@ export function useRidePosition(
       broadcastLatest();
     };
 
+    /** Force a fresh broadcast — used by the recovery listeners when
+     *  the browser reports the device is online again or when the
+     *  page returns to the foreground. Without this, the channel can
+     *  technically be subscribed but no new fix flows to the rider
+     *  until the next 5-second heartbeat tick — that gap is visible
+     *  on the map as a "stuck" marker. */
+    const forceRebroadcast = () => {
+      const fix = latestFixRef.current;
+      if (!fix) return;
+      const payload: LivePosition = { ...fix, ts: Date.now() };
+      channel.send({ type: "broadcast", event: eventName, payload });
+    };
+
+    /** Re-establish the realtime channel after a network drop. The
+     *  Supabase JS client auto-reconnects the WebSocket but the
+     *  individual channel subscription doesn't always re-arm. Calling
+     *  `subscribe()` on an already-subscribed channel is a no-op, but
+     *  on a dropped channel it kicks off a fresh JOIN frame which is
+     *  what we want. */
+    const onNetworkRestored = () => {
+      // Trigger Supabase to reconcile the channel state, then
+      // immediately broadcast our latest fix so the rider's marker
+      // jumps to current location instead of waiting for the next
+      // heartbeat.
+      try {
+        channel.subscribe();
+      } catch {
+        /* already subscribed — fine */
+      }
+      forceRebroadcast();
+    };
+
+    const onVisibilityChange = () => {
+      if (!document.hidden) onNetworkRestored();
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("online", onNetworkRestored);
+      // Page visibility — also fires when the user returns to the
+      // app from another app on mobile. Web users get this when they
+      // come back to the tab.
+      document.addEventListener("visibilitychange", onVisibilityChange);
+    }
+
     channel.subscribe((status) => {
       if (status !== "SUBSCRIBED") return;
       if (!streamSelf) return;
@@ -236,6 +279,10 @@ export function useRidePosition(
       }
       if (heartbeatTimer) clearInterval(heartbeatTimer);
       if (serverCacheTimer) clearInterval(serverCacheTimer);
+      if (typeof window !== "undefined") {
+        window.removeEventListener("online", onNetworkRestored);
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+      }
       // Stop the native background-geolocation watcher (Android
       // foreground service goes away with it). Fire-and-forget — by
       // the time the cleanup runs the trip is over, nothing else to do.

@@ -15,6 +15,8 @@ import {
   isNativeApp,
   registerNativePush,
   requestNativeLocationPermission,
+  hasNativeLocationBeenGranted,
+  checkNativePushPermission,
 } from "@/lib/native";
 
 /**
@@ -622,10 +624,32 @@ function PushDeniedRecovery() {
  * app — we show the path.
  */
 function NativeReadinessGate({ children }: { children: React.ReactNode }) {
+  // null = still checking on mount, true/false = known state.
+  // Starting as `null` so we render a brief loading shell instead of
+  // flashing the "Allow location" CTA for a driver who already granted
+  // permissions on a previous run.
   const [locationGranted, setLocationGranted] = useState<boolean | null>(null);
   const [pushGranted, setPushGranted] = useState<boolean | null>(null);
   const [working, setWorking] = useState<"location" | "push" | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Re-hydrate from OS state on mount. Location uses a localStorage
+  // cache (the background-geolocation plugin has no checkPermissions);
+  // push reads the live OS permission via the plugin's checkPermissions
+  // call. Without this the gate would re-appear on every app launch
+  // even though the OS-level grants are still in place.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [pushOk] = await Promise.all([checkNativePushPermission()]);
+      if (cancelled) return;
+      setLocationGranted(hasNativeLocationBeenGranted());
+      setPushGranted(pushOk);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const askLocation = useCallback(async () => {
     setWorking("location");
@@ -653,6 +677,19 @@ function NativeReadinessGate({ children }: { children: React.ReactNode }) {
       );
     }
   }, []);
+
+  // Initial mount check still pending — show a loading shell so we
+  // don't flash the gate at a driver who's already onboarded.
+  if (locationGranted === null || pushGranted === null) {
+    return (
+      <ReadinessShell tone="loading">
+        <div className="space-y-3">
+          <div className="h-3 w-32 animate-pulse rounded bg-white/20" />
+          <div className="h-3 w-48 animate-pulse rounded bg-white/15" />
+        </div>
+      </ReadinessShell>
+    );
+  }
 
   // Both granted → render the actual online toggle.
   if (locationGranted && pushGranted) {

@@ -5,6 +5,7 @@ import {
   shapeMessages,
   RIDE_CHAT_BUCKET,
 } from "@/lib/ride-chat-shared";
+import { notifyRider, notifyDriver } from "@/lib/notify";
 
 /**
  * GET / POST /api/rides/[id]/messages
@@ -241,6 +242,51 @@ export async function POST(
           createdAt: inserted.created_at,
         },
       ];
+
+  // Push notification to the OTHER party. Best-effort — failure here
+  // doesn't block the message send (the realtime subscription on the
+  // other client will still deliver the message in-app; the push is
+  // for waking them up when the app is backgrounded). Service-role
+  // client is needed because the notify helpers write to inbox tables
+  // outside of the auth user's RLS scope.
+  if (sigClient) {
+    const previewBody =
+      kind === "text"
+        ? messageBody.slice(0, 120)
+        : kind === "image"
+          ? "Sent a photo"
+          : "Sent a voice note";
+
+    if (senderRole === "rider" && ride.driver_id) {
+      // Resolve the driver's auth.users.id to address the push.
+      const { data: drv } = await sigClient
+        .from("drivers")
+        .select("user_id")
+        .eq("id", ride.driver_id)
+        .maybeSingle();
+      if (drv?.user_id) {
+        void notifyDriver(sigClient, {
+          driverUserId: drv.user_id,
+          kind: "trip_update",
+          title: "New message from your rider",
+          body: previewBody,
+          href: "/driver/active-trip",
+          pushTag: `ride-${id}-chat`,
+          pushRenotify: true,
+        }).catch(() => null);
+      }
+    } else if (senderRole === "driver") {
+      void notifyRider(sigClient, {
+        riderId: ride.rider_id,
+        kind: "trip",
+        title: "New message from your driver",
+        body: previewBody,
+        href: "/rider/live-trip",
+        pushTag: `ride-${id}-chat`,
+        pushRenotify: true,
+      }).catch(() => null);
+    }
+  }
 
   return NextResponse.json({ message: shaped });
 }

@@ -22,15 +22,26 @@ export function SignOutButton({
     <button
       type="button"
       onClick={async () => {
-        // Best-effort: flip the driver offline before signing out so
-        // their last-known intent is "off" if they don't sign back in.
-        // The endpoint silently 403s for non-driver users — safe to
-        // call unconditionally.
-        await fetch("/api/driver/online", {
+        // Flip the driver offline before signing out. The endpoint
+        // refuses with 409 when an active trip is in flight; we
+        // surface that to the user and abort rather than logging them
+        // out with a rider still on board. 403s (non-driver) flow
+        // through silently.
+        const res = await fetch("/api/driver/online", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ online: false }),
         }).catch(() => null);
+        if (res && res.status === 409) {
+          const body = (await res.json().catch(() => ({}))) as {
+            message?: string;
+          };
+          alert(
+            body.message ??
+              "You can't sign out while a trip is in progress. Finish or cancel the current ride first.",
+          );
+          return;
+        }
         const supabase = createSupabaseBrowserClient();
         await supabase.auth.signOut();
         clearSessionPolicy();

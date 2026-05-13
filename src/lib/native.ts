@@ -130,6 +130,55 @@ export async function startBackgroundGeolocation(
 }
 
 /**
+ * Localstorage flag the gate writes after the driver successfully
+ * grants location permission. Used to skip the readiness gate on
+ * subsequent app launches without re-prompting.
+ *
+ * The `@capacitor-community/background-geolocation` plugin doesn't
+ * expose a clean checkPermissions API, so we cache the grant locally.
+ * If the user later revokes permission via Android Settings, the
+ * watcher will fail with NOT_AUTHORIZED next time it tries to start
+ * and we surface the error through the normal "permission denied"
+ * path in useRidePosition.
+ */
+const LOCATION_GRANTED_KEY = "rajlo_native_location_granted";
+
+/**
+ * True if the driver has granted location permission at least once
+ * before in this app install. Used by the readiness gate to skip the
+ * "Allow location" step on app relaunch.
+ */
+export function hasNativeLocationBeenGranted(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(LOCATION_GRANTED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check the current OS-level push permission. Unlike location, the
+ * @capacitor/push-notifications plugin DOES expose checkPermissions,
+ * so we read the live state instead of caching. Returns true only if
+ * the user has previously tapped Allow.
+ *
+ * Returns false on web (no native plugin).
+ */
+export async function checkNativePushPermission(): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  try {
+    const { PushNotifications } = await import(
+      "@capacitor/push-notifications"
+    );
+    const result = await PushNotifications.checkPermissions();
+    return result.receive === "granted";
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Register the device for native push notifications, POST the FCM/APNs
  * token to /api/push/subscribe so it's stored alongside web-push rows,
  * and return the token. After this resolves successfully the
@@ -251,6 +300,16 @@ export async function requestNativeLocationPermission(): Promise<boolean> {
         await BackgroundGeolocation.removeWatcher({ id: watcherId });
       } catch {
         /* watcher already gone */
+      }
+    }
+
+    if (granted) {
+      // Cache the grant so the readiness gate skips this step on
+      // subsequent app launches.
+      try {
+        window.localStorage.setItem(LOCATION_GRANTED_KEY, "1");
+      } catch {
+        /* localStorage unavailable — fall through, gate will re-ask */
       }
     }
 
