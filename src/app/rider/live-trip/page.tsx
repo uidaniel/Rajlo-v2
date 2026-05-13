@@ -630,14 +630,14 @@ export default function RiderLiveTripPage() {
   if (!data?.ride) {
     return (
       <>
-        <div className="mx-auto max-w-2xl px-4 py-16 text-center">
-          <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-surface-soft text-muted">
+        <div className="flex min-h-[70dvh] flex-col items-center justify-center px-4 text-center">
+          <span className="grid h-14 w-14 place-items-center rounded-full bg-surface-soft text-muted">
             <Icon name="navigation" className="h-6 w-6" />
           </span>
           <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
             No active trip
           </h1>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted">
+          <p className="mt-2 max-w-md text-sm text-muted">
             Book a ride to get started.
           </p>
           <Link

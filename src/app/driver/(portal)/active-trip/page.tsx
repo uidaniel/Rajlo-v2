@@ -14,6 +14,12 @@ import { useLocationViolationMonitor } from "@/lib/use-location-violation-monito
 import { useBackgroundRefresh } from "@/lib/use-background-refresh";
 import { formatJMD, type Place } from "@/lib/jamaica";
 import { HeroSkeleton, MapSkeleton, Skeleton } from "@/components/skeleton";
+import {
+  getCachedDriverData,
+  setCachedDriverData,
+} from "@/lib/driver-prefetch";
+
+const ACTIVE_URL = "/api/driver/rides/active";
 
 /**
  * Driver's active-trip console.
@@ -89,8 +95,12 @@ const STAGE_COPY = {
 };
 
 export default function DriverActiveTripPage() {
-  const [data, setData] = useState<ActiveResponse | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Seed from the cross-page cache so a tab-switch back to /driver/active-trip
+  // renders content instantly instead of flashing skeletons. The
+  // background refresh below still re-fetches to stay accurate.
+  const cachedActive = getCachedDriverData<ActiveResponse>(ACTIVE_URL);
+  const [data, setData] = useState<ActiveResponse | null>(cachedActive);
+  const [loading, setLoading] = useState(cachedActive == null);
   const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Snapshot of the just-completed trip so the completion flash can
@@ -134,10 +144,11 @@ export default function DriverActiveTripPage() {
 
   const refresh = async () => {
     try {
-      const res = await fetch("/api/driver/rides/active");
+      const res = await fetch(ACTIVE_URL);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = (await res.json()) as ActiveResponse;
       setData(json);
+      setCachedDriverData(ACTIVE_URL, json);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load active trip");
     } finally {
@@ -369,14 +380,14 @@ export default function DriverActiveTripPage() {
   /* ─── No active trip ─── */
   if (!data?.ride) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-16 text-center">
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-surface-soft text-muted">
+      <div className="flex min-h-[70dvh] flex-col items-center justify-center px-4 text-center">
+        <span className="grid h-14 w-14 place-items-center rounded-full bg-surface-soft text-muted">
           <Icon name="navigation" className="h-6 w-6" />
         </span>
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
           No active trip
         </h1>
-        <p className="mx-auto mt-2 max-w-md text-sm text-muted">
+        <p className="mt-2 max-w-md text-sm text-muted">
           Head back to the dashboard and wait for an incoming request, or
           accept one from your inbox.
         </p>

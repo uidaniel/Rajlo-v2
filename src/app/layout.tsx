@@ -6,6 +6,7 @@ import { NativeDriverGuard } from "@/components/native-driver-guard";
 import { NativePushHandler } from "@/components/native-push-handler";
 import { AuthFetchGuard } from "@/components/auth-fetch-guard";
 import { NativeBottomNav } from "@/components/native-bottom-nav";
+import { NativeBackButton } from "@/components/native-back-button";
 import { NativePageTransition } from "@/components/native-page-transition";
 import { NO_FOUC_SCRIPT } from "@/lib/preferences-client";
 
@@ -119,6 +120,9 @@ export default function RootLayout({
           {/* Native-only bottom tab bar for the driver app. No-op on
               web and on auth / verification screens. */}
           <NativeBottomNav />
+          {/* Native-only Android hardware back-button handler. Routes
+              top-tab back-presses to Home, double-tap-on-Home to exit. */}
+          <NativeBackButton />
           {/* Native-only slide-fade transition between pages. No-op
               on web so the marketing site doesn't feel jittery. */}
           <NativePageTransition>

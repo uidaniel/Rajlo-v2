@@ -4,7 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useSyncExternalStore } from "react";
 import { Icon, type IconName } from "./icons";
-import { isNativeApp, haptics } from "@/lib/native";
+import { isNativeApp } from "@/lib/native";
+import {
+  DRIVER_PREFETCH_URLS,
+  prefetchDriverData,
+} from "@/lib/driver-prefetch";
 
 /**
  * Native-style bottom tab bar for the driver Capacitor app. Lifts the
@@ -69,6 +73,12 @@ const DRIVER_TABS: Tab[] = [
   },
 ];
 
+/** Hrefs of the tabs above — exported so MobileDrawer can hide them
+ *  from the native drawer (the bottom bar already covers them). */
+export const NATIVE_DRIVER_TAB_HREFS = new Set(
+  DRIVER_TABS.map((tab) => tab.href),
+);
+
 /** Routes where the bottom bar should NOT show even inside the app. */
 const HIDDEN_PREFIXES = [
   "/auth/",
@@ -82,20 +92,32 @@ const HIDDEN_PREFIXES = [
   "/404",
 ];
 
+/**
+ * Pick the active tab by **longest matching prefix across all tabs**.
+ *
+ * The earlier "longest tab.match max length" sort was buggy: it picked
+ * the Home tab for /driver/earnings because Home's max prefix length
+ * (16 — "/driver/requests") tied with Earnings's max (16 —
+ * "/driver/earnings"), and the loop's first-match-wins order made Home
+ * win via its "/driver" catch-all. Comparing the actually-matched
+ * prefix's length per tab fixes that — Earnings's "/driver/earnings"
+ * (16 chars) beats Home's "/driver" (7 chars) cleanly.
+ */
 function pickActiveTab(path: string): Tab | null {
   if (!path) return null;
-  // Match longest prefix first so /driver/active-trip beats /driver.
-  const sorted = [...DRIVER_TABS].sort(
-    (a, b) =>
-      Math.max(...b.match.map((m) => m.length)) -
-      Math.max(...a.match.map((m) => m.length)),
-  );
-  for (const tab of sorted) {
-    if (tab.match.some((m) => path === m || path.startsWith(`${m}/`))) {
-      return tab;
+  let bestTab: Tab | null = null;
+  let bestLen = -1;
+  for (const tab of DRIVER_TABS) {
+    for (const prefix of tab.match) {
+      const matches =
+        path === prefix || path.startsWith(`${prefix}/`);
+      if (matches && prefix.length > bestLen) {
+        bestLen = prefix.length;
+        bestTab = tab;
+      }
     }
   }
-  return null;
+  return bestTab;
 }
 
 export function NativeBottomNav() {
@@ -132,6 +154,27 @@ export function NativeBottomNav() {
     };
   }, [shouldShow]);
 
+  // Warm the common driver endpoints once the bar shows up. Each page
+  // checks the cache on mount and skips its skeleton if the prefetch
+  // already landed. We schedule with `requestIdleCallback` so the
+  // prefetches don't fight the initial render for bandwidth.
+  useEffect(() => {
+    if (!shouldShow) return;
+    const run = () => {
+      for (const url of DRIVER_PREFETCH_URLS) {
+        void prefetchDriverData(url);
+      }
+    };
+    const w = window as Window & {
+      requestIdleCallback?: (cb: () => void) => number;
+    };
+    if (typeof w.requestIdleCallback === "function") {
+      w.requestIdleCallback(run);
+    } else {
+      setTimeout(run, 200);
+    }
+  }, [shouldShow]);
+
   if (!shouldShow) return null;
 
   const active = pickActiveTab(pathname);
@@ -140,6 +183,16 @@ export function NativeBottomNav() {
     <nav
       className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-surface/95 backdrop-blur-lg"
       style={{
+        // Pin to the visible viewport bottom on Android WebView too.
+        // The `translateZ(0)` promotes the bar to its own compositor
+        // layer so the WebView never paints it inline with the
+        // scrolling content — what was making it feel jittery on
+        // tab change. `will-change: transform` keeps the layer warm.
+        bottom: 0,
+        left: 0,
+        right: 0,
+        transform: "translateZ(0)",
+        willChange: "transform",
         paddingBottom:
           "max(env(safe-area-inset-bottom, 0px), 6px)",
       }}
@@ -154,7 +207,13 @@ export function NativeBottomNav() {
                 href={tab.href}
                 prefetch
                 onClick={() => {
-                  void haptics.tap();
+                  // Warm the destination tab's data on tap so the next
+                  // page hits the cache instead of fetching cold. No
+                  // haptic feedback — the driver flagged the vibration
+                  // on every tab tap as noisy.
+                  for (const url of DRIVER_PREFETCH_URLS) {
+                    void prefetchDriverData(url);
+                  }
                 }}
                 className={`flex flex-col items-center justify-center gap-0.5 rounded-2xl px-1 py-2 transition-colors ${
                   isActive

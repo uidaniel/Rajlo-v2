@@ -12,6 +12,10 @@ import {
   StatsGridSkeleton,
 } from "@/components/skeleton";
 import { formatJMD } from "@/lib/jamaica";
+import {
+  getCachedDriverData,
+  setCachedDriverData,
+} from "@/lib/driver-prefetch";
 
 /**
  * Driver earnings dashboard. Pulls real completed-ride data from
@@ -54,10 +58,15 @@ const RANGES: { key: Range; label: string }[] = [
 ];
 
 const FETCH_LIMIT = 50;
+const EARNINGS_URL = `/api/driver/rides/history?limit=${FETCH_LIMIT}&offset=0`;
 
 export default function DriverEarningsPage() {
-  const [rows, setRows] = useState<HistoryRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Seed from the bottom-nav's prefetch cache so tab-switches show
+  // the chart and totals instantly. The background refresh below
+  // still pulls the latest numbers.
+  const cached = getCachedDriverData<HistoryResponse>(EARNINGS_URL);
+  const [rows, setRows] = useState<HistoryRow[]>(cached?.rides ?? []);
+  const [loading, setLoading] = useState(cached == null);
   const [error, setError] = useState<string | null>(null);
   const [range, setRange] = useState<Range>("week");
 
@@ -65,13 +74,12 @@ export default function DriverEarningsPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `/api/driver/rides/history?limit=${FETCH_LIMIT}&offset=0`,
-        );
+        const res = await fetch(EARNINGS_URL);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as HistoryResponse;
         if (cancelled) return;
         setRows(json.rides);
+        setCachedDriverData(EARNINGS_URL, json);
       } catch (e) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : "Couldn't load earnings");

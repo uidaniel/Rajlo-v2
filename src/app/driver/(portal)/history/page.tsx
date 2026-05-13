@@ -7,6 +7,10 @@ import { FadeUp } from "@/components/anim";
 import { RateDialog } from "@/components/rate-dialog";
 import { RideCardSkeleton, StatsGridSkeleton } from "@/components/skeleton";
 import { formatJMD } from "@/lib/jamaica";
+import {
+  getCachedDriverData,
+  setCachedDriverData,
+} from "@/lib/driver-prefetch";
 
 /**
  * Driver trip history. Mirror of the rider's history page in shape,
@@ -42,15 +46,19 @@ type HistoryResponse = {
 };
 
 const PAGE_SIZE = 20;
+const FIRST_PAGE_URL = `/api/driver/rides/history?limit=${PAGE_SIZE}&offset=0`;
 
 export default function DriverHistoryPage() {
-  const [rows, setRows] = useState<HistoryRow[]>([]);
-  const [pageEarnings, setPageEarnings] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // Seed from the bottom-nav's prefetch cache so tab-switches into
+  // /driver/history land on real rows instead of a skeleton.
+  const cached = getCachedDriverData<HistoryResponse>(FIRST_PAGE_URL);
+  const [rows, setRows] = useState<HistoryRow[]>(cached?.rides ?? []);
+  const [pageEarnings, setPageEarnings] = useState(cached?.pageEarningsJMD ?? 0);
+  const [loading, setLoading] = useState(cached == null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(cached?.pagination?.hasMore ?? false);
+  const [offset, setOffset] = useState(cached?.rides?.length ?? 0);
   // The driver hasn't rated this rider yet — track which row is open
   // in the rate dialog. The driver can rate the rider at any time after
   // trip completion.
@@ -65,9 +73,7 @@ export default function DriverHistoryPage() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(
-          `/api/driver/rides/history?limit=${PAGE_SIZE}&offset=0`,
-        );
+        const res = await fetch(FIRST_PAGE_URL);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as HistoryResponse;
         if (cancelled) return;
@@ -75,6 +81,7 @@ export default function DriverHistoryPage() {
         setHasMore(json.pagination.hasMore);
         setOffset(json.rides.length);
         setPageEarnings(json.pageEarningsJMD);
+        setCachedDriverData(FIRST_PAGE_URL, json);
       } catch (e) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : "Couldn't load history");

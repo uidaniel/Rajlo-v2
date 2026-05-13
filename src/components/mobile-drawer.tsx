@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { Logo } from "./logo";
 import { Icon, type IconName } from "./icons";
+import { NATIVE_DRIVER_TAB_HREFS } from "./native-bottom-nav";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { clearSessionPolicy } from "@/lib/session-policy";
 import { useT } from "@/lib/i18n";
+import { isNativeApp } from "@/lib/native";
 
 type NavLink = {
   label: string;
@@ -59,6 +61,22 @@ export function MobileDrawer({
   const pathname = usePathname();
   const router = useRouter();
   const { t } = useT();
+
+  // In the Capacitor driver app, the five most-used surfaces (Home,
+  // Trip, Earnings, History, Me) live in the bottom tab bar — so we
+  // hide them from the drawer to avoid duplicate navigation paths.
+  // On the web, or for rider/admin nav, the drawer remains the full
+  // navigation primitive.
+  const native = useSyncExternalStore(
+    () => () => {},
+    () => isNativeApp(),
+    () => false,
+  );
+  const onDriverRoute = (pathname ?? "").startsWith("/driver");
+  const visibleNav =
+    native && onDriverRoute
+      ? nav.filter((item) => !NATIVE_DRIVER_TAB_HREFS.has(item.href))
+      : nav;
 
   // Fetch the signed-in user's profile for the footer block. We do
   // two parallel fetches: one for name/email/role from the profiles
@@ -190,7 +208,7 @@ export function MobileDrawer({
   // Pick the active nav item by longest matching href. Stops the root
   // "/rider" Dashboard link from showing as active on every nested page —
   // on /rider/request only "Request a ride" lights up, etc.
-  const activeHref = nav.reduce<string | null>((longest, item) => {
+  const activeHref = visibleNav.reduce<string | null>((longest, item) => {
     const matches =
       pathname === item.href || pathname?.startsWith(`${item.href}/`);
     if (!matches) return longest;
@@ -295,7 +313,7 @@ export function MobileDrawer({
           aria-label="Portal navigation"
         >
           <ul className="grid gap-1">
-            {nav.map((item) => {
+            {visibleNav.map((item) => {
               const active = item.href === activeHref;
               return (
                 <li key={item.href}>
@@ -383,8 +401,13 @@ export function MobileDrawer({
         </div>
       </aside>
 
-      {/* ============== Main content ============== */}
-      <main className="relative overflow-x-hidden pb-20 md:overflow-y-auto md:pb-0">
+      {/* ============== Main content ==============
+         Bottom padding is owned by the global rule on `body` (only
+         applied when the native bottom nav is showing) so we don't
+         double-pad and end up with ~150px of dead space below the
+         content. The portal-layout wrapper inside this <main> already
+         provides regular page breathing room via its py-4 / py-6. */}
+      <main className="relative overflow-x-hidden md:overflow-y-auto">
         {children}
       </main>
     </div>
