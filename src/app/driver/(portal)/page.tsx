@@ -16,6 +16,16 @@ import {
   RideCardSkeleton,
   Skeleton,
 } from "@/components/skeleton";
+import {
+  getCachedDriverData,
+  setCachedDriverData,
+} from "@/lib/driver-prefetch";
+
+const STATS_URL = "/api/driver/stats";
+const COMPLIANCE_URL = "/api/driver/compliance";
+const ACTIVE_URL = "/api/driver/rides/active";
+const INBOX_URL = "/api/driver/inbox";
+const PROFILE_URL = "/api/me/profile";
 
 /**
  * Driver dashboard — single-page command surface.
@@ -94,18 +104,47 @@ type Compliance = {
 
 export default function DriverHomePage() {
   const router = useRouter();
-  const [firstName, setFirstName] = React.useState<string | null>(null);
-  const [stats, setStats] = React.useState<Stats | null>(null);
+  // Seed every section from the bottom-nav's prefetch cache so the
+  // dashboard lands fully painted on first frame: the hero shows the
+  // real name + correct online state, the stat tiles + 7-day chart
+  // skip their skeletons, compliance + inbox + active-trip banner
+  // render immediately. The background re-fetches below + the
+  // Supabase Realtime channels keep everything live; the user just
+  // doesn't see the "loading → toggle flips on" transition any more.
+  const cachedStats = getCachedDriverData<Stats>(STATS_URL);
+  const cachedProfile = getCachedDriverData<{
+    profile: { fullName: string | null };
+  }>(PROFILE_URL);
+  const cachedCompliance = getCachedDriverData<{ summary?: Compliance }>(
+    COMPLIANCE_URL,
+  );
+  const cachedActive = getCachedDriverData<{ ride: { id: string } | null }>(
+    ACTIVE_URL,
+  );
+  const cachedInbox = getCachedDriverData<{ rides?: InboxEntry[] }>(INBOX_URL);
+
+  const [firstName, setFirstName] = React.useState<string | null>(
+    cachedProfile?.profile.fullName?.split(" ")[0] ?? null,
+  );
+  const [stats, setStats] = React.useState<Stats | null>(cachedStats ?? null);
   const [statsError, setStatsError] = React.useState<string | null>(null);
-  const [compliance, setCompliance] = React.useState<Compliance | null>(null);
-  const [online, setOnlineState] = React.useState<boolean | null>(null);
+  const [compliance, setCompliance] = React.useState<Compliance | null>(
+    cachedCompliance?.summary ?? null,
+  );
+  const [online, setOnlineState] = React.useState<boolean | null>(
+    cachedStats?.online.is ?? null,
+  );
   const [onlineSyncing, setOnlineSyncing] = React.useState(false);
-  const [inboxRides, setInboxRides] = React.useState<InboxEntry[]>([]);
+  const [inboxRides, setInboxRides] = React.useState<InboxEntry[]>(
+    cachedInbox?.rides ?? [],
+  );
   const [acceptError, setAcceptError] = React.useState<string | null>(null);
   const [accepting, setAccepting] = React.useState<string | null>(null);
   const [driverUserId, setDriverUserId] = React.useState<string | null>(null);
-  const [hasActiveTrip, setHasActiveTrip] = React.useState(false);
-  const [bootstrapping, setBootstrapping] = React.useState(true);
+  const [hasActiveTrip, setHasActiveTrip] = React.useState(
+    !!cachedActive?.ride,
+  );
+  const [bootstrapping, setBootstrapping] = React.useState(cachedActive == null);
 
   /* ─── Auth user id (for fleet broadcaster) ─── */
   React.useEffect(() => {
@@ -127,13 +166,15 @@ export default function DriverHomePage() {
     let mounted = true;
     (async () => {
       try {
-        const res = await fetch("/api/me/profile");
+        const res = await fetch(PROFILE_URL);
         if (!res.ok) return;
         const json = (await res.json()) as {
           profile: { fullName: string | null };
         };
-        if (mounted)
+        if (mounted) {
           setFirstName(json.profile.fullName?.split(" ")[0] ?? null);
+          setCachedDriverData(PROFILE_URL, json);
+        }
       } catch {
         /* fine — header still reads */
       }
@@ -146,7 +187,7 @@ export default function DriverHomePage() {
   /* ─── Stats (the real one — replaces all mock data) ─── */
   const refreshStats = React.useCallback(async () => {
     try {
-      const res = await fetch("/api/driver/stats");
+      const res = await fetch(STATS_URL);
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(j.error ?? `HTTP ${res.status}`);
@@ -155,6 +196,7 @@ export default function DriverHomePage() {
       setStats(json);
       setOnlineState(json.online.is);
       setStatsError(null);
+      setCachedDriverData(STATS_URL, json);
     } catch (e) {
       setStatsError(
         e instanceof Error ? e.message : "Couldn't load your stats.",
@@ -171,10 +213,13 @@ export default function DriverHomePage() {
     let mounted = true;
     (async () => {
       try {
-        const res = await fetch("/api/driver/compliance");
+        const res = await fetch(COMPLIANCE_URL);
         if (!res.ok) return;
         const json = (await res.json()) as { summary?: Compliance };
-        if (mounted && json.summary) setCompliance(json.summary);
+        if (mounted) {
+          if (json.summary) setCompliance(json.summary);
+          setCachedDriverData(COMPLIANCE_URL, json);
+        }
       } catch {
         /* silent — section just won't render */
       }
@@ -189,10 +234,13 @@ export default function DriverHomePage() {
     let cancelled = false;
     const check = async () => {
       try {
-        const res = await fetch("/api/driver/rides/active");
+        const res = await fetch(ACTIVE_URL);
         if (!res.ok) return;
         const json = (await res.json()) as { ride: { id: string } | null };
-        if (!cancelled) setHasActiveTrip(!!json.ride);
+        if (!cancelled) {
+          setHasActiveTrip(!!json.ride);
+          setCachedDriverData(ACTIVE_URL, json);
+        }
       } catch {
         /* network blip */
       } finally {
@@ -388,10 +436,11 @@ export default function DriverHomePage() {
     let cancelled = false;
     const refresh = async () => {
       try {
-        const res = await fetch("/api/driver/inbox");
+        const res = await fetch(INBOX_URL);
         if (res.ok && !cancelled) {
           const json = (await res.json()) as { rides: InboxEntry[] };
           setInboxRides(json.rides ?? []);
+          setCachedDriverData(INBOX_URL, json);
         }
       } catch {
         /* Realtime will retry */

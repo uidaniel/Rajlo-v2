@@ -65,9 +65,23 @@ export function invalidateDriverData(url: string): void {
   cache.delete(url);
 }
 
-/** Endpoints that should be warm whenever the driver opens the app. */
+/** Endpoints that should be warm whenever the driver opens the app.
+ *  Listed in priority order — the dashboard (where the driver lands)
+ *  needs `stats`, `compliance`, `inbox`, and `rides/active` to render
+ *  without skeletons; the `Me` tab needs `driver/me` + `me/avatar`;
+ *  the rest cover the bottom-nav targets (earnings, history). */
 export const DRIVER_PREFETCH_URLS = [
+  // Dashboard
+  "/api/driver/stats",
+  "/api/driver/compliance",
+  "/api/driver/inbox",
+  "/api/me/profile",
+  // Trip tab — also used by the dashboard to show the "Active trip" banner
   "/api/driver/rides/active",
+  // Earnings / history tabs
   "/api/driver/rides/history?limit=20&offset=0",
   "/api/driver/rides/history?limit=50&offset=0",
+  // Profile (Me) tab
+  "/api/driver/me",
+  "/api/me/avatar",
 ];

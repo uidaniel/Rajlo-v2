@@ -8,6 +8,15 @@ import { FadeUp } from "@/components/anim";
 import { HeroSkeleton, Skeleton } from "@/components/skeleton";
 import { usePush } from "@/lib/use-push";
 import { DeleteAccountDialog } from "@/components/delete-account-dialog";
+import {
+  getCachedDriverData,
+  setCachedDriverData,
+} from "@/lib/driver-prefetch";
+
+const DRIVER_ME_URL = "/api/driver/me";
+const AVATAR_URL = "/api/me/avatar";
+
+type CachedAvatar = { avatarUrl: string | null; source: "selfie" | "oauth" };
 
 /**
  * Driver self-edit profile page. Drivers update the fields they own:
@@ -39,8 +48,17 @@ type DriverMe = {
 };
 
 export default function DriverProfilePage() {
-  const [driver, setDriver] = useState<DriverMe | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Seed every piece of state from the bottom-nav's prefetch cache so
+  // tapping the "Me" tab lands on a fully-painted profile instead of
+  // a shimmer. The fetch below still runs to refresh, but the user
+  // only sees the latest values, never the empty/loading states.
+  const cachedDriver = getCachedDriverData<{ driver: DriverMe | null }>(
+    DRIVER_ME_URL,
+  )?.driver ?? null;
+  const cachedAvatar = getCachedDriverData<CachedAvatar>(AVATAR_URL);
+
+  const [driver, setDriver] = useState<DriverMe | null>(cachedDriver);
+  const [loading, setLoading] = useState(cachedDriver == null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
@@ -49,21 +67,31 @@ export default function DriverProfilePage() {
 
   // Editable form state — kept separate from the loaded `driver` so we
   // can detect dirty fields and let the rider revert with a refresh.
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [vehicleMake, setVehicleMake] = useState("");
-  const [vehicleModel, setVehicleModel] = useState("");
-  const [vehicleYear, setVehicleYear] = useState<string>("");
-  const [vehicleColor, setVehicleColor] = useState("");
+  const [firstName, setFirstName] = useState(cachedDriver?.first_name ?? "");
+  const [lastName, setLastName] = useState(cachedDriver?.last_name ?? "");
+  const [phone, setPhone] = useState(cachedDriver?.phone ?? "");
+  const [vehicleMake, setVehicleMake] = useState(
+    cachedDriver?.vehicle_make ?? "",
+  );
+  const [vehicleModel, setVehicleModel] = useState(
+    cachedDriver?.vehicle_model ?? "",
+  );
+  const [vehicleYear, setVehicleYear] = useState<string>(
+    cachedDriver?.vehicle_year?.toString() ?? "",
+  );
+  const [vehicleColor, setVehicleColor] = useState(
+    cachedDriver?.vehicle_color ?? "",
+  );
   // Driver's profile picture IS the verified TA selfie — there's no
   // separate "everyday avatar". `/api/me/avatar` already prefers the
   // selfie for drivers and falls back to OAuth picture if the selfie
   // hasn't been uploaded/approved yet (rare in the portal since the
   // layout gates on activation, but defensive).
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(
+    cachedAvatar?.avatarUrl ?? null,
+  );
   const [avatarSource, setAvatarSource] = useState<"selfie" | "oauth" | null>(
-    null,
+    cachedAvatar?.source ?? null,
   );
 
   useEffect(() => {
@@ -71,8 +99,8 @@ export default function DriverProfilePage() {
     (async () => {
       try {
         const [driverRes, avatarRes] = await Promise.all([
-          fetch("/api/driver/me"),
-          fetch("/api/me/avatar"),
+          fetch(DRIVER_ME_URL),
+          fetch(AVATAR_URL),
         ]);
         if (!driverRes.ok) throw new Error(`HTTP ${driverRes.status}`);
         const json = (await driverRes.json()) as { driver: DriverMe | null };
@@ -84,6 +112,12 @@ export default function DriverProfilePage() {
           return;
         }
         setDriver(json.driver);
+        setCachedDriverData(DRIVER_ME_URL, json);
+        // Only overwrite editable form fields the user hasn't started
+        // typing into. Since seeding from cache already populated them
+        // with the most recent server values, this catches the rare
+        // case where the background refresh resolved with a newer
+        // value while the user was reading the page.
         setFirstName(json.driver.first_name ?? "");
         setLastName(json.driver.last_name ?? "");
         setPhone(json.driver.phone ?? "");
@@ -93,12 +127,10 @@ export default function DriverProfilePage() {
         setVehicleColor(json.driver.vehicle_color ?? "");
 
         if (avatarRes.ok) {
-          const ajson = (await avatarRes.json()) as {
-            avatarUrl: string | null;
-            source: "selfie" | "oauth";
-          };
+          const ajson = (await avatarRes.json()) as CachedAvatar;
           setAvatarUrl(ajson.avatarUrl);
           setAvatarSource(ajson.source);
+          setCachedDriverData(AVATAR_URL, ajson);
         }
       } catch (e) {
         if (!cancelled)
