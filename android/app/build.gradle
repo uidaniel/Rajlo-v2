@@ -1,5 +1,19 @@
 apply plugin: 'com.android.application'
 
+// Release signing config is read from key.properties (gitignored).
+// To produce an AAB for Play Store:
+//   1. Drop key.properties in android/  (see key.properties.example)
+//   2. Drop your keystore file alongside it (or set storeFile to an absolute path)
+//   3. ./gradlew bundleRelease
+//      → android/app/build/outputs/bundle/release/app-release.aab
+// If key.properties is missing, the release build falls back to the
+// debug signing config so local development still works.
+def keystorePropertiesFile = rootProject.file("key.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     namespace = "com.rajlo.driver"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +21,12 @@ android {
         applicationId "com.rajlo.driver"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Date-encoded versionCode (YYYYMMDD) — guarantees a number
+        // higher than any small integer the previous developer almost
+        // certainly used. Bump on every Play Store upload; this style
+        // means we never have to remember what was last published.
+        versionCode 20260514
+        versionName "1.0.1"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +34,27 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        release {
+            if (keystorePropertiesFile.exists()) {
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Only attach the release signing config when key.properties
+            // is present. Without this guard, ./gradlew assembleRelease
+            // on a fresh checkout would fail with "Keystore file not set"
+            // instead of falling back to debug signing.
+            if (keystorePropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 }
