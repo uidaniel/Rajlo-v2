@@ -74,23 +74,20 @@ const DRIVER_TABS: Tab[] = [
 ];
 
 /** Hrefs of the tabs above — exported so MobileDrawer can hide them
- *  from the native drawer (the bottom bar already covers them). */
+ *  from the native drawer (the bottom bar already covers them) and
+ *  so the drawer's back-button-vs-hamburger logic can branch on it. */
 export const NATIVE_DRIVER_TAB_HREFS = new Set(
   DRIVER_TABS.map((tab) => tab.href),
 );
 
-/** Routes where the bottom bar should NOT show even inside the app. */
-const HIDDEN_PREFIXES = [
-  "/auth/",
-  "/driver/onboarding",
-  "/driver/pending",
-  "/driver/verify-on-web",
-  "/driver/download-app",
-  "/driver/resubmit",
-  "/driver/renew",
-  "/403",
-  "/404",
-];
+/** True when `pathname` is one of the five top-level tab routes. The
+ *  bottom bar should ONLY render on these; drawer items and deeper
+ *  pages (history detail, wallet, route taxi, etc.) get a full-bleed
+ *  page with an in-page back button instead. */
+export function isTopTabPath(pathname: string | null | undefined): boolean {
+  if (!pathname) return false;
+  return NATIVE_DRIVER_TAB_HREFS.has(pathname);
+}
 
 /**
  * Pick the active tab by **longest matching prefix across all tabs**.
@@ -132,10 +129,11 @@ export function NativeBottomNav() {
   );
   const pathname = usePathname() ?? "";
 
-  const shouldShow =
-    native &&
-    pathname.startsWith("/driver") &&
-    !HIDDEN_PREFIXES.some((p) => pathname.startsWith(p));
+  // Bottom bar only appears on the five top-level tab paths. Drawer
+  // items (Wallet, Route Taxi, Notifications, etc.) and deep details
+  // pages render full-bleed without the bar — they're "pushed views"
+  // in native-app terms and get a back button in the top chrome.
+  const shouldShow = native && isTopTabPath(pathname);
 
   // Toggle a body attribute so a CSS rule in globals.css can add
   // matching bottom padding to pages — keeps scrollable content
@@ -154,24 +152,16 @@ export function NativeBottomNav() {
     };
   }, [shouldShow]);
 
-  // Warm the common driver endpoints once the bar shows up. Each page
-  // checks the cache on mount and skips its skeleton if the prefetch
-  // already landed. We schedule with `requestIdleCallback` so the
-  // prefetches don't fight the initial render for bandwidth.
+  // Warm the common driver endpoints the moment the bar appears, so
+  // the first tab-tap from launch lands on cached data instead of a
+  // skeleton. We used to schedule via requestIdleCallback for politeness
+  // but on Android that idle frame can be 300–500ms out, which was long
+  // enough that a quick tap beat the prefetch — the cache then read
+  // empty and the page fell through to its skeleton.
   useEffect(() => {
     if (!shouldShow) return;
-    const run = () => {
-      for (const url of DRIVER_PREFETCH_URLS) {
-        void prefetchDriverData(url);
-      }
-    };
-    const w = window as Window & {
-      requestIdleCallback?: (cb: () => void) => number;
-    };
-    if (typeof w.requestIdleCallback === "function") {
-      w.requestIdleCallback(run);
-    } else {
-      setTimeout(run, 200);
+    for (const url of DRIVER_PREFETCH_URLS) {
+      void prefetchDriverData(url);
     }
   }, [shouldShow]);
 

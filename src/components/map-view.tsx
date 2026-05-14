@@ -218,6 +218,52 @@ export function MapView({
   // approach lets us render our own close button + keeps the same
   // CSS theming as the inline map.
   const [fullscreen, setFullscreen] = useState(false);
+  // Locate-me button state. `locating` flips on while we're waiting on
+  // the device GPS so we can swap the icon for a spinner — getting
+  // an A-GPS fix on a cold start can take 1-3s and silent button
+  // taps feel broken.
+  const [locating, setLocating] = useState(false);
+
+  const handleLocate = () => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    // Prefer the live-broadcast position (already on the map, no
+    // permission round-trip, no GPS wait) before asking the device.
+    // The component is used by both driver and rider surfaces so we
+    // accept either side's streamed location as "me" and only fall
+    // back to navigator.geolocation if neither is available.
+    const streamed = driverPosition ?? riderPosition;
+    if (streamed) {
+      map.panTo({ lat: streamed.lat, lng: streamed.lng });
+      map.setZoom(Math.max(map.getZoom() ?? 9, 16));
+      // Unlock interactions so the next pinch/drag doesn't have to
+      // dismiss the lock overlay first.
+      setLocked(false);
+      return;
+    }
+
+    if (typeof navigator === "undefined" || !navigator.geolocation) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const m = mapRef.current;
+        if (m) {
+          m.panTo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+          m.setZoom(Math.max(m.getZoom() ?? 9, 16));
+          setLocked(false);
+        }
+        setLocating(false);
+      },
+      () => {
+        // Permission denied / unavailable — silent. The user already
+        // sees the button "click" via the spinner toggle; spamming an
+        // alert here would be hostile.
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 8_000, maximumAge: 30_000 },
+    );
+  };
 
   // Init map + DirectionsService once. We retry once on a small delay if
   // the container isn't sized yet — that happens on iOS Safari when the
@@ -901,6 +947,45 @@ export function MapView({
             <path d="M6 6l12 12" />
           </svg>
           Cancel
+        </button>
+      )}
+
+      {/* Locate-me button. Mirrors Google Maps' standard control —
+         tap to recenter the map on the current device location and
+         zoom in. Hidden during the matcher search overlay (the radar
+         already locks the map) and while loading. */}
+      {!loadError && !searching && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            handleLocate();
+          }}
+          disabled={locating}
+          aria-label="Center map on my location"
+          className="absolute bottom-3 right-3 z-30 grid h-11 w-11 place-items-center rounded-full bg-white text-rajlo-black shadow-lg ring-1 ring-black/5 transition-all hover:-translate-y-0.5 hover:bg-white active:translate-y-0 disabled:opacity-70"
+        >
+          {locating ? (
+            <span className="h-4 w-4 animate-spin rounded-full border-2 border-rajlo-red border-t-transparent" />
+          ) : (
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="h-5 w-5"
+            >
+              <circle cx="12" cy="12" r="3" />
+              <circle cx="12" cy="12" r="9" />
+              <path d="M12 2v3" />
+              <path d="M12 19v3" />
+              <path d="M2 12h3" />
+              <path d="M19 12h3" />
+            </svg>
+          )}
         </button>
       )}
 

@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { Logo } from "./logo";
 import { Icon, type IconName } from "./icons";
-import { NATIVE_DRIVER_TAB_HREFS } from "./native-bottom-nav";
+import { NATIVE_DRIVER_TAB_HREFS, isTopTabPath } from "./native-bottom-nav";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { clearSessionPolicy } from "@/lib/session-policy";
 import { useT } from "@/lib/i18n";
@@ -77,6 +77,12 @@ export function MobileDrawer({
     native && onDriverRoute
       ? nav.filter((item) => !NATIVE_DRIVER_TAB_HREFS.has(item.href))
       : nav;
+
+  // In the native driver app, pages that are NOT one of the bottom-nav
+  // tabs (wallet, route taxi, notifications, deep details, etc.) lose
+  // the bottom bar and get a back-button on the left of the top bar
+  // instead — the standard "pushed view" pattern in real native apps.
+  const showBackButton = native && onDriverRoute && !isTopTabPath(pathname);
 
   // Fetch the signed-in user's profile for the footer block. We do
   // two parallel fetches: one for name/email/role from the profiles
@@ -236,11 +242,23 @@ export function MobileDrawer({
     // doesn't scroll at the body level.
     <div className="min-h-screen bg-background md:grid md:h-screen md:grid-cols-[280px_1fr] md:overflow-hidden">
       {/* ============== Mobile top bar ============== */}
-      <header className="sticky top-0 z-40 flex items-center justify-between gap-4 border-b border-line bg-surface px-4 py-3 md:hidden">
-        <Logo size="sm" tagline />
+      <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 md:hidden">
+        <div className="flex min-w-0 items-center gap-2">
+          {showBackButton && (
+            <button
+              type="button"
+              onClick={() => router.back()}
+              aria-label="Back"
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-surface-soft text-foreground hover:bg-surface active:scale-95"
+            >
+              <Icon name="chevron-left" className="h-5 w-5" />
+            </button>
+          )}
+          <Logo size="sm" tagline />
+        </div>
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="grid h-9 w-9 place-items-center rounded-lg border border-line bg-surface-soft hover:bg-surface"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-line bg-surface-soft hover:bg-surface"
           aria-label={isOpen ? "Close menu" : "Open menu"}
           aria-expanded={isOpen}
         >

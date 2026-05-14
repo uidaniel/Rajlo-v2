@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { AnimatePresence, m } from "motion/react";
 import { Icon } from "./icons";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { clearSessionPolicy } from "@/lib/session-policy";
@@ -74,16 +75,27 @@ export function DeleteAccountDialog({
     }
   };
 
-  if (!open) return null;
-
   return (
-    <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="delete-account-title"
-    >
-      <div className="relative w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl">
+    <AnimatePresence>
+      {open && (
+        <m.div
+          key="delete-account"
+          className="fixed inset-0 z-[80] flex items-end justify-center bg-black/60 backdrop-blur-sm sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-account-title"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+        >
+          <m.div
+            className="relative w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
+            initial={{ opacity: 0, y: 24, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.98 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          >
         {/* Header */}
         <div className="bg-rajlo-red px-5 py-5 text-white">
           <div className="flex items-center gap-3">
@@ -259,7 +271,9 @@ export function DeleteAccountDialog({
             </div>
           </div>
         )}
-      </div>
-    </div>
+          </m.div>
+        </m.div>
+      )}
+    </AnimatePresence>
   );
 }

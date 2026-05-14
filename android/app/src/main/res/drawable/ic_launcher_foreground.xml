@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive launcher icon foreground for the Rajlo Driver app.
+
+  Was: the @capacitor/assets-generated default (the blue Capacitor "X"
+  on a teal grid). That's why the home-screen icon and status-bar icon
+  both showed the Capacitor placeholder instead of the brand.
+
+  Now: the brand "o" ring + arc rendered in white, drawn from the
+  same path data as `src/components/logo.tsx`'s LogoIcon export.
+  Background is owned by `values/ic_launcher_background.xml` (red
+  #F10100) so the launcher composes red-bg + white-icon adaptively.
+
+  Sizing:
+    - Adaptive icon viewport is 108×108 dp.
+    - Source path bbox is 130×115 (viewBox 349 339 130 115 in the SVG).
+    - Scale 0.5 → rendered 65×57.5 dp, centered around (54, 54).
+    - 65×57.5 sits comfortably inside Android's 66 dp safe-zone circle
+      so every launcher mask (circle, squircle, rounded square)
+      reveals the full mark with no cropping.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.5"
+        android:scaleY="0.5"
+        android:translateX="-153"
+        android:translateY="-144">
+        <!-- "O" — hollow ring -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M413.75,363.1c24.55,0,43.87,19.32,43.87,43.34s-19.32,43.34-43.87,43.34-43.86-19.32-43.86-43.34S389.21,363.1,413.75,363.1Zm0,72.06c16.71,0,27.16-12,27.16-28.72s-10.45-28.72-27.16-28.72-27.15,12-27.15,28.72S397,435.16,413.75,435.16Z" />
+        <!-- Arc above the O (the "movement shape") -->
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M413.53,339.93a64.37,64.37,0,0,0-63.7,55.7H365a49.27,49.27,0,0,1,97,0h15.18A64.37,64.37,0,0,0,413.53,339.93Z" />
+    </group>
+</vector>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { m } from "motion/react";
 import { Icon } from "./icons";
 
 /**
@@ -69,13 +70,26 @@ export function RateDialog({
   };
 
   return (
-    <div
+    // Parent mounts this conditionally so an AnimatePresence wrapper
+    // here can't replay exit on close — that would require lifting
+    // open-state into every caller. Entry animation only is still a
+    // clear "this just appeared" cue and matches what the other
+    // popups now do on enter.
+    <m.div
       role="dialog"
       aria-modal="true"
       aria-labelledby="rate-dialog-title"
       className="fixed inset-0 z-50 grid place-items-center bg-rajlo-black/60 px-4 py-6 backdrop-blur-sm"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
     >
-      <div className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-surface shadow-2xl">
+      <m.div
+        className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-surface shadow-2xl"
+        initial={{ opacity: 0, y: 16, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+      >
         <button
           type="button"
           onClick={onClose}
@@ -143,7 +157,7 @@ export function RateDialog({
             {submitted ? "Done" : "Cancel"}
           </button>
         </div>
-      </div>
-    </div>
+      </m.div>
+    </m.div>
   );
 }
