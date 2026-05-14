@@ -171,6 +171,7 @@ export function DriverOnlinePresence() {
       return;
     }
     let cancelled = false;
+    let appStateUnsub: (() => void) | null = null;
 
     const probe = async () => {
       if (cancelled) return;
@@ -186,9 +187,19 @@ export function DriverOnlinePresence() {
       } catch {
         /* Permissions API unavailable — fall through to the fix probe */
       }
-      // On Android the Permissions API can report "granted" while the
-      // OS-level location service is OFF (the "Location" toggle in
-      // quick settings). Only an actual position request reveals that.
+      // On Android the Permissions API reports "granted" (the app
+      // permission) even while the OS-level Location service is OFF —
+      // the system-wide quick-settings toggle. The only reliable way
+      // to detect that is to attempt a fresh fix and watch for
+      // POSITION_UNAVAILABLE.
+      //
+      // `maximumAge: 0` is the critical fix here. The old value
+      // (60_000) let the browser return a cached fix up to a minute
+      // old — so if the driver turned location off while the app was
+      // backgrounded, reopening the app within 60s would silently
+      // accept the stale cached position and we'd never know location
+      // had gone off. Forcing a fresh hardware fix turns that into a
+      // PROPER POSITION_UNAVAILABLE error.
       if (!denied) {
         try {
           await new Promise<void>((resolve, reject) => {
@@ -197,15 +208,16 @@ export function DriverOnlinePresence() {
               (err) => reject(err),
               {
                 enableHighAccuracy: false,
-                maximumAge: 60_000,
-                timeout: 5_000,
+                maximumAge: 0,
+                timeout: 7_000,
               },
             );
           });
         } catch (err) {
           const code = (err as GeolocationPositionError | null)?.code;
           // 1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE.
-          // Timeouts (3) are transient and we don't treat them as off.
+          // Timeouts (3) are transient and we don't treat them as off
+          // — a real off-state returns code 2 quickly on Android.
           if (code === 1 || code === 2) denied = true;
         }
       }
@@ -214,15 +226,41 @@ export function DriverOnlinePresence() {
 
     void probe();
     const timer = setInterval(probe, PERMISSION_CHECK_INTERVAL_MS);
+
+    // Browser-level visibility flip (works on the web + most native
+    // WebViews). Re-probes the moment the driver returns to the app.
     const onVisibility = () => {
       if (document.visibilityState === "visible") void probe();
     };
     document.addEventListener("visibilitychange", onVisibility);
 
+    // Native Capacitor: the app's `appStateChange` listener fires
+    // reliably on Android when the user comes back from Settings,
+    // the quick-settings tray, or any other system surface — more
+    // reliable than the WebView's visibilitychange on some Android
+    // builds. The dynamic import keeps @capacitor/app out of the
+    // web bundle.
+    void (async () => {
+      try {
+        const { App } = await import("@capacitor/app");
+        const handle = await App.addListener("appStateChange", (state) => {
+          if (state.isActive) void probe();
+        });
+        if (cancelled) {
+          void handle.remove();
+        } else {
+          appStateUnsub = () => void handle.remove();
+        }
+      } catch {
+        /* not in a Capacitor context — no-op */
+      }
+    })();
+
     return () => {
       cancelled = true;
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
+      if (appStateUnsub) appStateUnsub();
     };
   }, [online, onDriverPortal]);
 
