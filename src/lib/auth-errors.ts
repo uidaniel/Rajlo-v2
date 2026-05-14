@@ -35,3 +35,46 @@ export function friendlyError(code: string | null): string | null {
       return code;
   }
 }
+
+/**
+ * Catches the "I signed up with Google, then tried to sign in with a
+ * password" case and returns a helpful explanation pointing the user
+ * at the Google button. Called from the login pages AFTER a failed
+ * `signInWithPassword` so we don't leak account existence to crawlers
+ * — only to someone who already typed the email + a wrong password.
+ *
+ * Returns `null` if the email isn't OAuth-only (so the caller falls
+ * back to whatever message Supabase already gave us — usually the
+ * generic "invalid login credentials").
+ */
+export async function detectOAuthOnlyEmail(
+  email: string,
+): Promise<string | null> {
+  if (!email || !email.includes("@")) return null;
+  try {
+    const res = await fetch("/api/auth/check-identity", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      exists?: boolean;
+      providers?: string[];
+    };
+    if (!data?.exists) return null;
+    const providers = data.providers ?? [];
+    const hasEmail = providers.includes("email");
+    const hasGoogle = providers.includes("google");
+    if (!hasEmail && hasGoogle) {
+      return "This email is registered with Google. Tap “Continue with Google” above to sign in — there's no password set on this account.";
+    }
+    if (!hasEmail && providers.length > 0) {
+      // Any other OAuth-only provider (Apple etc.) — generic guidance.
+      return `This email is registered via ${providers[0]}. Use that sign-in method instead.`;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}

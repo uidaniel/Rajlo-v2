@@ -11,7 +11,7 @@ import {
   AuthDivider,
 } from "@/components/auth-shell";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { friendlyError } from "@/lib/auth-errors";
+import { friendlyError, detectOAuthOnlyEmail } from "@/lib/auth-errors";
 import { setSessionPolicy } from "@/lib/session-policy";
 
 export default function RiderLoginPage() {
@@ -47,7 +47,13 @@ function RiderLoginInner() {
     });
 
     if (authError) {
-      setError(authError.message);
+      // Detect the "signed up with Google, then tried email/password"
+      // case so we can point them at the right button instead of the
+      // generic "invalid credentials" message. Only fires after a
+      // failed password attempt — keeps email enumeration off the
+      // public surface.
+      const friendly = await detectOAuthOnlyEmail(email);
+      setError(friendly ?? authError.message);
       setIsLoading(false);
       return;
     }

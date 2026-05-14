@@ -16,9 +16,21 @@ export default function ForgotPasswordPage() {
     setError(null);
 
     const supabase = createSupabaseBrowserClient();
-    const { error: authError } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/callback?next=/auth/reset-password`,
-    });
+    // Prefer the explicit production origin if NEXT_PUBLIC_SITE_URL is
+    // set on the deploy — defends against the email landing in a
+    // browser where `window.location.origin` later resolves to a
+    // preview URL or, worse, localhost (an open dev server can
+    // accidentally swallow the link). Falls back to the current
+    // origin so dev still works without the env var.
+    const baseOrigin =
+      (process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ||
+        window.location.origin);
+    const { error: authError } = await supabase.auth.resetPasswordForEmail(
+      email,
+      {
+        redirectTo: `${baseOrigin}/auth/callback?next=/auth/reset-password`,
+      },
+    );
 
     if (authError) {
       setError(authError.message);

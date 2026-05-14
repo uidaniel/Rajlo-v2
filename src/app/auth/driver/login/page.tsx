@@ -11,7 +11,7 @@ import {
   AuthDivider,
 } from "@/components/auth-shell";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import { friendlyError } from "@/lib/auth-errors";
+import { friendlyError, detectOAuthOnlyEmail } from "@/lib/auth-errors";
 import { setSessionPolicy } from "@/lib/session-policy";
 import { isNativeApp } from "@/lib/native";
 
@@ -48,7 +48,9 @@ function DriverLoginInner() {
     });
 
     if (authError) {
-      setError(authError.message);
+      // OAuth-only-account detection (see rider login for context).
+      const friendly = await detectOAuthOnlyEmail(email);
+      setError(friendly ?? authError.message);
       setIsLoading(false);
       return;
     }
