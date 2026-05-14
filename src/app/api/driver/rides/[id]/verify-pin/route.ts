@@ -132,7 +132,6 @@ export async function POST(
         status: "cancelled",
         cancelled_at: now,
         cancellation_reason: "pin_mismatch",
-        cancelled_by: "driver",
       })
       .eq("id", ride.id);
     if (cancelErr) {

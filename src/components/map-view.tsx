@@ -223,10 +223,22 @@ export function MapView({
   // an A-GPS fix on a cold start can take 1-3s and silent button
   // taps feel broken.
   const [locating, setLocating] = useState(false);
+  // Follow-the-car mode. When ON, the map auto-pans on every new
+  // driver-position broadcast so the car stays centered as it
+  // moves — the standard navigation-app feel. Turns OFF the moment
+  // the user manually drags the map (so they can explore without
+  // it snapping back), and back ON when they tap the locate-me
+  // button. Default ON because most page-loads land on a moving
+  // trip where the centered behaviour is wanted.
+  const followModeRef = useRef(true);
 
   const handleLocate = () => {
     const map = mapRef.current;
     if (!map) return;
+
+    // Re-arm follow-mode — the user explicitly asked to be centered,
+    // so the next position update should keep them centered too.
+    followModeRef.current = true;
 
     // Prefer the live-broadcast position (already on the map, no
     // permission round-trip, no GPS wait) before asking the device.
@@ -296,6 +308,15 @@ export function MapView({
           styles: MAP_STYLE,
         });
         directionsServiceRef.current = new g.maps.DirectionsService();
+        // Any user-driven drag disables follow-the-car mode — the
+        // driver/rider is explicitly looking at a different area, so
+        // we don't want the next position broadcast to yank them
+        // back. Re-arm follow when they tap the locate-me button.
+        // We check ev.domEvent so programmatic panTo() calls don't
+        // count as user drags (those have no DOM event).
+        mapRef.current.addListener("dragstart", (ev: { domEvent?: Event }) => {
+          if (ev?.domEvent) followModeRef.current = false;
+        });
         // Wake up any effects waiting for the map to exist (markers,
         // polyline, fleet dots, live-route).
         setMapReady(true);
@@ -637,7 +658,17 @@ export function MapView({
         driverIconBucketRef.current = bucket;
       }
     }
-  }, [driverPosition]);
+
+    // Follow-the-car: pan the map to keep the driver marker centered
+    // as the car moves, the way every native navigation app behaves.
+    // We don't touch zoom — the user's current zoom level is theirs to
+    // control. Skipped when the user has manually dragged (the
+    // `dragstart` listener on the map sets followModeRef.current=false)
+    // or while the searching overlay is up (the radar owns the map).
+    if (followModeRef.current && !searching && !locked) {
+      map.panTo(pos);
+    }
+  }, [driverPosition, searching, locked]);
 
   // Fleet markers (Phase 2A.4 — nearby online drivers on booking screen).
   // We diff against the previous set: existing driverIds get setPosition,
