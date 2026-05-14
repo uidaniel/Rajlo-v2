@@ -174,11 +174,17 @@ export async function POST(
     .from("rides")
     .update({ pin_attempts: nextAttempts })
     .eq("id", ride.id);
+  // 422 (Unprocessable Entity) — the request was valid auth-wise,
+  // the submitted value just doesn't match. We deliberately avoid
+  // 401 here because the global AuthFetchGuard treats any 401 from
+  // a same-origin API as "session expired" and bounces the driver
+  // to the login page, which is the exact thing a wrong-PIN entry
+  // shouldn't do.
   return NextResponse.json(
     {
       error: "Wrong PIN.",
       remainingAttempts,
     },
-    { status: 401 },
+    { status: 422 },
   );
 }

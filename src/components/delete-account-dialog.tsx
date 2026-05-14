@@ -88,6 +88,12 @@ export function DeleteAccountDialog({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+          onClick={() => {
+            if (!busy) {
+              reset();
+              onClose();
+            }
+          }}
         >
           <m.div
             className="relative w-full max-w-md overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:rounded-3xl"
@@ -95,6 +101,7 @@ export function DeleteAccountDialog({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            onClick={(e) => e.stopPropagation()}
           >
         {/* Header */}
         <div className="bg-rajlo-red px-5 py-5 text-white">

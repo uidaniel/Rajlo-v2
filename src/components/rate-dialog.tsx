@@ -83,12 +83,16 @@ export function RateDialog({
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+      onClick={() => {
+        if (!submitting) onClose();
+      }}
     >
       <m.div
         className="relative w-full max-w-sm overflow-hidden rounded-3xl bg-surface shadow-2xl"
         initial={{ opacity: 0, y: 16, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        onClick={(e) => e.stopPropagation()}
       >
         <button
           type="button"
