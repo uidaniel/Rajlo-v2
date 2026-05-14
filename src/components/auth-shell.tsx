@@ -83,9 +83,19 @@ export function AuthShell({
 }: AuthShellProps) {
   const { eyebrow, quotes, mockup: Mockup } = AUDIENCE_COPY[audience];
 
+  // Staff sign-in is intentionally minimal — no marketing/brand panel,
+  // no rotating taglines, no phone mockup. Internal ops users get a
+  // single-column page with the wordmark up top and the form below it.
+  // The rider + driver sign-ins still ship the full two-pane marketing
+  // shell because those screens are first impressions for outside users.
+  const minimal = audience === "admin";
+
   return (
-    <div className="grid min-h-screen md:h-screen md:grid-cols-2">
+    <div
+      className={`grid min-h-screen ${minimal ? "" : "md:h-screen md:grid-cols-2"}`}
+    >
       {/* ──────── Brand panel (md+) ──────── */}
+      {!minimal && (
       <aside className="relative hidden overflow-hidden bg-rajlo-red text-white md:flex md:flex-col md:justify-between md:p-12">
         <ArcWatermark
           size={720}
@@ -147,6 +157,7 @@ export function AuthShell({
           </p>
         </FadeUp>
       </aside>
+      )}
 
       {/* ──────── Form panel ──────── */}
       {/*
@@ -182,10 +193,22 @@ export function AuthShell({
           />
         </div>
 
-        {/* Mobile-only logo */}
-        <div className="md:hidden">
-          <Logo size="sm" tagline />
-        </div>
+        {/* Logo at the top of the form panel.
+           - Marketing audiences (rider, driver): mobile-only — the
+             desktop layout already carries a big white logo in the
+             brand panel.
+           - Staff sign-in (admin): visible on every breakpoint since
+             there's no brand panel; rendered in the default red+black
+             variant so it reads as the Rajlo wordmark immediately. */}
+        {minimal ? (
+          <div className="flex justify-center pt-2 md:pt-0">
+            <Logo size="md" tagline />
+          </div>
+        ) : (
+          <div className="md:hidden">
+            <Logo size="sm" tagline />
+          </div>
+        )}
 
         {/*
          * `my-auto` (in a flex-col parent) vertically centers the form when
