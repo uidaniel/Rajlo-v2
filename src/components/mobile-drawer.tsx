@@ -237,24 +237,36 @@ export function MobileDrawer({
   }, [isOpen]);
 
   return (
-    // Lock to viewport height on EVERY breakpoint and clip overflow so
-    // only the <main> below scrolls. On mobile this also makes the
-    // sticky <header> truly fixed (it's a flex item now, not a sticky
-    // child of a body-scrolling tree) and the bottom nav truly fixed
-    // (the page's content never scrolls past it because content scrolls
-    // INSIDE <main>, not the body). This is the standard native-app
-    // shell pattern.
-    //
-    // The previous `min-h-screen + sticky top-0` setup broke because
-    // the page-transition motion.div introduces a transform on the
-    // sticky element's ancestor — which moves sticky's containing
-    // block from the viewport to the motion.div, so the header
-    // scrolled away with the page. Internal main-scroll sidesteps that.
-    <div className="flex h-[100dvh] flex-col bg-background md:grid md:h-screen md:grid-cols-[280px_1fr] md:overflow-hidden">
+    // Layout structure is scoped to driver routes only. The driver
+    // native app needs the "internal <main> scrolls" pattern so the
+    // top bar + bottom nav stay anchored when the page-transition
+    // motion.div applies its transform (which would otherwise turn
+    // sticky elements into "stick within the motion.div" elements
+    // and let them scroll off). Rider + admin portals don't have a
+    // bottom nav OR a page-transition wrapper, so they keep the
+    // simpler body-scroll layout — which gives them back the
+    // browser's native scroll feel (pull-to-refresh, address-bar
+    // collapse, etc.) and removes the empty bottom strip the user
+    // flagged on the rider side.
+    <div
+      className={
+        onDriverRoute
+          ? "flex h-[100dvh] flex-col bg-background md:grid md:h-screen md:grid-cols-[280px_1fr] md:overflow-hidden"
+          : "min-h-screen bg-background md:grid md:h-screen md:grid-cols-[280px_1fr] md:overflow-hidden"
+      }
+    >
       {/* ============== Mobile top bar ==============
-         shrink-0 flex item, NOT sticky. Sits at the top of the flex
-         column and never moves; the user scrolls <main> below. */}
-      <header className="z-40 flex shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 md:hidden">
+         Driver routes: shrink-0 flex item (header is locked at the
+         top of the viewport-height flex column).
+         Rider/admin:   sticky top-0 (header rides body scroll as
+         it always did — keeps the rider portal unchanged). */}
+      <header
+        className={
+          onDriverRoute
+            ? "z-40 flex shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 md:hidden"
+            : "sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 md:hidden"
+        }
+      >
         <div className="flex min-w-0 items-center gap-2">
           {showBackButton && (
             <button
@@ -438,7 +450,17 @@ export function MobileDrawer({
          scopes scrolling here — header + bottom nav never participate.
          Bottom padding is owned by the global rule on `body main` so
          content clears the fixed bottom nav. */}
-      <main className="relative flex-1 overflow-y-auto overflow-x-hidden">
+      <main
+        className={
+          onDriverRoute
+            ? // Driver: internal scroll container so the chrome stays put.
+              "relative flex-1 overflow-y-auto overflow-x-hidden"
+            : // Rider/admin: body scrolls (original behaviour). The
+              // pb-20 reserves bottom breathing room since there's no
+              // floating bottom nav to clear here.
+              "relative overflow-x-hidden pb-20 md:overflow-y-auto md:pb-0"
+        }
+      >
         {children}
       </main>
     </div>
