@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
+import { AnimatePresence, m } from "motion/react";
 import { MapView } from "@/components/map-view";
 import { HailChatSheet } from "@/components/hail-chat-sheet";
 import { nearestParish, type Place } from "@/lib/jamaica";
@@ -516,51 +517,121 @@ function StartSessionPicker({
         </section>
       </FadeUp>
 
-      {selected && (
-        <FadeUp delay={0.05}>
-          <section className="sticky bottom-4 z-20 rounded-3xl border border-line bg-surface p-5 shadow-2xl shadow-rajlo-red/10 md:p-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-end md:gap-5">
-              <div className="min-w-0 flex-1">
-                <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
-                  Selected
-                </p>
-                <p className="mt-0.5 truncate text-sm font-extrabold tracking-tight md:text-base">
-                  {selected.origin} <span className="text-rajlo-red">→</span>{" "}
-                  {selected.destination}
-                </p>
-                <p className="mt-0.5 text-xs text-muted">
-                  {selected.distanceKm.toFixed(1)} km ·{" "}
-                  {formatJMD(selected.taFareJmd)}/leg
-                </p>
+      {/* Bottom-sheet for the chosen route. Lives outside the page's
+         scrolling container as a fixed-viewport panel so it stays
+         glued to the bottom of the screen regardless of how far the
+         driver has scrolled through the route list. Slides up from
+         below on selection, slides back down when cleared — same
+         pattern as a native Android "info sheet". */}
+      <AnimatePresence>
+        {selected && (
+          <>
+            {/* Backdrop tap clears the selection. Just a translucent
+               overlay — leaves the route list visible behind so the
+               driver can see what they're picking from. */}
+            <m.button
+              key="route-sheet-backdrop"
+              type="button"
+              aria-label="Clear selection"
+              className="fixed inset-x-0 bottom-0 top-0 z-30 cursor-default bg-black/30 backdrop-blur-[2px]"
+              onClick={() => setSelected(null)}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+            />
+            <m.section
+              key="route-sheet"
+              className="fixed inset-x-0 bottom-0 z-40 rounded-t-3xl border-t border-line bg-surface px-5 pb-[max(env(safe-area-inset-bottom,0px),1rem)] pt-3 shadow-[0_-12px_40px_-12px_rgba(0,0,0,0.25)] md:mx-auto md:max-w-3xl md:rounded-3xl md:border md:bottom-4 md:px-6 md:pb-6"
+              role="dialog"
+              aria-modal="false"
+              aria-labelledby="route-sheet-title"
+              initial={{ y: "100%", opacity: 0.6 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: "100%", opacity: 0.6 }}
+              transition={{
+                type: "spring",
+                stiffness: 380,
+                damping: 36,
+                mass: 0.9,
+              }}
+            >
+              {/* Grab handle — visual affordance that this is a sheet
+                 and tells the eye where to look for a swipe target. */}
+              <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-line md:hidden" />
+
+              <div className="flex items-start justify-between gap-3 md:hidden">
+                <div className="min-w-0 flex-1">
+                  <p
+                    id="route-sheet-title"
+                    className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red"
+                  >
+                    Selected
+                  </p>
+                  <p className="mt-0.5 truncate text-sm font-extrabold tracking-tight">
+                    {selected.origin}{" "}
+                    <span className="text-rajlo-red">→</span>{" "}
+                    {selected.destination}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {selected.distanceKm.toFixed(1)} km ·{" "}
+                    {formatJMD(selected.taFareJmd)}/leg
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelected(null)}
+                  aria-label="Close"
+                  className="grid h-9 w-9 shrink-0 place-items-center rounded-full border border-line bg-surface-soft text-muted hover:bg-surface"
+                >
+                  <Icon name="x" className="h-4 w-4" />
+                </button>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 md:flex md:items-center">
-                <DirectionToggle value={direction} onChange={setDirection} />
-                <CapacityStepper value={capacity} onChange={setCapacity} />
-              </div>
+              <div className="mt-3 flex flex-col gap-4 md:mt-0 md:flex-row md:items-end md:gap-5">
+                <div className="hidden min-w-0 flex-1 md:block">
+                  <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                    Selected
+                  </p>
+                  <p className="mt-0.5 truncate text-sm font-extrabold tracking-tight md:text-base">
+                    {selected.origin}{" "}
+                    <span className="text-rajlo-red">→</span>{" "}
+                    {selected.destination}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {selected.distanceKm.toFixed(1)} km ·{" "}
+                    {formatJMD(selected.taFareJmd)}/leg
+                  </p>
+                </div>
 
-              <button
-                type="button"
-                onClick={startSession}
-                disabled={starting}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-rajlo-red px-6 py-3 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 transition-all hover:-translate-y-0.5 hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {starting ? (
-                  <>
-                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-[2px] border-white border-t-transparent" />
-                    Going live…
-                  </>
-                ) : (
-                  <>
-                    Go live on this route
-                    <Icon name="arrow-right" className="h-4 w-4" />
-                  </>
-                )}
-              </button>
-            </div>
-          </section>
-        </FadeUp>
-      )}
+                <div className="grid grid-cols-2 gap-2 md:flex md:items-center">
+                  <DirectionToggle value={direction} onChange={setDirection} />
+                  <CapacityStepper value={capacity} onChange={setCapacity} />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={startSession}
+                  disabled={starting}
+                  className="inline-flex items-center justify-center gap-2 rounded-full bg-rajlo-red px-6 py-3 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 transition-all hover:-translate-y-0.5 hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {starting ? (
+                    <>
+                      <span className="h-3.5 w-3.5 animate-spin rounded-full border-[2px] border-white border-t-transparent" />
+                      Going live…
+                    </>
+                  ) : (
+                    <>
+                      Go live on this route
+                      <Icon name="arrow-right" className="h-4 w-4" />
+                    </>
+                  )}
+                </button>
+              </div>
+            </m.section>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
