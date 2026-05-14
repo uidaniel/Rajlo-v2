@@ -60,8 +60,6 @@ export default function DriverProfilePage() {
   const [driver, setDriver] = useState<DriverMe | null>(cachedDriver);
   const [loading, setLoading] = useState(cachedDriver == null);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [savedAt, setSavedAt] = useState<number | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const push = usePush();
 
@@ -144,37 +142,6 @@ export default function DriverProfilePage() {
     };
   }, []);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      // Vehicle fields are NOT sent — they're read-only on this page
-      // and only changeable via the vehicle-change request flow which
-      // re-collects compliance documents.
-      const res = await fetch("/api/driver/me", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          firstName,
-          lastName,
-          phone,
-        }),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error ?? `Server returned ${res.status}`);
-      }
-      setSavedAt(Date.now());
-      // Hide the "Saved!" badge after 2.5s.
-      setTimeout(() => setSavedAt(null), 2500);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't save.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
   if (loading) {
     // Profile layout skeleton: hero + info banner + 3 sections
     // (personal, vehicle, compliance), each with field placeholders.
@@ -237,10 +204,7 @@ export default function DriverProfilePage() {
     .join(" ");
 
   return (
-    <form
-      onSubmit={handleSave}
-      className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8"
-    >
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">
@@ -343,31 +307,26 @@ export default function DriverProfilePage() {
         </Section>
       </FadeUp>
 
-      {/* Personal */}
+      {/* Personal — read-only.
+         Name and phone are tied to the verified TA record and the
+         masked-call routing system, so a silent self-edit isn't
+         allowed. Riders see the name on every trip share-link and
+         live-trip view; the phone is the number our masked-call
+         layer routes through. Changes need re-verification, same
+         path as email + compliance IDs — contact support. */}
       <FadeUp delay={0.08}>
         <Section title="Personal" icon="user">
+          <p className="text-xs text-muted">
+            These details are tied to your TA verification. To update them,
+            contact support.
+          </p>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Field
-              label="First name"
-              value={firstName}
-              onChange={setFirstName}
-              placeholder="Andre"
-              required
-            />
-            <Field
-              label="Last name"
-              value={lastName}
-              onChange={setLastName}
-              placeholder="Thompson"
-              required
-            />
+            <ReadOnlyField label="First name" value={firstName || "—"} />
+            <ReadOnlyField label="Last name" value={lastName || "—"} />
           </div>
-          <Field
+          <ReadOnlyField
             label="Phone"
-            value={phone}
-            onChange={setPhone}
-            placeholder="+1 876 555 0143"
-            type="tel"
+            value={phone || "—"}
             help="Riders call this number through Rajlo's masked-call system."
           />
           <ReadOnlyField
@@ -606,50 +565,12 @@ export default function DriverProfilePage() {
         </Section>
       </FadeUp>
 
-      {/* Save bar */}
-      <FadeUp delay={0.2}>
-        <div className="sticky bottom-0 z-10 -mx-4 flex flex-col gap-2 border-t border-line bg-surface/95 px-4 py-3 backdrop-blur md:relative md:mx-0 md:rounded-2xl md:border md:px-5 md:py-4">
-          {error && (
-            <p className="rounded-xl bg-primary-soft px-3 py-2 text-xs font-semibold text-rajlo-red">
-              {error}
-            </p>
-          )}
-          <div className="flex items-center justify-between gap-3">
-            <p
-              className={`text-xs font-bold transition-opacity ${
-                savedAt ? "text-emerald-700" : "text-muted opacity-0"
-              }`}
-            >
-              {savedAt && (
-                <>
-                  <Icon
-                    name="check-circle"
-                    className="mr-1 inline h-3.5 w-3.5 align-text-bottom"
-                  />
-                  Saved
-                </>
-              )}
-            </p>
-            <button
-              type="submit"
-              disabled={saving}
-              className="inline-flex items-center gap-2 rounded-full bg-rajlo-red px-6 py-3 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 transition-all hover:-translate-y-0.5 hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {saving ? (
-                <>
-                  <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Saving…
-                </>
-              ) : (
-                <>
-                  Save changes
-                  <Icon name="check-circle" className="h-4 w-4" />
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      </FadeUp>
+      {/* Nothing on this page is self-editable anymore — every field is
+         locked to verified TA / compliance data and changes need
+         support. The save bar that used to live here was removed
+         along with the editable Personal fields. Errors from the
+         initial fetch surface above via the `error && !driver` early
+         return. */}
 
       {/* Delete account — required by Google Play. Permanent. The
           dialog handles the two-step confirmation + API call. Sitting
@@ -690,7 +611,7 @@ export default function DriverProfilePage() {
         role="driver"
         onClose={() => setDeleteDialogOpen(false)}
       />
-    </form>
+    </div>
   );
 }
 

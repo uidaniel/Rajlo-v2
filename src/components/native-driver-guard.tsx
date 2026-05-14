@@ -55,6 +55,19 @@ export function NativeDriverGuard() {
   const pathname = usePathname();
   const router = useRouter();
 
+  // Mark <html> with `data-rajlo-native="1"` so globals.css can apply
+  // native-only styling (disabled text selection, no long-press
+  // callout, etc.). Set once on mount when we're in the Capacitor
+  // shell; web users never see the attribute.
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    if (typeof document === "undefined") return;
+    document.documentElement.dataset.rajloNative = "1";
+    return () => {
+      delete document.documentElement.dataset.rajloNative;
+    };
+  }, []);
+
   useEffect(() => {
     if (!isNativeApp()) return;
     if (!pathname) return;

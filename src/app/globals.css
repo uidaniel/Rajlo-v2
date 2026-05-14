@@ -342,6 +342,34 @@ button {
 }
 
 /*
+ * Native-app text selection lockdown. Inside the Capacitor shell,
+ * long-pressing anything should NOT pop the system text-select
+ * handles / "Copy" callout — that's browser UX, not app UX. The
+ * data attribute is set by NativeDriverGuard on mount, so this only
+ * applies when actually running in the native WebView (web stays
+ * normal so marketing-site users can still select / copy).
+ *
+ * Exceptions: real input controls + anything with the `select-text`
+ * utility class (or `contenteditable`) — we want OTP boxes, chat
+ * composer, etc. to behave normally.
+ */
+html[data-rajlo-native="1"] body,
+html[data-rajlo-native="1"] body * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+html[data-rajlo-native="1"] input,
+html[data-rajlo-native="1"] textarea,
+html[data-rajlo-native="1"] [contenteditable="true"],
+html[data-rajlo-native="1"] [contenteditable=""],
+html[data-rajlo-native="1"] .select-text {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
+/*
  * Smooth scrolling + iOS-style overscroll behaviour. `contain`
  * prevents the rubber-band bounce from propagating to the parent
  * page when scrolling inside a modal / sheet — feels much more
