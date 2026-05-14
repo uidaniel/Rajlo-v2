@@ -35,6 +35,8 @@ import { Icon } from "./icons";
 
 const ONLINE_EVENT = "rajlo:driver-online-changed";
 const PERMISSION_CHECK_INTERVAL_MS = 15_000;
+const ROUTE_SESSION_REFRESH_MS = 30_000;
+const ROUTE_SESSION_URL = "/api/driver/route-taxi/sessions/current";
 
 /** Notify the global presence component that the driver toggled
  *  online from somewhere else (the dashboard toggle, a server
@@ -54,6 +56,12 @@ export function DriverOnlinePresence() {
   const [online, setOnline] = useState(false);
   const [locationOff, setLocationOff] = useState(false);
   const [going, setGoing] = useState<"offline" | null>(null);
+  // True when the driver has an open route-taxi hailing session. While
+  // this is true we remove the "Go offline" escape from the
+  // location-off modal — the driver has riders mid-route relying on
+  // their GPS, so the only acceptable resolution is to re-enable
+  // location.
+  const [hasRouteSession, setHasRouteSession] = useState(false);
 
   /* ─── Auth user id ─── */
   useEffect(() => {
@@ -108,6 +116,45 @@ export function DriverOnlinePresence() {
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [driverUserId]);
+
+  /* ─── Route-taxi session presence ───
+   *
+   * Polled alongside the location-permission probe so the modal
+   * (rendered further down) can decide whether to offer "Go offline"
+   * as an out. While a session is open, that escape is hidden and
+   * the driver must re-enable location to dismiss.
+   */
+  useEffect(() => {
+    if (!driverUserId || !onDriverPortal) {
+      setHasRouteSession(false);
+      return;
+    }
+    let cancelled = false;
+
+    const refresh = async () => {
+      try {
+        const res = await fetch(ROUTE_SESSION_URL);
+        if (!res.ok) return;
+        const json = (await res.json()) as { session?: unknown };
+        if (!cancelled) setHasRouteSession(!!json.session);
+      } catch {
+        /* silent — next tick or visibility flip will retry */
+      }
+    };
+
+    void refresh();
+    const timer = setInterval(refresh, ROUTE_SESSION_REFRESH_MS);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [driverUserId, onDriverPortal]);
 
   /* ─── Position broadcast — drives the foreground service on
        Android and the browser watch on the web. Runs across every
@@ -253,10 +300,22 @@ export function DriverOnlinePresence() {
                 </div>
               </div>
               <p className="mt-3 text-sm leading-relaxed text-white/90">
-                You&apos;re still set to <strong>online</strong>, but your
-                phone&apos;s location is off — riders can&apos;t see you and
-                we can&apos;t dispatch trips. Re-enable location to keep
-                taking rides, or drop offline for now.
+                {hasRouteSession ? (
+                  <>
+                    You have an <strong>active Route Taxi session</strong>{" "}
+                    — riders on your route are relying on your live
+                    position. Location must stay on until you end the
+                    session.
+                  </>
+                ) : (
+                  <>
+                    You&apos;re still set to <strong>online</strong>, but
+                    your phone&apos;s location is off — riders can&apos;t
+                    see you and we can&apos;t dispatch trips. Re-enable
+                    location to keep taking rides, or drop offline for
+                    now.
+                  </>
+                )}
               </p>
             </div>
 
@@ -285,14 +344,22 @@ export function DriverOnlinePresence() {
                 <Icon name="navigation" className="h-4 w-4" />
                 Try again
               </button>
-              <button
-                type="button"
-                onClick={handleGoOffline}
-                disabled={going === "offline"}
-                className="rounded-full px-6 py-3 text-sm font-semibold text-muted hover:text-foreground disabled:opacity-60 sm:flex-none"
-              >
-                {going === "offline" ? "Going offline…" : "Go offline"}
-              </button>
+              {/* "Go offline" intentionally hidden when a route-taxi
+                 session is open — turning location off (and dropping
+                 offline) mid-route would strand the riders who hailed
+                 onto that route. Driver has to end the session first
+                 from the Route Taxi page, then this modal will offer
+                 the escape again. */}
+              {!hasRouteSession && (
+                <button
+                  type="button"
+                  onClick={handleGoOffline}
+                  disabled={going === "offline"}
+                  className="rounded-full px-6 py-3 text-sm font-semibold text-muted hover:text-foreground disabled:opacity-60 sm:flex-none"
+                >
+                  {going === "offline" ? "Going offline…" : "Go offline"}
+                </button>
+              )}
             </div>
           </m.div>
         </m.div>
