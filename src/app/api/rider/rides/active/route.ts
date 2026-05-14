@@ -42,7 +42,7 @@ export async function GET() {
   let { data: ride } = await supabase
     .from("rides")
     .select(
-      "id, status, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, expires_at, accepted_at, arrived_at, started_at, cancelled_at, cancellation_reason, carpool_group_id",
+      "id, status, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, expires_at, accepted_at, arrived_at, started_at, cancelled_at, cancellation_reason, carpool_group_id, start_pin, pin_verified_at",
     )
     .eq("rider_id", user.id)
     .or(
@@ -65,7 +65,7 @@ export async function GET() {
     const { data: refreshed } = await supabase
       .from("rides")
       .select(
-        "id, status, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, expires_at, accepted_at, arrived_at, started_at, cancelled_at, cancellation_reason, carpool_group_id",
+        "id, status, driver_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, expires_at, accepted_at, arrived_at, started_at, cancelled_at, cancellation_reason, carpool_group_id, start_pin, pin_verified_at",
       )
       .eq("id", ride.id)
       .maybeSingle();
@@ -221,6 +221,20 @@ export async function GET() {
         ? {
             groupId: ride.carpool_group_id,
             partnerFirstName: carpoolPartnerFirstName,
+          }
+        : null,
+      // Verify-Your-Ride PIN. Surfaced only after a driver is assigned
+      // so the rider doesn't see it on the searching screen — the code
+      // is meant to be flashed once the rider can physically see the
+      // car. UI shows it most prominently in the `arrived` state, but
+      // we ship it in `accepted` too so the rider can have it ready.
+      pin: ride.start_pin
+        ? {
+            code:
+              ride.status === "accepted" || ride.status === "arrived"
+                ? (ride.start_pin as string)
+                : null,
+            verified: !!ride.pin_verified_at,
           }
         : null,
     },

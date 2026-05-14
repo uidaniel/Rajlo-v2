@@ -5,6 +5,7 @@ import { tryMatchCarpool } from "@/lib/carpool-matcher";
 import { computeRideExpiry } from "@/lib/ride-expiry";
 import { sendRideRequestedEmail } from "@/lib/email-templates";
 import { notifyRider, notifyAllAvailableDrivers } from "@/lib/notify";
+import { resolveRidePin } from "@/lib/pin-verify";
 
 /**
  * POST /api/rider/rides
@@ -151,12 +152,19 @@ export async function POST(request: Request) {
 
   const allowCarpool = body.allowCarpool === true;
 
+  // Resolve the rider's "Verify Your Ride" PIN preference. Returns a
+  // 4-digit string when the rider has it enabled and the current
+  // Jamaica time satisfies their mode (always vs night-only), or
+  // null when no PIN is required for this ride.
+  const startPin = await resolveRidePin(supabase, user.id);
+
   // Insert the ride row.
   const { data: ride, error: rideError } = await supabase
     .from("rides")
     .insert({
       rider_id: user.id,
       status: "requested",
+      start_pin: startPin,
       pickup_name: body.pickup.name,
       pickup_address: body.pickup.address,
       pickup_lat: body.pickup.lat,

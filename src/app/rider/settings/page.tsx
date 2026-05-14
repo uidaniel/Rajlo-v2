@@ -81,9 +81,14 @@ const fromServer = (p: ServerPrefs): WirePrefs => ({
   autoShareNotifyDelay: p.auto_share_notify_delay,
 });
 
+type PinPrefs = { enabled: boolean; mode: "always" | "night_only" };
+
 export default function RiderSettingsPage() {
   const [profile, setProfile] = useState<ProfileInfo | null>(null);
   const [prefs, setPrefs] = useState<WirePrefs | null>(null);
+  // PIN-at-pickup safety setting — lives on profiles, not the
+  // preferences row, so it's a separate fetch + save path.
+  const [pin, setPin] = useState<PinPrefs | null>(null);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [signingOut, setSigningOut] = useState(false);
@@ -154,6 +159,43 @@ export default function RiderSettingsPage() {
       cancelled = true;
     };
   }, []);
+
+  // PIN preference — separate fetch because it lives on profiles, not
+  // the preferences row. Pre-launch riders are off by default; the
+  // endpoint surfaces existing on/off + mode without any extra plumbing.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/rider/settings/pin");
+        if (!res.ok) return;
+        const json = (await res.json()) as PinPrefs;
+        if (!cancelled) setPin(json);
+      } catch {
+        /* silent — section just shows the skeleton */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const savePin = async (next: PinPrefs) => {
+    setPin(next);
+    try {
+      const res = await fetch("/api/rider/settings/pin", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next.enabled, mode: next.mode }),
+      });
+      if (res.ok) {
+        setSavedAt(Date.now());
+        setTimeout(() => setSavedAt(null), 1800);
+      }
+    } catch {
+      /* keep optimistic value; next mount re-syncs from server */
+    }
+  };
 
   // Cleanup the debounce timer on unmount so a still-pending save
   // doesn't fire after navigation.
@@ -318,6 +360,44 @@ export default function RiderSettingsPage() {
               Edit
             </Link>
           </div>
+        </Section>
+      </FadeUp>
+
+      {/* Verify Your Ride — 4-digit PIN safety check */}
+      <FadeUp delay={0.08}>
+        <Section title="Safety" icon="shield">
+          {pin ? (
+            <>
+              <ToggleRow
+                label="Verify Your Ride with a PIN"
+                description="We'll show you a 4-digit PIN. Your driver has to enter it before the trip can start — protects you from getting into the wrong car."
+                value={pin.enabled}
+                onChange={(next) => savePin({ ...pin, enabled: next })}
+              />
+              {pin.enabled && (
+                <>
+                  <Divider />
+                  <SegmentedRow
+                    label="When to require it"
+                    description="Every ride is most protective. Night-only switches it on automatically between 9 PM and 6 AM."
+                    value={pin.mode}
+                    onChange={(v) =>
+                      savePin({
+                        ...pin,
+                        mode: v === "night_only" ? "night_only" : "always",
+                      })
+                    }
+                    options={[
+                      { value: "always", label: "Every ride" },
+                      { value: "night_only", label: "Only at night" },
+                    ]}
+                  />
+                </>
+              )}
+            </>
+          ) : (
+            <ToggleRowsSkeleton rows={1} />
+          )}
         </Section>
       </FadeUp>
 

@@ -45,7 +45,7 @@ export async function GET() {
   const { data: ride } = await supabase
     .from("rides")
     .select(
-      "id, status, rider_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, accepted_at, arrived_at, started_at, carpool_group_id, carpool_role",
+      "id, status, rider_id, pickup_name, pickup_address, pickup_lat, pickup_lng, dropoff_name, dropoff_address, dropoff_lat, dropoff_lng, seats, notes, estimated_fare_jmd, estimated_distance_km, estimated_eta_minutes, requested_at, accepted_at, arrived_at, started_at, carpool_group_id, carpool_role, start_pin, pin_verified_at",
     )
     .eq("driver_id", driver.id)
     .in("status", ["accepted", "arrived", "in_progress"])
@@ -143,6 +143,14 @@ export async function GET() {
         arrivedAt: ride.arrived_at,
         startedAt: ride.started_at,
       },
+      // Verify-Your-Ride. The driver never sees the PIN itself — only
+      // whether one is required and whether they've already entered
+      // it. The active-trip UI gates the "Start trip" button on this:
+      // if `hasPin && !pinVerified`, tap opens the PIN entry dialog
+      // instead of immediately POSTing the start transition.
+      pin: ride.start_pin
+        ? { required: true, verified: !!ride.pin_verified_at }
+        : { required: false, verified: false },
     },
     rider: {
       name: riderProfile?.full_name ?? "Rider",

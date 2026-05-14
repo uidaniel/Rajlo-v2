@@ -8,6 +8,7 @@ import { FadeUp } from "@/components/anim";
 import { MapView } from "@/components/map-view";
 import { ChatLauncher } from "@/components/chat-launcher";
 import { CancelReasonDialog } from "@/components/cancel-reason-dialog";
+import { PinEntryDialog } from "@/components/pin-entry-dialog";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { useRidePosition } from "@/lib/use-ride-position";
 import { useLocationViolationMonitor } from "@/lib/use-location-violation-monitor";
@@ -63,7 +64,12 @@ type CarpoolPartner = {
 };
 
 type ActiveResponse = {
-  ride: ActiveRide | null;
+  ride: (ActiveRide & {
+    /** Verify-Your-Ride. `required` true means the rider opted in and
+     *  the trip can't move past `arrived` until `verified` flips to
+     *  true via /api/driver/rides/[id]/verify-pin. */
+    pin?: { required: boolean; verified: boolean };
+  }) | null;
   rider: {
     name: string;
     avatarUrl: string | null;
@@ -128,6 +134,10 @@ export default function DriverActiveTripPage() {
   // When the driver taps Cancel, we open the reason dialog and remember
   // which ride id to cancel on confirm. Null = dialog closed.
   const [cancelTargetId, setCancelTargetId] = useState<string | null>(null);
+  // Verify-Your-Ride PIN entry dialog state. Set to the ride id when
+  // the driver taps "Start trip" on a PIN-required ride; cleared when
+  // they verify, cancel, or the 3-strike auto-cancel fires.
+  const [pinTargetId, setPinTargetId] = useState<string | null>(null);
 
   // Live position channel: driver streams own GPS so the rider can watch
   // the car move on the map. Hook also receives the rider's position so
@@ -756,9 +766,22 @@ export default function DriverActiveTripPage() {
 
           <button
             type="button"
-            onClick={() =>
-              handleAction(ride.id, stage.actionAction, ride.estimatedFareJMD)
-            }
+            onClick={() => {
+              // PIN gate. If the rider opted into Verify-Your-Ride
+              // and we haven't entered the right code yet, open the
+              // PIN dialog instead of firing the start transition —
+              // the server would 412 us anyway, so let's collect
+              // the digits first.
+              if (
+                stage.actionAction === "start" &&
+                data?.ride?.pin?.required &&
+                !data?.ride?.pin?.verified
+              ) {
+                setPinTargetId(ride.id);
+                return;
+              }
+              handleAction(ride.id, stage.actionAction, ride.estimatedFareJMD);
+            }}
             disabled={acting}
             className={`group inline-flex w-full items-center justify-center gap-2 rounded-full px-6 py-3.5 text-sm font-bold text-white shadow-lg transition-all hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:-translate-y-0 ${
               ride.status === "in_progress"
@@ -808,6 +831,30 @@ export default function DriverActiveTripPage() {
         busy={acting}
         onClose={() => setCancelTargetId(null)}
         onConfirm={performCancel}
+      />
+
+      <PinEntryDialog
+        open={pinTargetId !== null}
+        rideId={pinTargetId}
+        onClose={() => setPinTargetId(null)}
+        onVerified={() => {
+          // Server stamped pin_verified_at. Close the dialog and
+          // immediately fire the start transition; the gate that
+          // 412'd us before now passes.
+          const rideId = pinTargetId;
+          setPinTargetId(null);
+          if (rideId) {
+            void handleAction(rideId, "start", ride.estimatedFareJMD);
+          }
+        }}
+        onCancelled={() => {
+          // 3-strikes cancel. The ride row is already cancelled
+          // server-side — just clear our local state, close the
+          // dialog, and let the active-trip refresh bounce us to
+          // the empty state.
+          setPinTargetId(null);
+          void refresh();
+        }}
       />
     </div>
   );

@@ -74,6 +74,10 @@ type ActiveRide = {
     cancelledAt: string | null;
   };
   carpool: { groupId: string; partnerFirstName: string | null } | null;
+  /** Verify-Your-Ride PIN. Surfaced once a driver is assigned. The
+   *  `code` is only set during `accepted`/`arrived` — once the driver
+   *  has verified, the rider doesn't need to see it any more. */
+  pin: { code: string | null; verified: boolean } | null;
 };
 
 type DriverInfo = {
@@ -867,6 +871,65 @@ export default function RiderLiveTripPage() {
                 pickupLng={ride.pickup.lng}
               />
             )}
+        </FadeUp>
+      )}
+
+      {/* Verify-Your-Ride PIN card. Most prominent when the driver
+         has arrived (rider's physically about to step in), but we
+         show it earlier in `accepted` too so the rider can have the
+         number ready. Hidden once the driver has entered it — the
+         visible state would just be noise after that. */}
+      {ride.pin?.code && !ride.pin.verified && (
+        <FadeUp delay={0.12}>
+          <div
+            className={`relative overflow-hidden rounded-2xl border-2 p-5 shadow-md ${
+              ride.status === "arrived"
+                ? "border-rajlo-red bg-rajlo-red text-white"
+                : "border-rajlo-red/30 bg-primary-soft text-foreground"
+            }`}
+          >
+            <div className="flex items-start gap-4">
+              <span
+                className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl ${
+                  ride.status === "arrived"
+                    ? "bg-white/15 text-white"
+                    : "bg-rajlo-red/15 text-rajlo-red"
+                }`}
+              >
+                <Icon name="shield-check" className="h-5 w-5" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p
+                  className={`text-[11px] font-bold uppercase tracking-wider ${
+                    ride.status === "arrived" ? "text-white/85" : "text-rajlo-red"
+                  }`}
+                >
+                  {ride.status === "arrived"
+                    ? "Read this PIN to your driver"
+                    : "Your PIN for this ride"}
+                </p>
+                <p
+                  className={`mt-0.5 text-sm leading-snug ${
+                    ride.status === "arrived" ? "text-white/90" : "text-muted"
+                  }`}
+                >
+                  {ride.status === "arrived"
+                    ? "Before you get in, confirm the car + plate match, then read this 4-digit code to your driver. The trip can't start without it."
+                    : "Once your driver arrives, read these 4 digits to them so they can start the trip."}
+                </p>
+                <div
+                  aria-label="Verify-your-ride PIN"
+                  className={`mt-3 inline-flex items-center gap-2 rounded-2xl px-5 py-3 font-mono text-4xl font-extrabold tracking-[0.4em] ${
+                    ride.status === "arrived"
+                      ? "bg-white text-rajlo-red shadow-lg"
+                      : "bg-white text-rajlo-red ring-2 ring-rajlo-red/20"
+                  }`}
+                >
+                  {ride.pin.code}
+                </div>
+              </div>
+            </div>
+          </div>
         </FadeUp>
       )}
 

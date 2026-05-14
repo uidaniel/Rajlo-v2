@@ -110,11 +110,41 @@ export async function POST(
   // future refinement.
   const { data: target } = await supabase
     .from("rides")
-    .select("id, carpool_group_id, driver_id")
+    .select(
+      "id, carpool_group_id, driver_id, start_pin, pin_verified_at",
+    )
     .eq("id", id)
     .maybeSingle();
   if (!target || target.driver_id !== driver.id) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // PIN-verify gate. If the rider opted into a start PIN, the driver
+  // must have entered the right code via /verify-pin before this
+  // ride can move past `arrived`. For carpool rides we check ALL
+  // legs that carry a PIN — both passengers' protections must clear
+  // before the driver can roll.
+  if (action === "start") {
+    if (target.carpool_group_id) {
+      const { data: legs } = await supabase
+        .from("rides")
+        .select("id, start_pin, pin_verified_at")
+        .eq("carpool_group_id", target.carpool_group_id);
+      const unverified = (legs ?? []).filter(
+        (l) => l.start_pin && !l.pin_verified_at,
+      );
+      if (unverified.length > 0) {
+        return NextResponse.json(
+          { error: "pin_required", needsPin: true },
+          { status: 412 },
+        );
+      }
+    } else if (target.start_pin && !target.pin_verified_at) {
+      return NextResponse.json(
+        { error: "pin_required", needsPin: true },
+        { status: 412 },
+      );
+    }
   }
 
   const now = new Date().toISOString();
