@@ -1,3 +1,4 @@
+import type { Viewport } from "next";
 import { redirect } from "next/navigation";
 import { PortalLayout } from "@/components/portal-layout";
 import { SessionGuard } from "@/components/session-guard";
@@ -6,6 +7,25 @@ import { DriverPortalGate } from "@/components/driver-portal-gate";
 import { DriverOnlinePresence } from "@/components/driver-online-presence";
 import { driverNav } from "@/lib/mock-data";
 import { getDriverStatus } from "@/lib/driver-status";
+
+/**
+ * Override the root viewport for the driver portal: lock pinch- and
+ * double-tap-zoom off so the WebView behaves like a real native app
+ * instead of a browser page. Maximum-scale=1 + userScalable=false is
+ * the canonical recipe; we don't apply this globally because the
+ * rider portal + marketing site need accessibility zoom for low-
+ * vision riders. The driver UI is an operational tool with fixed
+ * sizing, so locking zoom there is the right trade-off.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
+  themeColor: "#f10100",
+  interactiveWidget: "resizes-content",
+};
 
 /**
  * Gates the activated driver portal. Routes the signed-in driver to:

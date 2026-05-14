@@ -359,6 +359,21 @@ html[data-rajlo-native="1"] body * {
   user-select: none;
   -webkit-touch-callout: none;
 }
+
+/*
+ * Kill page-level pinch + double-tap zoom inside the native shell.
+ * `touch-action: pan-x pan-y` keeps scrolling alive but tells the
+ * browser to ignore pinch-to-zoom and double-tap-to-zoom gestures
+ * entirely. The viewport meta in the driver portal already sets
+ * userScalable=false, but some Android WebView builds honour the
+ * CSS property earlier in the gesture lifecycle, so this is a belt-
+ * and-suspenders guard. Map gestures inside <MapView> are unaffected
+ * because Google Maps installs its own gesture handler on its
+ * container — the body-level rule doesn't reach inside.
+ */
+html[data-rajlo-native="1"] body {
+  touch-action: pan-x pan-y;
+}
 html[data-rajlo-native="1"] input,
 html[data-rajlo-native="1"] textarea,
 html[data-rajlo-native="1"] [contenteditable="true"],
