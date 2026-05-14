@@ -165,14 +165,24 @@ export function MobileDrawer({
 
   const handleSignOut = async () => {
     const supabase = createSupabaseBrowserClient();
-    // Capture role BEFORE signOut so we know which login page to bounce to.
-    const role = profile?.role ?? "rider";
+    // Role detection — prefer the loaded profile, but fall back to the
+    // pathname so a sign-out tap that beats the profile fetch (or an
+    // admin whose profile row is missing somehow) still routes to the
+    // correct login page. Previously this fell back to "rider" via
+    // `?? "rider"`, which is what was bouncing admins to the rider
+    // login.
+    const pathRole = (pathname ?? "").startsWith("/admin")
+      ? "admin"
+      : (pathname ?? "").startsWith("/driver")
+        ? "driver"
+        : "rider";
+    const role = profile?.role ?? pathRole;
+
     // Drivers: flip them offline before clearing the session so the
     // persisted is_online flag matches their actual intent (won't be
     // taking rides while signed out). The offline endpoint refuses
-    // the flip if there's an active trip in flight — propagate that
-    // refusal up so the driver isn't accidentally signed out with
-    // a rider waiting on them.
+    // the flip if there's an active trip in flight — that's the ONE
+    // case worth awaiting since we can't sign out a mid-trip driver.
     if (role === "driver") {
       const res = await fetch("/api/driver/online", {
         method: "PATCH",
@@ -190,7 +200,15 @@ export function MobileDrawer({
         return;
       }
     }
-    await supabase.auth.signOut();
+
+    // Tear the session down WITHOUT awaiting the network round-trip.
+    // supabase.auth.signOut() clears local storage synchronously
+    // before it issues the revoke request, so by the time the next
+    // line runs there is no session anymore — the network call
+    // races us to the login page in the background and a failure
+    // doesn't matter (local session is already gone). Net effect:
+    // the tap feels instant instead of waiting on a remote /logout.
+    void supabase.auth.signOut();
     clearSessionPolicy();
     const loginPath =
       role === "admin"
@@ -435,7 +453,7 @@ export function MobileDrawer({
               type="button"
               onClick={handleSignOut}
               aria-label="Sign out"
-              className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/80 transition-colors hover:bg-white/15 hover:text-white"
+              className="grid h-9 w-9 shrink-0 cursor-pointer place-items-center rounded-lg text-white/80 transition-colors hover:bg-white/15 hover:text-white active:scale-95"
             >
               <Icon name="log-out" className="h-4 w-4" />
             </button>
