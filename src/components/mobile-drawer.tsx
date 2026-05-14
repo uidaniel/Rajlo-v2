@@ -237,12 +237,24 @@ export function MobileDrawer({
   }, [isOpen]);
 
   return (
-    // Lock the desktop layout to viewport height + clip overflow so only the
-    // <main> below can scroll. Sidebar stays put in its grid cell, page
-    // doesn't scroll at the body level.
-    <div className="min-h-screen bg-background md:grid md:h-screen md:grid-cols-[280px_1fr] md:overflow-hidden">
-      {/* ============== Mobile top bar ============== */}
-      <header className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 md:hidden">
+    // Lock to viewport height on EVERY breakpoint and clip overflow so
+    // only the <main> below scrolls. On mobile this also makes the
+    // sticky <header> truly fixed (it's a flex item now, not a sticky
+    // child of a body-scrolling tree) and the bottom nav truly fixed
+    // (the page's content never scrolls past it because content scrolls
+    // INSIDE <main>, not the body). This is the standard native-app
+    // shell pattern.
+    //
+    // The previous `min-h-screen + sticky top-0` setup broke because
+    // the page-transition motion.div introduces a transform on the
+    // sticky element's ancestor — which moves sticky's containing
+    // block from the viewport to the motion.div, so the header
+    // scrolled away with the page. Internal main-scroll sidesteps that.
+    <div className="flex h-[100dvh] flex-col bg-background md:grid md:h-screen md:grid-cols-[280px_1fr] md:overflow-hidden">
+      {/* ============== Mobile top bar ==============
+         shrink-0 flex item, NOT sticky. Sits at the top of the flex
+         column and never moves; the user scrolls <main> below. */}
+      <header className="z-40 flex shrink-0 items-center justify-between gap-3 border-b border-line bg-surface px-4 py-3 md:hidden">
         <div className="flex min-w-0 items-center gap-2">
           {showBackButton && (
             <button
@@ -420,12 +432,13 @@ export function MobileDrawer({
       </aside>
 
       {/* ============== Main content ==============
-         Bottom padding is owned by the global rule on `body` (only
-         applied when the native bottom nav is showing) so we don't
-         double-pad and end up with ~150px of dead space below the
-         content. The portal-layout wrapper inside this <main> already
-         provides regular page breathing room via its py-4 / py-6. */}
-      <main className="relative overflow-x-hidden md:overflow-y-auto">
+         The scroll container for the whole page. flex-1 makes it fill
+         the viewport between the header above and the bottom nav
+         (which floats fixed over its bottom edge). overflow-y-auto
+         scopes scrolling here — header + bottom nav never participate.
+         Bottom padding is owned by the global rule on `body main` so
+         content clears the fixed bottom nav. */}
+      <main className="relative flex-1 overflow-y-auto overflow-x-hidden">
         {children}
       </main>
     </div>

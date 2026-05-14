@@ -305,15 +305,21 @@ body {
 
 /*
  * Reserve space at the bottom of every page for the fixed
- * NativeBottomNav. The component flips this attribute on the <body>
- * only when it's actually rendering the bar (Capacitor + driver
- * routes), so web users see zero extra padding.
+ * NativeBottomNav. The bottom nav floats over the bottom of <main>,
+ * so the padding goes on <main> (the scroll container) — not on
+ * <body>, which doesn't scroll at all in this layout. Putting it on
+ * body would push the whole flex column past the viewport bottom
+ * and leak the page off-screen.
+ *
+ * The component flips the body attribute on only when it's actually
+ * rendering the bar (Capacitor + a top-tab driver route), so web users
+ * see zero extra padding.
  *
  * The 72px figure is the nav's height (~64px) + a hair of breathing
  * room. The safe-area-inset accommodates the gesture handle on
  * modern Android phones.
  */
-body[data-rajlo-bottom-nav="1"] {
+body[data-rajlo-bottom-nav="1"] main {
   padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
 }
 
