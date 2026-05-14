@@ -29,7 +29,7 @@ export function ArcWatermark({
       stroke="currentColor"
       strokeWidth="14"
       aria-hidden="true"
-      className={`pointer-events-none select-none opacity-[0.07] ${colorClass} ${className}`}
+      className={`pointer-events-none select-none opacity-[0.035] ${colorClass} ${className}`}
     >
       {/* Outer arc (largest) */}
       <path d="M 18 110 A 82 82 0 0 1 182 110" />

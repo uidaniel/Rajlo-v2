@@ -10,18 +10,17 @@ import { isNativeApp } from "@/lib/native";
  * the Capacitor app — on the web pages render instantly with no
  * animation overhead.
  *
- * **Skips animation for top-tab → top-tab navigation** (e.g. tapping
- * Home → Earnings). Tabs in a real Android app cut instantly between
- * sibling screens; the slide-fade only feels right when pushing into
- * a deeper page (drawer item, detail screen). Animating tab swaps was
- * also what produced the perceived layout shift and the "still
- * loading" flash the driver flagged — the page was fading in over
- * 180ms whether the data was cached or not.
+ * Direction-aware: on a forward navigation (link tap, router.push)
+ * the new page slides in from the right while the old slides out
+ * left, mimicking the iOS-style push. On a **back** navigation
+ * (Android hardware back, our in-page back button, browser back —
+ * anything that fires `popstate`) the direction reverses: the current
+ * page slides out to the **right**, revealing the previous page
+ * sliding in from the left. That matches what every native Android
+ * app does and is what the driver flagged was missing.
  *
- * For deeper navigation it slides each new page in from the right by
- * 16px while fading, mimicking the iOS-style push transition that
- * Material 3 also uses. 180ms duration matches Android's default
- * "fast" emphasis duration so the app feels in-step with the OS.
+ * Also skips animation entirely for top-tab → top-tab navigation
+ * (Home ↔ Earnings ↔ History ↔ Me etc.) so tab swaps feel instant.
  */
 
 /** Top-level tab paths whose mutual transitions should be instant. */
@@ -32,6 +31,10 @@ const TOP_TAB_PATHS = new Set([
   "/driver/history",
   "/driver/profile",
 ]);
+
+/** Slide offset in px — small enough to feel like a polish detail,
+ *  big enough that the motion direction reads clearly. */
+const SLIDE_PX = 20;
 
 export function NativePageTransition({
   children,
@@ -50,12 +53,30 @@ export function NativePageTransition({
     () => false,
   );
 
+  // Direction snapshot for the *next* navigation. Popstate (Android
+  // hardware back, browser back, router.back()) flips it to -1; every
+  // other navigation leaves it at +1 (forward push). The ref avoids
+  // an extra render and the value is read at the moment AnimatePresence
+  // captures props for the exiting child, then reset back to +1 once
+  // pathname settles so the next forward push reads correctly.
+  const directionRef = useRef<1 | -1>(1);
+
+  useEffect(() => {
+    const onPopState = () => {
+      directionRef.current = -1;
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   // Remember the previous pathname so we can detect tab-to-tab moves.
-  // We update the ref AFTER render so the comparison on the current
-  // render reads the just-changed-from value.
   const prevPathnameRef = useRef(pathname);
   useEffect(() => {
     prevPathnameRef.current = pathname;
+    // Reset direction now that the new page is committed. The
+    // AnimatePresence + custom prop has already snapshotted the
+    // direction value used for this transition.
+    directionRef.current = 1;
   }, [pathname]);
 
   if (!native) {
@@ -77,13 +98,24 @@ export function NativePageTransition({
     return <>{children}</>;
   }
 
+  // Direction-aware variants. `custom` propagates through AnimatePresence
+  // to the exiting child too, so the OUTGOING page sees the latest
+  // direction value (not the value at its original mount).
+  const variants = {
+    initial: (dir: 1 | -1) => ({ opacity: 0, x: SLIDE_PX * dir }),
+    animate: { opacity: 1, x: 0 },
+    exit: (dir: 1 | -1) => ({ opacity: 0, x: -SLIDE_PX * dir }),
+  };
+
   return (
-    <AnimatePresence mode="wait" initial={false}>
+    <AnimatePresence mode="wait" initial={false} custom={directionRef.current}>
       <m.div
         key={pathname}
-        initial={{ opacity: 0, x: 16 }}
-        animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: -16 }}
+        custom={directionRef.current}
+        variants={variants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
         transition={{
           duration: 0.18,
           ease: [0.4, 0, 0.2, 1], // material emphasized-easing
