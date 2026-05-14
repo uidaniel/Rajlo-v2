@@ -662,13 +662,18 @@ export function MapView({
     // Follow-the-car: pan the map to keep the driver marker centered
     // as the car moves, the way every native navigation app behaves.
     // We don't touch zoom — the user's current zoom level is theirs to
-    // control. Skipped when the user has manually dragged (the
-    // `dragstart` listener on the map sets followModeRef.current=false)
-    // or while the searching overlay is up (the radar owns the map).
-    if (followModeRef.current && !searching && !locked) {
+    // control. Skipped only when the user has manually dragged (the
+    // `dragstart` listener flips followModeRef.current=false) or while
+    // the searching radar overlay owns the map. Crucially we DON'T
+    // gate on `locked` — the lock overlay blocks user gestures (so a
+    // finger-swipe doesn't accidentally pan the map past the page),
+    // but our own programmatic panTo is exactly the thing the lock
+    // was supposed to leave alone. Earlier code gated on it and froze
+    // the map under the "Tap to interact" pill.
+    if (followModeRef.current && !searching) {
       map.panTo(pos);
     }
-  }, [driverPosition, searching, locked]);
+  }, [driverPosition, searching]);
 
   // Fleet markers (Phase 2A.4 — nearby online drivers on booking screen).
   // We diff against the previous set: existing driverIds get setPosition,
