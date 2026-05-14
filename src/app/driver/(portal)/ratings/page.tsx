@@ -5,6 +5,12 @@ import { Icon } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { HeroSkeleton, Skeleton } from "@/components/skeleton";
+import {
+  getCachedDriverData,
+  setCachedDriverData,
+} from "@/lib/driver-prefetch";
+
+const RATINGS_URL = "/api/driver/ratings";
 
 /**
  * Driver "my ratings" page. Read-only window into how riders are
@@ -41,21 +47,28 @@ type Response = {
 };
 
 export default function DriverRatingsPage() {
-  const [data, setData] = useState<Response | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Seed from the prefetch cache so a tap on the Ratings drawer item
+  // lands on real numbers + reviews instantly; the fetch below still
+  // refreshes in the background.
+  const cached = getCachedDriverData<Response>(RATINGS_URL);
+  const [data, setData] = useState<Response | null>(cached);
+  const [loading, setLoading] = useState(cached == null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/driver/ratings");
+        const res = await fetch(RATINGS_URL);
         if (!res.ok) {
           const j = (await res.json().catch(() => ({}))) as { error?: string };
           throw new Error(j.error ?? `HTTP ${res.status}`);
         }
         const json = (await res.json()) as Response;
-        if (!cancelled) setData(json);
+        if (!cancelled) {
+          setData(json);
+          setCachedDriverData(RATINGS_URL, json);
+        }
       } catch (e) {
         if (!cancelled)
           setError(e instanceof Error ? e.message : "Couldn't load ratings.");

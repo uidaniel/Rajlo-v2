@@ -69,7 +69,11 @@ export function invalidateDriverData(url: string): void {
  *  Listed in priority order — the dashboard (where the driver lands)
  *  needs `stats`, `compliance`, `inbox`, and `rides/active` to render
  *  without skeletons; the `Me` tab needs `driver/me` + `me/avatar`;
- *  the rest cover the bottom-nav targets (earnings, history). */
+ *  the rest cover the bottom-nav + drawer targets so every page in
+ *  the portal opens with cached data on first paint instead of a
+ *  loading spinner. Prefetch is cheap and dedup'd, so over-listing
+ *  is fine — the only ones to leave out are POST-only or per-id URLs
+ *  that can't be warmed without context. */
 export const DRIVER_PREFETCH_URLS = [
   // Dashboard
   "/api/driver/stats",
@@ -84,4 +88,9 @@ export const DRIVER_PREFETCH_URLS = [
   // Profile (Me) tab
   "/api/driver/me",
   "/api/me/avatar",
+  // Drawer pages
+  "/api/wallet?limit=40",
+  "/api/wallet/withdraw",
+  "/api/driver/ratings",
+  "/api/driver/notifications",
 ];

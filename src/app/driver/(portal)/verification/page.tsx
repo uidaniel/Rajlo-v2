@@ -156,7 +156,10 @@ export default function DriverVerificationPage() {
   }, []);
 
   const sortedDocs = useMemo(
-    () => (data ? [...data.docs].sort((a, b) => severityRank(a) - severityRank(b)) : []),
+    () =>
+      data
+        ? [...data.docs].sort((a, b) => severityRank(a) - severityRank(b))
+        : [],
     [data],
   );
 
@@ -172,18 +175,13 @@ export default function DriverVerificationPage() {
         if (ACTION_STATES.includes(d.status)) return false;
         if (d.status === "pending") return false;
         return (
-          days !== null &&
-          days >= 0 &&
-          days <= complianceThresholds.warningDays
+          days !== null && days >= 0 && days <= complianceThresholds.warningDays
         );
       }
       if (tab === "ok") {
         if (ACTION_STATES.includes(d.status)) return false;
         if (d.status === "pending") return false;
-        return (
-          days === null ||
-          days > complianceThresholds.warningDays
-        );
+        return days === null || days > complianceThresholds.warningDays;
       }
       return true;
     });
@@ -223,30 +221,30 @@ export default function DriverVerificationPage() {
     summary.expired > 0
       ? "danger"
       : summary.urgent > 0
-        ? "warning"
-        : summary.upcoming > 0
-          ? "info"
-          : "good";
+      ? "warning"
+      : summary.upcoming > 0
+      ? "info"
+      : "good";
 
   const heroTitle =
     heroTone === "danger"
       ? "Action needed"
       : heroTone === "warning"
-        ? "Renewals due soon"
-        : heroTone === "info"
-          ? "Stay ahead of renewals"
-          : "All compliance up to date";
+      ? "Renewals due soon"
+      : heroTone === "info"
+      ? "Stay ahead of renewals"
+      : "All compliance up to date";
   const heroSubtitle =
     heroTone === "danger"
       ? "One or more documents are expired or missing. Your account stays inactive until they're back in good standing."
       : heroTone === "warning"
-        ? "Documents need renewal within 7 days. Get them in before they expire to avoid suspension."
-        : heroTone === "info"
-          ? "Some documents are coming up for renewal. We'll keep you posted as expiry approaches."
-          : "Every Transport Authority requirement on file is approved and current. Keep it up.";
+      ? "Documents need renewal within 7 days. Get them in before they expire to avoid suspension."
+      : heroTone === "info"
+      ? "Some documents are coming up for renewal. We'll keep you posted as expiry approaches."
+      : "Every Transport Authority requirement on file is approved and current. Keep it up.";
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-2 py-2 md:px-3 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div
@@ -254,8 +252,8 @@ export default function DriverVerificationPage() {
             heroTone === "danger"
               ? "bg-rajlo-red shadow-rajlo-red/30"
               : heroTone === "warning"
-                ? "bg-rajlo-black shadow-rajlo-black/30"
-                : "bg-emerald-700 shadow-emerald-700/30"
+              ? "bg-rajlo-black shadow-rajlo-black/30"
+              : "bg-emerald-700 shadow-emerald-700/30"
           }`}
         >
           <ArcWatermark
@@ -306,33 +304,32 @@ export default function DriverVerificationPage() {
                 t.key === "all"
                   ? sortedDocs.length
                   : t.key === "action"
-                    ? sortedDocs.filter((d) => {
-                        const days = daysUntil(d.expiryDate);
-                        return (
-                          ACTION_STATES.includes(d.status) ||
-                          (days !== null && days < 0)
-                        );
-                      }).length
-                    : t.key === "soon"
-                      ? sortedDocs.filter((d) => {
-                          if (ACTION_STATES.includes(d.status)) return false;
-                          if (d.status === "pending") return false;
-                          const days = daysUntil(d.expiryDate);
-                          return (
-                            days !== null &&
-                            days >= 0 &&
-                            days <= complianceThresholds.warningDays
-                          );
-                        }).length
-                      : sortedDocs.filter((d) => {
-                          if (ACTION_STATES.includes(d.status)) return false;
-                          if (d.status === "pending") return false;
-                          const days = daysUntil(d.expiryDate);
-                          return (
-                            days === null ||
-                            days > complianceThresholds.warningDays
-                          );
-                        }).length;
+                  ? sortedDocs.filter((d) => {
+                      const days = daysUntil(d.expiryDate);
+                      return (
+                        ACTION_STATES.includes(d.status) ||
+                        (days !== null && days < 0)
+                      );
+                    }).length
+                  : t.key === "soon"
+                  ? sortedDocs.filter((d) => {
+                      if (ACTION_STATES.includes(d.status)) return false;
+                      if (d.status === "pending") return false;
+                      const days = daysUntil(d.expiryDate);
+                      return (
+                        days !== null &&
+                        days >= 0 &&
+                        days <= complianceThresholds.warningDays
+                      );
+                    }).length
+                  : sortedDocs.filter((d) => {
+                      if (ACTION_STATES.includes(d.status)) return false;
+                      if (d.status === "pending") return false;
+                      const days = daysUntil(d.expiryDate);
+                      return (
+                        days === null || days > complianceThresholds.warningDays
+                      );
+                    }).length;
               return (
                 <button
                   key={t.key}
@@ -383,8 +380,7 @@ export default function DriverVerificationPage() {
             const palette = tonePalette(badge.tone);
             const days = daysUntil(doc.expiryDate);
             const needsAction =
-              ACTION_STATES.includes(doc.status) ||
-              (days !== null && days < 0);
+              ACTION_STATES.includes(doc.status) || (days !== null && days < 0);
 
             return (
               <FadeUp key={doc.id} delay={0.06 + i * 0.02}>
@@ -535,4 +531,3 @@ function RenewalLink({
     </li>
   );
 }
-

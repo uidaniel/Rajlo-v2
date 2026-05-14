@@ -10,16 +10,10 @@ import {
   VehiclePicker,
   type VehicleSpec,
 } from "@/components/vehicle-picker";
-import {
-  FileUpload,
-  type FileState,
-} from "@/components/file-upload";
+import { FileUpload, type FileState } from "@/components/file-upload";
 import { Skeleton } from "@/components/skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
-import {
-  uploadDriverDocument,
-  removeDriverDocument,
-} from "@/lib/storage";
+import { uploadDriverDocument, removeDriverDocument } from "@/lib/storage";
 
 /**
  * Driver vehicle-change request flow. Verified drivers can't
@@ -150,9 +144,7 @@ export default function DriverVehicleChangePage() {
     });
   };
 
-  const allDocsUploaded = REQUIRED_DOCS.every(
-    (d) => !!files[d.id]?.path,
-  );
+  const allDocsUploaded = REQUIRED_DOCS.every((d) => !!files[d.id]?.path);
   const specComplete =
     !!spec.type && !!spec.brand && !!spec.model && !!spec.year && !!spec.color;
   const canSubmit = specComplete && allDocsUploaded && !submitting;
@@ -249,9 +241,9 @@ export default function DriverVehicleChangePage() {
                 Awaiting review
               </h1>
               <p className="mt-2 max-w-md text-sm text-white/80">
-                We&apos;ve received your request. Our compliance team
-                typically reviews within 1–2 business days. You can keep
-                driving your current vehicle in the meantime.
+                We&apos;ve received your request. Our compliance team typically
+                reviews within 1–2 business days. You can keep driving your
+                current vehicle in the meantime.
               </p>
             </div>
           </div>
@@ -327,7 +319,7 @@ export default function DriverVehicleChangePage() {
   return (
     <form
       onSubmit={handleSubmit}
-      className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8"
+      className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8"
     >
       {/* Hero */}
       <FadeUp>
@@ -345,9 +337,8 @@ export default function DriverVehicleChangePage() {
               Tell us about your new car
             </h1>
             <p className="mt-2 max-w-md text-sm text-white/85">
-              Pick the new vehicle from the list, upload its registration,
-              COF and insurance, and we&apos;ll review within 1–2 business
-              days.
+              Pick the new vehicle from the list, upload its registration, COF
+              and insurance, and we&apos;ll review within 1–2 business days.
             </p>
           </div>
         </div>
@@ -360,9 +351,7 @@ export default function DriverVehicleChangePage() {
             <p className="font-secondary text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
               Previous request rejected
             </p>
-            <p className="mt-1 text-sm font-bold">
-              {latest.admin_note}
-            </p>
+            <p className="mt-1 text-sm font-bold">{latest.admin_note}</p>
             <p className="mt-1 text-xs text-muted">
               Address the issue above and resubmit.
             </p>
@@ -383,8 +372,8 @@ export default function DriverVehicleChangePage() {
             New vehicle
           </p>
           <p className="mt-1 mb-4 text-xs text-muted">
-            Pick from the catalog so the spec matches what we&apos;ll
-            verify against your documents.
+            Pick from the catalog so the spec matches what we&apos;ll verify
+            against your documents.
           </p>
           <VehiclePicker value={spec} onChange={setSpec} />
           <div className="mt-4">
@@ -466,8 +455,8 @@ export default function DriverVehicleChangePage() {
               {!specComplete
                 ? "Pick all vehicle fields to continue."
                 : !allDocsUploaded
-                  ? "Upload all three documents to continue."
-                  : "Ready to submit for review."}
+                ? "Upload all three documents to continue."
+                : "Ready to submit for review."}
             </p>
             <button
               type="submit"

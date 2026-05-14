@@ -9,6 +9,17 @@ import { NotificationSkeleton, Skeleton } from "@/components/skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { complianceThresholds, type TADocument } from "@/lib/mock-data";
 import { buildMockCompliancePayload } from "@/lib/compliance-utils";
+import {
+  getCachedDriverData,
+  setCachedDriverData,
+} from "@/lib/driver-prefetch";
+
+const NOTIFS_URL = "/api/driver/notifications";
+
+type NotifsResponse = {
+  notifications: DriverNotification[];
+  unreadCount: number;
+};
 
 /**
  * Driver notifications inbox. Two sections:
@@ -139,9 +150,17 @@ function levelStyle(level: ReminderLevel) {
 /* ─────────── Page ─────────── */
 
 export default function DriverNotificationsPage() {
-  const [items, setItems] = useState<DriverNotification[]>([]);
-  const [unreadFromServer, setUnreadFromServer] = useState(0);
-  const [loading, setLoading] = useState(true);
+  // Seed from the prefetch cache so opening Notifications from the
+  // drawer lands on the real list instantly. The refresh below + the
+  // Supabase Realtime channel keep things live.
+  const cachedNotifs = getCachedDriverData<NotifsResponse>(NOTIFS_URL);
+  const [items, setItems] = useState<DriverNotification[]>(
+    cachedNotifs?.notifications ?? [],
+  );
+  const [unreadFromServer, setUnreadFromServer] = useState(
+    cachedNotifs?.unreadCount ?? 0,
+  );
+  const [loading, setLoading] = useState(cachedNotifs == null);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("all");
 
@@ -156,16 +175,14 @@ export default function DriverNotificationsPage() {
 
     const refresh = async () => {
       try {
-        const res = await fetch("/api/driver/notifications");
+        const res = await fetch(NOTIFS_URL);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = (await res.json()) as {
-          notifications: DriverNotification[];
-          unreadCount: number;
-        };
+        const json = (await res.json()) as NotifsResponse;
         if (cancelled) return;
         setItems(json.notifications);
         setUnreadFromServer(json.unreadCount);
         setError(null);
+        setCachedDriverData(NOTIFS_URL, json);
       } catch (e) {
         if (!cancelled)
           setError(

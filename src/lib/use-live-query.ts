@@ -25,13 +25,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
  * required prerequisite — auth user, route param — is known).
  */
 
-type Options = {
+type Options<T> = {
   /** Polling interval in ms. Set to 0 to disable polling (one-shot). */
   interval?: number;
   /** Skip the request entirely while false. */
   enabled?: boolean;
   /** Pause polling when the tab is in the background. Default true. */
   pauseWhenHidden?: boolean;
+  /** Pre-populate the result so the first paint shows real data
+   *  instead of `loading=true`. Pair with the driver-prefetch cache:
+   *  pass `getCachedDriverData<T>(url)` and the page lands instant
+   *  while the background fetch still runs to keep things fresh. */
+  initialData?: T | null;
 };
 
 export type LiveQueryResult<T> = {
@@ -45,16 +50,20 @@ export type LiveQueryResult<T> = {
 
 export function useLiveQuery<T>(
   url: string | null,
-  options: Options = {},
+  options: Options<T> = {},
 ): LiveQueryResult<T> {
   const {
     interval = 30_000,
     enabled = true,
     pauseWhenHidden = true,
+    initialData = null,
   } = options;
 
-  const [data, setData] = useState<T | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<T | null>(initialData);
+  // When the caller seeded `data`, start with loading=false so the
+  // consumer skips its skeleton — the background refresh below still
+  // runs and surfaces freshness via `refreshing`.
+  const [loading, setLoading] = useState(initialData == null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -96,14 +105,20 @@ export function useLiveQuery<T>(
 
   // Initial + url/enabled change fetch — explicit "loading" reset so
   // the consumer can swap to a skeleton when the URL flips (e.g., the
-  // admin switches between filter tabs).
+  // admin switches between filter tabs). If we have seeded data,
+  // keep loading=false so the existing render stays on screen and
+  // the refresh signals via `refreshing` instead of replacing the UI.
   useEffect(() => {
     if (!url || !enabled) {
       setLoading(false);
       return;
     }
-    setLoading(true);
-    fetcher(false);
+    if (data == null) setLoading(true);
+    fetcher(data == null ? false : true);
+    // `data` deliberately omitted from deps — we only want this effect
+    // to re-run when the URL or enabled flag changes, not every time
+    // setData lands a new payload.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [url, enabled, fetcher]);
 
   // Polling + visibility integration.

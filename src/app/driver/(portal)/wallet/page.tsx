@@ -9,6 +9,10 @@ import { Skeleton } from "@/components/skeleton";
 import { LiveIndicator } from "@/components/live-indicator";
 import { useLiveQuery } from "@/lib/use-live-query";
 import { formatJMD } from "@/lib/jamaica";
+import { getCachedDriverData } from "@/lib/driver-prefetch";
+
+const WALLET_URL = "/api/wallet?limit=40";
+const WITHDRAWALS_URL = "/api/wallet/withdraw";
 
 /**
  * /driver/wallet — driver's wallet workspace.
@@ -40,12 +44,7 @@ type WithdrawalsResponse = {
     bank_name: string | null;
     bank_account_number: string | null;
     account_holder_name: string | null;
-    status:
-      | "pending"
-      | "processing"
-      | "paid"
-      | "rejected"
-      | "cancelled";
+    status: "pending" | "processing" | "paid" | "rejected" | "cancelled";
     admin_note: string | null;
     reviewed_at: string | null;
     paid_at: string | null;
@@ -73,13 +72,18 @@ const KIND_META: Record<
 };
 
 export default function DriverWalletPage() {
-  const wallet = useLiveQuery<WalletResponse>("/api/wallet?limit=40", {
+  // Seed both queries from the bottom-nav prefetch cache so opening
+  // the Wallet drawer item renders the real balance + ledger
+  // instantly. The live-query keeps re-fetching on its interval so
+  // values stay current; `refreshing` shows the freshness state.
+  const wallet = useLiveQuery<WalletResponse>(WALLET_URL, {
     interval: 15_000,
+    initialData: getCachedDriverData<WalletResponse>(WALLET_URL),
   });
-  const withdrawals = useLiveQuery<WithdrawalsResponse>(
-    "/api/wallet/withdraw",
-    { interval: 30_000 },
-  );
+  const withdrawals = useLiveQuery<WithdrawalsResponse>(WITHDRAWALS_URL, {
+    interval: 30_000,
+    initialData: getCachedDriverData<WithdrawalsResponse>(WITHDRAWALS_URL),
+  });
   const balance = wallet.data?.balanceJmd ?? 0;
   const txns = wallet.data?.transactions ?? [];
 
@@ -90,7 +94,7 @@ export default function DriverWalletPage() {
   const [showWithdraw, setShowWithdraw] = useState(false);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-2 py-2 md:px-3 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-7 text-white shadow-xl md:p-9">
@@ -219,7 +223,10 @@ function TransactionRow({
 }: {
   tx: WalletResponse["transactions"][number];
 }) {
-  const meta = KIND_META[tx.kind] ?? { label: tx.kind, icon: "wallet" as const };
+  const meta = KIND_META[tx.kind] ?? {
+    label: tx.kind,
+    icon: "wallet" as const,
+  };
   const isCredit = tx.direction === "credit";
   return (
     <li>
@@ -229,7 +236,9 @@ function TransactionRow({
       >
         <span
           className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl ${
-            isCredit ? "bg-emerald-50 text-emerald-700" : "bg-primary-soft text-rajlo-red"
+            isCredit
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-primary-soft text-rajlo-red"
           }`}
         >
           <Icon name={meta.icon} className="h-4 w-4" />
@@ -285,8 +294,8 @@ function WithdrawalRow({
     w.status === "paid"
       ? "bg-emerald-50 text-emerald-800 border-emerald-300"
       : w.status === "rejected" || w.status === "cancelled"
-        ? "bg-primary-soft text-rajlo-red border-rajlo-red/30"
-        : "bg-amber-50 text-amber-800 border-amber-300";
+      ? "bg-primary-soft text-rajlo-red border-rajlo-red/30"
+      : "bg-amber-50 text-amber-800 border-amber-300";
   return (
     <li className="rounded-xl border border-line bg-surface-soft p-3">
       <div className="flex items-start justify-between gap-3">
@@ -432,9 +441,9 @@ function WithdrawComposer({
         </Field>
       </div>
       <p className="mt-2 text-[11px] text-muted">
-        Funds leave your wallet immediately; the bank transfer is sent
-        manually by Rajlo within 1 business day. Cancel to refund anytime
-        before processing starts.
+        Funds leave your wallet immediately; the bank transfer is sent manually
+        by Rajlo within 1 business day. Cancel to refund anytime before
+        processing starts.
       </p>
       {error && (
         <p className="mt-2 text-xs font-semibold text-rajlo-red">{error}</p>
