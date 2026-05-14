@@ -53,7 +53,9 @@ export default function DriverHistoryPage() {
   // /driver/history land on real rows instead of a skeleton.
   const cached = getCachedDriverData<HistoryResponse>(FIRST_PAGE_URL);
   const [rows, setRows] = useState<HistoryRow[]>(cached?.rides ?? []);
-  const [pageEarnings, setPageEarnings] = useState(cached?.pageEarningsJMD ?? 0);
+  const [pageEarnings, setPageEarnings] = useState(
+    cached?.pageEarningsJMD ?? 0,
+  );
   const [loading, setLoading] = useState(cached == null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +118,7 @@ export default function DriverHistoryPage() {
   const completedCount = rows.filter((r) => r.status === "completed").length;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       <FadeUp>
         <div>
           <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">

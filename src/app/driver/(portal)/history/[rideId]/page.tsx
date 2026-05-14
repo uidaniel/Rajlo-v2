@@ -164,7 +164,7 @@ export default function DriverHistoryDetailPage({
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl space-y-5 px-2 py-2 md:px-3 md:py-8">
+      <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
         <Skeleton className="h-5 w-40" rounded="full" />
         <HeroSkeleton />
         <MapSkeleton className="h-[42vh] min-h-72 w-full md:h-[50vh] md:max-h-130" />
@@ -174,9 +174,11 @@ export default function DriverHistoryDetailPage({
 
   if (error || !data) {
     return (
-      <div className="mx-auto max-w-md px-4 py-16 text-center">
+      <div className="mx-auto max-w-md  py-16 text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft">
-          <span aria-hidden className="text-3xl leading-none">😢</span>
+          <span aria-hidden className="text-3xl leading-none">
+            😢
+          </span>
         </span>
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
           Trip not found
@@ -201,13 +203,13 @@ export default function DriverHistoryDetailPage({
     hero.tone === "emerald"
       ? "from-emerald-700 via-rajlo-black to-rajlo-black"
       : hero.tone === "amber"
-        ? "from-amber-700 via-rajlo-black to-rajlo-black"
-        : hero.tone === "red"
-          ? "from-rajlo-red via-[#c00d0c] to-rajlo-black"
-          : "from-rajlo-black via-rajlo-black to-[#1a1d10]";
+      ? "from-amber-700 via-rajlo-black to-rajlo-black"
+      : hero.tone === "red"
+      ? "from-rajlo-red via-[#c00d0c] to-rajlo-black"
+      : "from-rajlo-black via-rajlo-black to-[#1a1d10]";
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-2 py-2 md:px-3 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       <Link
         href="/driver/history"
         className="inline-flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-muted hover:text-rajlo-red"
@@ -279,7 +281,10 @@ export default function DriverHistoryDetailPage({
           <ol className="mt-3 space-y-2.5 text-sm">
             <TimelineRow label="Requested" ts={ride.timeline.requestedAt} />
             <TimelineRow label="You accepted" ts={ride.timeline.acceptedAt} />
-            <TimelineRow label="Arrived at pickup" ts={ride.timeline.arrivedAt} />
+            <TimelineRow
+              label="Arrived at pickup"
+              ts={ride.timeline.arrivedAt}
+            />
             <TimelineRow label="Started trip" ts={ride.timeline.startedAt} />
             {ride.timeline.completedAt && (
               <TimelineRow label="Completed" ts={ride.timeline.completedAt} />
@@ -408,13 +413,7 @@ export default function DriverHistoryDetailPage({
   );
 }
 
-function TimelineRow({
-  label,
-  ts,
-}: {
-  label: string;
-  ts: string | null;
-}) {
+function TimelineRow({ label, ts }: { label: string; ts: string | null }) {
   return (
     <li className="flex items-baseline justify-between gap-3 text-sm">
       <span className="font-semibold">{label}</span>

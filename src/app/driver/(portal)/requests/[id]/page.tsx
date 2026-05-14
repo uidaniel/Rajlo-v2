@@ -96,10 +96,9 @@ export default function DriverRequestDetailPage() {
   // Fetch + auto-refresh every 8s. If the API flips to 410 because
   // another driver grabbed it, useLiveQuery surfaces that as `error`
   // and we render the "request taken" panel below.
-  const query = useLiveQuery<Detail>(
-    id ? `/api/driver/requests/${id}` : null,
-    { interval: 8_000 },
-  );
+  const query = useLiveQuery<Detail>(id ? `/api/driver/requests/${id}` : null, {
+    interval: 8_000,
+  });
 
   const [accepting, setAccepting] = useState(false);
   const [acceptError, setAcceptError] = useState<string | null>(null);
@@ -196,7 +195,7 @@ export default function DriverRequestDetailPage() {
   const totalSeats = partner ? ride.seats + partner.seats : ride.seats;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-2 py-4 md:px-3 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-3 md:px-3 md:py-8">
       <Link
         href="/driver/requests"
         className="inline-flex items-center gap-1 text-xs font-bold text-muted hover:text-rajlo-red"
@@ -402,7 +401,10 @@ export default function DriverRequestDetailPage() {
             Fare + payment
           </p>
           <ul className="mt-3 space-y-2 text-sm">
-            <FareRow label="Trip fare" value={formatJMD(ride.estimatedFareJmd)} />
+            <FareRow
+              label="Trip fare"
+              value={formatJMD(ride.estimatedFareJmd)}
+            />
             {partner && (
               <FareRow
                 label={`Carpool partner (${partner.riderName})`}
@@ -493,7 +495,9 @@ function HeroStat({
         {label}
       </p>
       <p
-        className={`mt-0.5 text-xl font-extrabold tracking-tight md:text-2xl ${accent ? "text-rajlo-red" : ""}`}
+        className={`mt-0.5 text-xl font-extrabold tracking-tight md:text-2xl ${
+          accent ? "text-rajlo-red" : ""
+        }`}
       >
         {value}
       </p>
@@ -518,10 +522,10 @@ function RouteRow({
     tone === "emerald"
       ? "bg-emerald-500"
       : tone === "red"
-        ? "bg-rajlo-red"
-        : tone === "amber"
-          ? "bg-amber-500"
-          : "bg-rajlo-black";
+      ? "bg-rajlo-red"
+      : tone === "amber"
+      ? "bg-amber-500"
+      : "bg-rajlo-black";
   return (
     <li className="relative flex items-start gap-3">
       <span
@@ -561,9 +565,7 @@ function FareRow({
 }) {
   return (
     <li className="flex items-center justify-between gap-3">
-      <span
-        className={emphasise ? "font-extrabold" : "text-muted"}
-      >
+      <span className={emphasise ? "font-extrabold" : "text-muted"}>
         {label}
       </span>
       <span

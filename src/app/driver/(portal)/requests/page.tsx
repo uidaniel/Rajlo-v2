@@ -115,7 +115,11 @@ const PARISHES = [
   "St. Elizabeth",
 ];
 
-const SORTS: { key: SortKey; label: string; icon: "clock" | "trending-up" | "map-pin" }[] = [
+const SORTS: {
+  key: SortKey;
+  label: string;
+  icon: "clock" | "trending-up" | "map-pin";
+}[] = [
   { key: "oldest", label: "Oldest waiting", icon: "clock" },
   { key: "newest", label: "Newest first", icon: "clock" },
   { key: "closest", label: "Nearest first", icon: "map-pin" },
@@ -229,7 +233,12 @@ export default function DriverLiveRequestsPage() {
 
   const stats = useMemo(() => {
     if (allEntries.length === 0) {
-      return { count: 0, avgFare: 0, closest: null as number | null, oldestMin: 0 };
+      return {
+        count: 0,
+        avgFare: 0,
+        closest: null as number | null,
+        oldestMin: 0,
+      };
     }
     const fares = allEntries.map((e) =>
       e.kind === "solo" ? e.estimatedFareJMD : e.combinedFareJMD,
@@ -242,8 +251,7 @@ export default function DriverLiveRequestsPage() {
     const oldestMin = Math.floor(
       Math.max(
         ...allEntries.map(
-          (e) =>
-            (Date.now() - new Date(e.requestedAt).getTime()) / 60_000,
+          (e) => (Date.now() - new Date(e.requestedAt).getTime()) / 60_000,
         ),
       ),
     );
@@ -284,7 +292,7 @@ export default function DriverLiveRequestsPage() {
   /* ─────────── Render ─────────── */
 
   return (
-    <div className="mx-auto max-w-5xl space-y-5 px-2 py-4 md:px-3 md:py-8">
+    <div className="mx-auto max-w-5xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div
@@ -336,8 +344,10 @@ export default function DriverLiveRequestsPage() {
               {inbox.loading
                 ? "Looking for requests…"
                 : stats.count === 0
-                  ? "No requests right now"
-                  : `${stats.count} request${stats.count === 1 ? "" : "s"} waiting`}
+                ? "No requests right now"
+                : `${stats.count} request${
+                    stats.count === 1 ? "" : "s"
+                  } waiting`}
             </h1>
             <p className="mt-2 max-w-2xl text-sm text-white/80 md:text-base">
               {isOnline
@@ -546,8 +556,8 @@ function EmptyState({
           No requests match these filters
         </p>
         <p className="mx-auto mt-1 max-w-sm text-xs text-muted">
-          {totalAvailable} request{totalAvailable === 1 ? "" : "s"} waiting overall — widen
-          your sort or parish filter to see them.
+          {totalAvailable} request{totalAvailable === 1 ? "" : "s"} waiting
+          overall — widen your sort or parish filter to see them.
         </p>
       </div>
     );
@@ -648,7 +658,10 @@ function SoloRideCard({
 
           {/* Meta row */}
           <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line pt-3 text-[11px]">
-            <Meta icon="user" value={`${entry.seats} seat${entry.seats === 1 ? "" : "s"}`} />
+            <Meta
+              icon="user"
+              value={`${entry.seats} seat${entry.seats === 1 ? "" : "s"}`}
+            />
             {entry.estimatedDistanceKm !== null && (
               <Meta
                 icon="navigation"
@@ -656,7 +669,10 @@ function SoloRideCard({
               />
             )}
             {entry.estimatedEtaMinutes !== null && (
-              <Meta icon="clock" value={`~${entry.estimatedEtaMinutes}m drive`} />
+              <Meta
+                icon="clock"
+                value={`~${entry.estimatedEtaMinutes}m drive`}
+              />
             )}
             {entry.distanceKmFromDriver !== null && (
               <Meta
@@ -799,14 +815,13 @@ function CarpoolRideCard({
           </div>
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-line pt-3 text-[11px]">
-            <Meta
-              icon="user"
-              value={`${entry.totalSeats} seats total`}
-            />
+            <Meta icon="user" value={`${entry.totalSeats} seats total`} />
             {entry.distanceKmFromDriver !== null && (
               <Meta
                 icon="map-pin"
-                value={`${entry.distanceKmFromDriver.toFixed(1)} km to first pickup`}
+                value={`${entry.distanceKmFromDriver.toFixed(
+                  1,
+                )} km to first pickup`}
                 accent
               />
             )}
@@ -900,5 +915,8 @@ function Meta({
 }
 
 function elapsedMinutes(iso: string): number {
-  return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 60_000));
+  return Math.max(
+    0,
+    Math.floor((Date.now() - new Date(iso).getTime()) / 60_000),
+  );
 }

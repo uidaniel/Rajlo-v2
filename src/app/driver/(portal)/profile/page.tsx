@@ -52,9 +52,9 @@ export default function DriverProfilePage() {
   // tapping the "Me" tab lands on a fully-painted profile instead of
   // a shimmer. The fetch below still runs to refresh, but the user
   // only sees the latest values, never the empty/loading states.
-  const cachedDriver = getCachedDriverData<{ driver: DriverMe | null }>(
-    DRIVER_ME_URL,
-  )?.driver ?? null;
+  const cachedDriver =
+    getCachedDriverData<{ driver: DriverMe | null }>(DRIVER_ME_URL)?.driver ??
+    null;
   const cachedAvatar = getCachedDriverData<CachedAvatar>(AVATAR_URL);
 
   const [driver, setDriver] = useState<DriverMe | null>(cachedDriver);
@@ -134,9 +134,7 @@ export default function DriverProfilePage() {
         }
       } catch (e) {
         if (!cancelled)
-          setError(
-            e instanceof Error ? e.message : "Couldn't load profile.",
-          );
+          setError(e instanceof Error ? e.message : "Couldn't load profile.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -181,7 +179,7 @@ export default function DriverProfilePage() {
     // Profile layout skeleton: hero + info banner + 3 sections
     // (personal, vehicle, compliance), each with field placeholders.
     return (
-      <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
+      <div className="mx-auto max-w-3xl space-y-5  py-2 md:px-3 md:py-8">
         <HeroSkeleton />
         <div className="rounded-2xl border border-rajlo-red/20 bg-primary-soft/40 p-4">
           <div className="flex items-start gap-3">
@@ -193,7 +191,10 @@ export default function DriverProfilePage() {
           </div>
         </div>
         {[0, 1, 2].map((s) => (
-          <div key={s} className="rounded-2xl border border-line bg-surface p-5">
+          <div
+            key={s}
+            className="rounded-2xl border border-line bg-surface p-5"
+          >
             <div className="mb-4 flex items-center gap-2">
               <Skeleton className="h-7 w-7" rounded="lg" />
               <Skeleton className="h-2.5 w-20" rounded="md" />
@@ -216,7 +217,9 @@ export default function DriverProfilePage() {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft">
-          <span aria-hidden className="text-3xl leading-none">😢</span>
+          <span aria-hidden className="text-3xl leading-none">
+            😢
+          </span>
         </span>
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
           Profile unavailable
@@ -229,19 +232,14 @@ export default function DriverProfilePage() {
   if (!driver) return null;
 
   const fullName = [firstName, lastName].filter(Boolean).join(" ") || "Driver";
-  const vehicleLine = [
-    vehicleYear,
-    vehicleColor,
-    vehicleMake,
-    vehicleModel,
-  ]
+  const vehicleLine = [vehicleYear, vehicleColor, vehicleMake, vehicleModel]
     .filter(Boolean)
     .join(" ");
 
   return (
     <form
       onSubmit={handleSave}
-      className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8"
+      className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8"
     >
       {/* Hero */}
       <FadeUp>
@@ -280,8 +278,8 @@ export default function DriverProfilePage() {
             </p>
             <p className="mt-0.5 text-xs text-muted">
               Vehicle colour, plate, and your name appear on the rider&apos;s
-              live-trip view, share links, and ride history. Keep them
-              accurate so riders can find you at pickup.
+              live-trip view, share links, and ride history. Keep them accurate
+              so riders can find you at pickup.
             </p>
           </div>
         </div>
@@ -305,10 +303,10 @@ export default function DriverProfilePage() {
                     className="h-full w-full object-cover"
                   />
                 ) : (
-                  ([firstName, lastName]
+                  [firstName, lastName]
                     .filter(Boolean)
                     .map((s) => s[0]?.toUpperCase() ?? "")
-                    .join("") || "D")
+                    .join("") || "D"
                 )}
               </div>
               {avatarSource === "selfie" && (
@@ -337,8 +335,8 @@ export default function DriverProfilePage() {
                   Need to change it?
                 </span>{" "}
                 Contact support to re-submit your verification documents — a
-                fresh selfie has to go through TA review before it replaces
-                this one.
+                fresh selfie has to go through TA review before it replaces this
+                one.
               </p>
             </div>
           </div>
@@ -391,28 +389,19 @@ export default function DriverProfilePage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <ReadOnlyField
               label="Type"
-              value={(driver as DriverMe & { vehicle_type?: string | null }).vehicle_type ?? "—"}
+              value={
+                (driver as DriverMe & { vehicle_type?: string | null })
+                  .vehicle_type ?? "—"
+              }
             />
-            <ReadOnlyField
-              label="Brand"
-              value={driver.vehicle_make ?? "—"}
-            />
-            <ReadOnlyField
-              label="Model"
-              value={driver.vehicle_model ?? "—"}
-            />
+            <ReadOnlyField label="Brand" value={driver.vehicle_make ?? "—"} />
+            <ReadOnlyField label="Model" value={driver.vehicle_model ?? "—"} />
             <ReadOnlyField
               label="Year"
               value={driver.vehicle_year ? String(driver.vehicle_year) : "—"}
             />
-            <ReadOnlyField
-              label="Colour"
-              value={driver.vehicle_color ?? "—"}
-            />
-            <ReadOnlyField
-              label="Plate"
-              value={driver.plate_number ?? "—"}
-            />
+            <ReadOnlyField label="Colour" value={driver.vehicle_color ?? "—"} />
+            <ReadOnlyField label="Plate" value={driver.plate_number ?? "—"} />
           </div>
 
           {/* Live preview — what the rider will see */}
@@ -466,9 +455,8 @@ export default function DriverProfilePage() {
       <FadeUp delay={0.16}>
         <Section title="Compliance" icon="shield-check">
           <p className="text-xs text-muted">
-            These TA-tied identifiers can&apos;t be self-edited — changing
-            them requires re-verification. Contact support if you need an
-            update.
+            These TA-tied identifiers can&apos;t be self-edited — changing them
+            requires re-verification. Contact support if you need an update.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <ReadOnlyField
@@ -507,9 +495,9 @@ export default function DriverProfilePage() {
       <FadeUp delay={0.18}>
         <Section title="Push notifications" icon="bell">
           <p className="text-xs text-muted">
-            Get a buzz on this device the second a new ride request comes
-            in. We&apos;ll also push verification + vehicle decisions and
-            rider cancellations so you can stand down quickly.
+            Get a buzz on this device the second a new ride request comes in.
+            We&apos;ll also push verification + vehicle decisions and rider
+            cancellations so you can stand down quickly.
           </p>
 
           {/* iOS-specific install banner — push only works after PWA
@@ -521,48 +509,45 @@ export default function DriverProfilePage() {
               </p>
               <ol className="mt-1.5 list-decimal space-y-0.5 pl-4">
                 <li>
-                  Tap the <strong>Share button</strong> at the bottom of
-                  Safari (square with an up arrow)
+                  Tap the <strong>Share button</strong> at the bottom of Safari
+                  (square with an up arrow)
                 </li>
                 <li>
                   Choose <strong>Add to Home Screen</strong> → Add
                 </li>
                 <li>
-                  Open Rajlo from the new icon on your home screen, then
-                  come back here
+                  Open Rajlo from the new icon on your home screen, then come
+                  back here
                 </li>
               </ol>
             </div>
           )}
           {push.ready && !push.support && !push.iosNeedsInstall && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs leading-relaxed text-amber-900">
-              This browser doesn&apos;t support push notifications. Try
-              Chrome, Safari, Edge, or Firefox.
+              This browser doesn&apos;t support push notifications. Try Chrome,
+              Safari, Edge, or Firefox.
             </div>
           )}
-          {push.ready &&
-            push.support &&
-            push.permission === "denied" && (
-              <div className="rounded-xl border border-rajlo-red/30 bg-primary-soft px-3 py-2.5 text-xs leading-relaxed text-rajlo-red">
-                {push.iosHint ? (
-                  <>
-                    <p className="font-bold">
-                      Notifications are blocked for Rajlo on iOS
-                    </p>
-                    <p className="mt-1">
-                      Open <strong>Settings → Notifications → Rajlo</strong>{" "}
-                      and turn <strong>Allow Notifications</strong> on.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    Notifications are blocked. Open your browser&apos;s
-                    site settings and allow notifications for Rajlo, then
-                    refresh.
-                  </>
-                )}
-              </div>
-            )}
+          {push.ready && push.support && push.permission === "denied" && (
+            <div className="rounded-xl border border-rajlo-red/30 bg-primary-soft px-3 py-2.5 text-xs leading-relaxed text-rajlo-red">
+              {push.iosHint ? (
+                <>
+                  <p className="font-bold">
+                    Notifications are blocked for Rajlo on iOS
+                  </p>
+                  <p className="mt-1">
+                    Open <strong>Settings → Notifications → Rajlo</strong> and
+                    turn <strong>Allow Notifications</strong> on.
+                  </p>
+                </>
+              ) : (
+                <>
+                  Notifications are blocked. Open your browser&apos;s site
+                  settings and allow notifications for Rajlo, then refresh.
+                </>
+              )}
+            </div>
+          )}
           {push.error && (
             <div className="rounded-xl border border-rajlo-red/30 bg-primary-soft px-3 py-2.5 text-xs leading-relaxed text-rajlo-red">
               {push.error}
@@ -592,9 +577,7 @@ export default function DriverProfilePage() {
                 }
               }}
               disabled={
-                !push.support ||
-                push.working ||
-                push.permission === "denied"
+                !push.support || push.working || push.permission === "denied"
               }
               className={`shrink-0 rounded-full px-4 py-2 text-xs font-bold transition-all disabled:cursor-not-allowed disabled:opacity-50 ${
                 push.subscribed
@@ -605,8 +588,8 @@ export default function DriverProfilePage() {
               {push.working
                 ? "Working…"
                 : push.subscribed
-                  ? "Turn off"
-                  : "Enable push"}
+                ? "Turn off"
+                : "Enable push"}
             </button>
           </div>
 
@@ -683,9 +666,9 @@ export default function DriverProfilePage() {
                 Delete account
               </p>
               <p className="mt-0.5 text-xs text-muted">
-                Permanently removes your driver record, uploaded TA
-                documents, trip history, ratings, and wallet. Can&apos;t
-                be undone. Make sure no trip is in progress first.
+                Permanently removes your driver record, uploaded TA documents,
+                trip history, ratings, and wallet. Can&apos;t be undone. Make
+                sure no trip is in progress first.
               </p>
             </div>
             <button

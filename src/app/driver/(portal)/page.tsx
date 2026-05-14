@@ -9,7 +9,7 @@ import { FadeUp } from "@/components/anim";
 import { DriverReadinessGate } from "@/components/driver-readiness-gate";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { formatJMD } from "@/lib/jamaica";
-import { useFleetBroadcaster } from "@/lib/use-fleet";
+import { announceDriverOnlineChange } from "@/components/driver-online-presence";
 import { useWakeLock } from "@/lib/use-wake-lock";
 import {
   HeroSkeleton,
@@ -365,6 +365,10 @@ export default function DriverHomePage() {
             body.message ?? body.error ?? `Couldn't go ${next ? "online" : "offline"}.`,
           );
         }
+        // Notify the global <DriverOnlinePresence /> so it can start
+        // (or stop) the foreground location stream + permission
+        // monitor without waiting on a stats refresh roundtrip.
+        announceDriverOnlineChange(next);
       } catch (e) {
         setOnlineState(prev);
         setOnlineError(
@@ -412,11 +416,10 @@ export default function DriverHomePage() {
     };
   }, [online, setOnline]);
 
-  /* ─── Fleet broadcaster ─── */
-  const { error: fleetError } = useFleetBroadcaster(
-    driverUserId,
-    online === true && !hasActiveTrip,
-  );
+  // Fleet broadcasting now lives in <DriverOnlinePresence /> mounted
+  // at the portal layout so the GPS stream stays alive across every
+  // driver page, not only the dashboard. The component drives
+  // useFleetBroadcaster itself.
 
   /* ─── Wake lock while online ─── */
   // Keep the screen on whenever the driver is online so the
@@ -660,15 +663,8 @@ export default function DriverHomePage() {
         </FadeUp>
       )}
 
-      {/* GPS / fleet warning */}
-      {online && fleetError && (
-        <FadeUp delay={0.04}>
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900">
-            <p className="font-bold">Location sharing is off</p>
-            <p className="mt-1">{fleetError}</p>
-          </div>
-        </FadeUp>
-      )}
+      {/* GPS / fleet failures now surface through the global
+         DriverOnlinePresence modal — no inline warning needed here. */}
 
       {statsError && (
         <FadeUp delay={0.04}>

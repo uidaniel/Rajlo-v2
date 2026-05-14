@@ -3,6 +3,7 @@ import { PortalLayout } from "@/components/portal-layout";
 import { SessionGuard } from "@/components/session-guard";
 import { DriverActivityTracker } from "@/components/driver-activity-tracker";
 import { DriverPortalGate } from "@/components/driver-portal-gate";
+import { DriverOnlinePresence } from "@/components/driver-online-presence";
 import { driverNav } from "@/lib/mock-data";
 import { getDriverStatus } from "@/lib/driver-status";
 
@@ -42,6 +43,11 @@ export default async function DriverPortalLayout({
          driver is interacting with the portal, and flips them
          offline after 1hr of no interaction. Renders nothing. */}
       <DriverActivityTracker />
+      {/* Global driver presence: keeps the GPS stream alive across
+         every driver page while the driver is online (not just the
+         dashboard), and surfaces a modal if the OS-level location is
+         turned off mid-session. Renders nothing until that fires. */}
+      <DriverOnlinePresence />
       {/* Client-side gate that bounces verified drivers on the web
          to /driver/download-app (they belong in the native app).
          The server-side getDriverStatus above already handles

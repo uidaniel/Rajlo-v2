@@ -103,7 +103,7 @@ export default function DriverRatingsPage() {
   const noRatings = summary.total === 0;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-2 py-2 md:px-3 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">
@@ -118,12 +118,16 @@ export default function DriverRatingsPage() {
             </p>
             <h1 className="mt-2 text-5xl font-extrabold leading-none tracking-tight md:text-6xl">
               {summary.average !== null ? summary.average.toFixed(1) : "—"}
-              <span className="ml-2 text-2xl text-white/60 md:text-3xl">/ 5</span>
+              <span className="ml-2 text-2xl text-white/60 md:text-3xl">
+                / 5
+              </span>
             </h1>
             <p className="mt-3 text-sm text-white/80">
               {noRatings
                 ? "No ratings yet — your first reviews land here once riders complete trips with you."
-                : `${summary.total} review${summary.total === 1 ? "" : "s"} from your riders`}
+                : `${summary.total} review${
+                    summary.total === 1 ? "" : "s"
+                  } from your riders`}
             </p>
 
             {!noRatings && (
@@ -135,7 +139,9 @@ export default function DriverRatingsPage() {
                       ? `${summary.fiveStarPct}%`
                       : "—"
                   }
-                  caption={`${distribution[5]} of ${summary.total} review${summary.total === 1 ? "" : "s"}`}
+                  caption={`${distribution[5]} of ${summary.total} review${
+                    summary.total === 1 ? "" : "s"
+                  }`}
                 />
                 <HeroStat
                   label="Last 30 days"
@@ -144,7 +150,9 @@ export default function DriverRatingsPage() {
                       ? last30Days.average.toFixed(1)
                       : "—"
                   }
-                  caption={`${last30Days.total} review${last30Days.total === 1 ? "" : "s"}`}
+                  caption={`${last30Days.total} review${
+                    last30Days.total === 1 ? "" : "s"
+                  }`}
                 />
                 <HeroStat
                   label="Lifetime"
@@ -230,9 +238,9 @@ export default function DriverRatingsPage() {
               Your first review is coming
             </p>
             <p className="mx-auto mt-1 max-w-sm text-xs text-muted">
-              Once you complete trips, riders will rate you 1–5 stars and
-              their feedback will land here. A consistent 4.7+ unlocks
-              priority matching.
+              Once you complete trips, riders will rate you 1–5 stars and their
+              feedback will land here. A consistent 4.7+ unlocks priority
+              matching.
             </p>
           </div>
         </FadeUp>

@@ -38,7 +38,13 @@ type ActiveRide = {
   status: "accepted" | "arrived" | "in_progress";
   pickup: { name: string; address: string; lat: number; lng: number };
   dropoff: { name: string; address: string; lat: number; lng: number };
-  stops: { position: number; name: string; address: string; lat: number; lng: number }[];
+  stops: {
+    position: number;
+    name: string;
+    address: string;
+    lat: number;
+    lng: number;
+  }[];
   seats: number;
   notes: string | null;
   estimatedFareJMD: number;
@@ -87,7 +93,8 @@ const STAGE_COPY = {
   in_progress: {
     eyebrow: "On the way",
     headline: "Trip in progress",
-    description: "Drive safely. Tap complete when the rider has been dropped off.",
+    description:
+      "Drive safely. Tap complete when the rider has been dropped off.",
     actionLabel: "Complete trip",
     actionAction: "complete" as const,
     nextStatus: "completed" as const,
@@ -282,7 +289,7 @@ export default function DriverActiveTripPage() {
      + map + rider card + trip details. */
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl space-y-4 px-2 py-6 md:px-3 md:py-8">
+      <div className="mx-auto max-w-3xl space-y-4 py2 md:px-3 md:py-8">
         <HeroSkeleton />
         <MapSkeleton />
         <div className="flex items-center gap-4 rounded-2xl border border-line bg-surface p-5">
@@ -351,9 +358,7 @@ export default function DriverActiveTripPage() {
               rideId={completed.secondary.rideId}
               riderName={completed.secondary.riderName}
               label="Rider 2"
-              alreadyStars={
-                ratedRides[completed.secondary.rideId] ?? null
-              }
+              alreadyStars={ratedRides[completed.secondary.rideId] ?? null}
               onRated={(s) =>
                 setRatedRides((m) => ({
                   ...m,
@@ -388,8 +393,8 @@ export default function DriverActiveTripPage() {
           No active trip
         </h1>
         <p className="mt-2 max-w-md text-sm text-muted">
-          Head back to the dashboard and wait for an incoming request, or
-          accept one from your inbox.
+          Head back to the dashboard and wait for an incoming request, or accept
+          one from your inbox.
         </p>
         <Link
           href="/driver"
@@ -483,7 +488,7 @@ export default function DriverActiveTripPage() {
       }));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 px-2 py-6 md:px-3 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-4 py-2 md:px-3 md:py-8">
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">
           <ArcWatermark
@@ -536,8 +541,8 @@ export default function DriverActiveTripPage() {
               carpool
                 ? null
                 : ride.status === "in_progress"
-                  ? { target: "dropoff" }
-                  : { target: "pickup" }
+                ? { target: "dropoff" }
+                : { target: "pickup" }
             }
             className="h-[55vh] min-h-[20rem] w-full md:h-[60vh] md:max-h-[640px]"
           />
@@ -563,9 +568,7 @@ export default function DriverActiveTripPage() {
               </p>
               <p className="mt-0.5 text-xs text-muted">
                 Combined fare ·{" "}
-                {formatJMD(
-                  ride.estimatedFareJMD + carpool.partner.fareJMD,
-                )}
+                {formatJMD(ride.estimatedFareJMD + carpool.partner.fareJMD)}
               </p>
             </div>
           </div>
@@ -773,7 +776,9 @@ export default function DriverActiveTripPage() {
                 {stage.actionLabel}
                 <Icon
                   name={
-                    ride.status === "in_progress" ? "check-circle" : "arrow-right"
+                    ride.status === "in_progress"
+                      ? "check-circle"
+                      : "arrow-right"
                   }
                   className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
                 />

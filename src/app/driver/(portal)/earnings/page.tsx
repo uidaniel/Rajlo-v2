@@ -147,8 +147,8 @@ export default function DriverEarningsPage() {
       priorTotal > 0
         ? ((rangeTotal - priorTotal) / priorTotal) * 100
         : rangeTotal > 0
-          ? 100
-          : 0;
+        ? 100
+        : 0;
     const bestDay = buckets.reduce((best, b) =>
       b.total > best.total ? b : best,
     );
@@ -169,10 +169,7 @@ export default function DriverEarningsPage() {
   // Most recent 5 completed trips, regardless of selected range —
   // just the "what did I do lately" feed at the bottom.
   const recentCompleted = useMemo(
-    () =>
-      rows
-        .filter((r) => r.status === "completed")
-        .slice(0, 5),
+    () => rows.filter((r) => r.status === "completed").slice(0, 5),
     [rows],
   );
 
@@ -180,7 +177,7 @@ export default function DriverEarningsPage() {
     // Earnings layout skeleton: hero + range tabs + KPI strip +
     // chart + payout card + recent-trips list.
     return (
-      <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
+      <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
         <HeroSkeleton />
         <Skeleton className="h-10 w-72" rounded="full" />
         <StatsGridSkeleton count={3} />
@@ -218,7 +215,9 @@ export default function DriverEarningsPage() {
     return (
       <div className="mx-auto max-w-md px-4 py-16 text-center">
         <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-primary-soft">
-          <span aria-hidden className="text-3xl leading-none">😢</span>
+          <span aria-hidden className="text-3xl leading-none">
+            😢
+          </span>
         </span>
         <h1 className="mt-5 text-2xl font-extrabold tracking-tight">
           Couldn&apos;t load earnings
@@ -229,7 +228,7 @@ export default function DriverEarningsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-2 py-6 md:px-3 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero — wallet card */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">
@@ -264,8 +263,8 @@ export default function DriverEarningsPage() {
                 {stats.windowDays === 1
                   ? "day"
                   : stats.windowDays === 7
-                    ? "week"
-                    : "month"}
+                  ? "week"
+                  : "month"}
               </p>
             )}
           </div>
@@ -366,10 +365,7 @@ export default function DriverEarningsPage() {
             </Link>
           </div>
           <ul className="divide-y divide-line text-xs">
-            <PayoutRow
-              label="Method"
-              value="Bank transfer · NCB ••••8821"
-            />
+            <PayoutRow label="Method" value="Bank transfer · NCB ••••8821" />
             <PayoutRow label="Currency" value="JMD" />
             <PayoutRow label="Schedule" value="Weekly · Mondays" />
           </ul>
@@ -446,8 +442,8 @@ export default function DriverEarningsPage() {
               No completed trips yet
             </h2>
             <p className="mx-auto mt-2 max-w-sm text-sm text-muted">
-              Once you wrap your first ride, your earnings appear here in
-              real time.
+              Once you wrap your first ride, your earnings appear here in real
+              time.
             </p>
             <Link
               href="/driver"
@@ -534,8 +530,7 @@ function DailyChart({
             weekday: "short",
           });
           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-          const isToday =
-            new Date().toDateString() === date.toDateString();
+          const isToday = new Date().toDateString() === date.toDateString();
           return (
             <div
               key={i}
@@ -547,11 +542,13 @@ function DailyChart({
                     b.total === 0
                       ? "bg-line"
                       : isToday
-                        ? "bg-rajlo-red shadow-md shadow-rajlo-red/30"
-                        : "bg-rajlo-red/70 hover:bg-rajlo-red"
+                      ? "bg-rajlo-red shadow-md shadow-rajlo-red/30"
+                      : "bg-rajlo-red/70 hover:bg-rajlo-red"
                   }`}
                   style={{ height: `${Math.max(4, heightPct)}%` }}
-                  title={`${formatJMD(b.total)} · ${b.count} trip${b.count === 1 ? "" : "s"}`}
+                  title={`${formatJMD(b.total)} · ${b.count} trip${
+                    b.count === 1 ? "" : "s"
+                  }`}
                 />
               </div>
               <p
@@ -559,8 +556,8 @@ function DailyChart({
                   isToday
                     ? "text-rajlo-red"
                     : isWeekend
-                      ? "text-muted"
-                      : "text-muted"
+                    ? "text-muted"
+                    : "text-muted"
                 }`}
               >
                 {dayLabel}

@@ -137,7 +137,7 @@ export default function DriverHelpSafetyPage() {
   }, [filtered]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 px-2 py-2 md:px-3 md:py-8">
+    <div className="mx-auto max-w-3xl space-y-5 py-2 md:px-3 md:py-8">
       {/* Hero with emergency CTA */}
       <FadeUp>
         <div className="relative overflow-hidden rounded-3xl bg-rajlo-black p-6 text-white shadow-xl shadow-rajlo-black/30 md:p-8">
@@ -154,9 +154,9 @@ export default function DriverHelpSafetyPage() {
               We&apos;ve got your back
             </h1>
             <p className="mt-2 max-w-md text-sm text-white/80">
-              One tap to reach emergency services, one tap to flag an
-              incident. Help articles, contact channels, and the rest of
-              your safety toolkit live below.
+              One tap to reach emergency services, one tap to flag an incident.
+              Help articles, contact channels, and the rest of your safety
+              toolkit live below.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-2">
