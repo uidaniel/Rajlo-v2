@@ -925,7 +925,17 @@ export function MapView({
         riderHeadingBucketRef.current = bucket;
       }
     }
-  }, [riderPosition, selfPosition, riderHeading, liveRoute]);
+
+    // Auto-follow: keep the puck visible on the map. We pan whenever
+    // the rider's position updates AND followMode is still armed
+    // (the dragstart listener flips it off the moment the user drags
+    // somewhere else, so this can't fight their exploration). Skipped
+    // during the searching-for-driver radar overlay since that mode
+    // owns the map view.
+    if (followModeRef.current && !searching) {
+      map.panTo(pos);
+    }
+  }, [riderPosition, selfPosition, riderHeading, liveRoute, searching]);
 
   // Fullscreen side-effects — Esc to exit, body-scroll lock, and a
   // Google Maps resize trigger so tiles + bounds re-fit correctly
@@ -1223,37 +1233,42 @@ export function MapView({
  *   -1   → no heading available, render the puck without the glow
  *   0..350 (multiple of 10) → rotate the glow to that compass bearing
  *
- * Glow is a 90° wedge drawn with a radial gradient that fades from
- * low-opacity blue at the dot centre to fully transparent at its
- * outer edge — no sharp polygon tip, no flashlight feel. Cached so
- * we never re-encode the same SVG twice.
+ * Glow is a 90°-wide wedge with a 40-unit radius (canvas 96×96, dot
+ * at (48, 60)) — longer than the previous 24-radius version so the
+ * direction reads from further out on the map. Radial gradient fades
+ * from low-opacity blue at the dot centre to fully transparent at
+ * the wedge's outer edge, so the cone is soft and rounded — no sharp
+ * polygon tip. Cached so we never re-encode the same SVG twice.
  */
 const riderIconCache = new Map<number, google.maps.Icon>();
 function buildRiderIcon(bucket: number): google.maps.Icon {
   const cached = riderIconCache.get(bucket);
   if (cached) return cached;
   const showGlow = bucket >= 0;
+  // Wedge endpoints derived from r=40 at ±45° off the upward axis:
+  // ( 48 ± 40·sin(45°), 60 − 40·cos(45°) ) = (19.72, 31.72) /
+  // (76.28, 31.72). Path: centre → left edge → arc to right → close.
   const glow = showGlow
     ? `<defs>` +
-      `<radialGradient id="rg" cx="32" cy="40" r="24" gradientUnits="userSpaceOnUse">` +
+      `<radialGradient id="rg" cx="48" cy="60" r="40" gradientUnits="userSpaceOnUse">` +
       `<stop offset="0%" stop-color="#1d4ed8" stop-opacity="0.45"/>` +
-      `<stop offset="60%" stop-color="#1d4ed8" stop-opacity="0.16"/>` +
+      `<stop offset="55%" stop-color="#1d4ed8" stop-opacity="0.18"/>` +
       `<stop offset="100%" stop-color="#1d4ed8" stop-opacity="0"/>` +
       `</radialGradient>` +
       `</defs>` +
-      `<g transform="rotate(${bucket} 32 40)">` +
-      `<path d="M 32 40 L 15.03 28 A 24 24 0 0 1 48.97 28 Z" fill="url(#rg)"/>` +
+      `<g transform="rotate(${bucket} 48 60)">` +
+      `<path d="M 48 60 L 19.72 31.72 A 40 40 0 0 1 76.28 31.72 Z" fill="url(#rg)"/>` +
       `</g>`
     : "";
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">` +
     `${glow}` +
-    `<circle cx="32" cy="40" r="10" fill="#1d4ed8" stroke="#ffffff" stroke-width="3"/>` +
+    `<circle cx="48" cy="60" r="10" fill="#1d4ed8" stroke="#ffffff" stroke-width="3"/>` +
     `</svg>`;
   const icon: google.maps.Icon = {
     url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
-    scaledSize: new google.maps.Size(64, 64),
-    anchor: new google.maps.Point(32, 40),
+    scaledSize: new google.maps.Size(96, 96),
+    anchor: new google.maps.Point(48, 60),
   };
   riderIconCache.set(bucket, icon);
   return icon;
