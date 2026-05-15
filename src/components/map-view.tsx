@@ -88,25 +88,29 @@ function approxDistanceMeters(
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Top-down (elevation) view car icon. Rendered as an inline SVG embedded
-// as a data URL — multi-element so we get a proper car look: red body,
-// dark windshield + rear window, wing mirror nubs.
+// Premium "depth-shaded top-down" car icon. Reads as 3D at every heading
+// because the cues are gradient-based (not perspective-based): a metallic
+// body gradient gives the body its curved sheen, the glass uses a vertical
+// gradient + a shine streak so the windshield catches the light, wheel
+// arches poke out below the body, and a soft radial ground shadow sits
+// under everything. A small Rajlo dot crowns the roof so the brand is
+// readable even at thumb-size.
 //
-// Rotation is achieved by wrapping the car body in a `<g transform="rotate(...)">`
-// and varying the rotation in the SVG source itself. The classic Google
-// Maps `Marker` API doesn't rotate URL-based icons, so we encode the
-// rotation directly into the SVG and produce a different data URL per
-// rotation bucket. We bucket to 10° steps so we end up with ≤36 cached
-// SVGs total no matter how many drivers, no matter how often they move.
+// A literal 3/4 perspective render would invert and look broken the moment
+// the car heads south. Depth-shaded top-down rotates cleanly at every
+// angle while still feeling like a render rather than a sticker.
+//
+// Rotation is baked into the SVG (`<g transform="rotate(...)">`) because
+// Google Maps' URL-based icon doesn't support runtime rotation. We bucket
+// to 10° steps so we cache ≤36 SVGs total no matter how many drivers move.
 //
 // IMPORTANT: viewBox is intentionally larger than the car body so corners
-// don't clip when the car is rotated to a diagonal. The body is ~24×50
+// don't clip when the car is rotated to a diagonal. The body is ~26×54
 // drawn inside a 70×70 box centred at (35,35). Half-diagonal of the
-// body is √(12² + 25²) ≈ 28, so 35px of margin around the rotation
-// centre is plenty — at 45° the corners still sit ~7px inside the
-// viewBox edge.
+// body is √(13² + 27²) ≈ 30, so 35px of margin around the rotation
+// centre is plenty — at 45° the corners still sit ~5px inside the edge.
 function carIconSvg(rotationDeg: number): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 70"><g transform="rotate(${rotationDeg} 35 35)"><path d="M27 9 Q23 9 23 13 L23 55 Q23 59 27 59 L43 59 Q47 59 47 55 L47 13 Q47 9 43 9 Z" fill="#f10100" stroke="#1a1a1a" stroke-width="1.5"/><path d="M26 18 L44 18 L41 26 L29 26 Z" fill="#1a1a1a" opacity="0.7"/><path d="M29 40 L41 40 L44 48 L26 48 Z" fill="#1a1a1a" opacity="0.7"/><rect x="20.5" y="20" width="3" height="3" rx="1" fill="#1a1a1a"/><rect x="46.5" y="20" width="3" height="3" rx="1" fill="#1a1a1a"/><line x1="35" y1="27" x2="35" y2="39" stroke="#1a1a1a" stroke-width="0.6" opacity="0.5"/></g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 70"><defs><linearGradient id="b" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#6a0000"/><stop offset="22%" stop-color="#b50000"/><stop offset="50%" stop-color="#ff2424"/><stop offset="78%" stop-color="#b50000"/><stop offset="100%" stop-color="#6a0000"/></linearGradient><linearGradient id="g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#2a3441"/><stop offset="100%" stop-color="#0d1117"/></linearGradient><radialGradient id="s" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#000" stop-opacity="0.55"/><stop offset="60%" stop-color="#000" stop-opacity="0.2"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><g transform="rotate(${rotationDeg} 35 35)"><ellipse cx="35" cy="38" rx="16" ry="28" fill="url(#s)"/><rect x="19" y="17" width="4" height="9" rx="1.5" fill="#0a0a0a"/><rect x="47" y="17" width="4" height="9" rx="1.5" fill="#0a0a0a"/><rect x="19" y="42" width="4" height="9" rx="1.5" fill="#0a0a0a"/><rect x="47" y="42" width="4" height="9" rx="1.5" fill="#0a0a0a"/><path d="M27 8 Q22 8 22 14 L22 56 Q22 62 27 62 L43 62 Q48 62 48 56 L48 14 Q48 8 43 8 Z" fill="url(#b)" stroke="#3a0000" stroke-width="0.6"/><path d="M24 14 L46 14 L44 16 L26 16 Z" fill="#5a0000" opacity="0.55"/><path d="M26 17 L44 17 L42 27 L28 27 Z" fill="url(#g)"/><path d="M28 18 L34 18 L32 25 L29 25 Z" fill="#ffffff" opacity="0.22"/><path d="M27 28 L43 28 L43 42 L27 42 Z" fill="#ff4040" opacity="0.32"/><line x1="35" y1="28" x2="35" y2="42" stroke="#ff8080" stroke-width="0.4" opacity="0.55"/><path d="M28 43 L42 43 L44 53 L26 53 Z" fill="url(#g)"/><path d="M24 56 L46 56 L44 58 L26 58 Z" fill="#5a0000" opacity="0.55"/><ellipse cx="21.5" cy="23" rx="1.5" ry="1.1" fill="#1a1a1a"/><ellipse cx="48.5" cy="23" rx="1.5" ry="1.1" fill="#1a1a1a"/><ellipse cx="29" cy="11" rx="2" ry="1.3" fill="#fff7c2" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="41" cy="11" rx="2" ry="1.3" fill="#fff7c2" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="28" cy="59" rx="2.2" ry="1.2" fill="#ff2020" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="42" cy="59" rx="2.2" ry="1.2" fill="#ff2020" stroke="#1a1a1a" stroke-width="0.3"/><circle cx="35" cy="35" r="1.8" fill="#ffffff" opacity="0.88"/><circle cx="35" cy="35" r="1.1" fill="#f10100"/></g></svg>`;
 }
 
 export function MapView({

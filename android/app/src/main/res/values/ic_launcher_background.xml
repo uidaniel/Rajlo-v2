@@ -1,11 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Driver-app launcher icon background.
-         The brand-red was the right call for any future RIDER-side app
-         (red is the consumer-facing accent), but on the driver side we
-         want the muted Rajlo dark — the same #111906 the in-app driver
-         theme uses, so the launcher tile, splash background, and the
-         driver hero on the dashboard all read as one. The "O" + arc
-         foreground stays white over this. -->
-    <color name="ic_launcher_background">#111906</color>
+         Brand red. The "O" + arc foreground (white) sits on top, so
+         the icon reads as "white wordmark on Rajlo red" — same
+         palette riders + drivers see on every CTA across the app. -->
+    <color name="ic_launcher_background">#F10100</color>
 </resources>

@@ -49,7 +49,7 @@ const config: CapacitorConfig = {
       // duration is just the failsafe for very slow first launches.
       launchShowDuration: 2500,
       launchAutoHide: true,
-      backgroundColor: "#111906", // Rajlo black — primary dark brand colour
+      backgroundColor: "#F10100", // Rajlo red — splash matches the launcher tile
       androidSplashResourceName: "splash",
       splashFullScreen: true,
       splashImmersive: true,
@@ -85,7 +85,7 @@ const config: CapacitorConfig = {
     allowMixedContent: false,
     // Match the launch screen colour so there's no flash of white
     // between the splash and the WebView painting.
-    backgroundColor: "#111906",
+    backgroundColor: "#F10100",
     // Disable the WebView remote-debugging bridge in production —
     // it adds attach overhead even when no debugger is connected.
     // Re-enable temporarily by setting this to `true` when debugging.

@@ -1,28 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { m } from "motion/react";
-import { Icon, type IconName } from "./icons";
+import { AnimatePresence, m } from "motion/react";
+import { Icon } from "./icons";
 
 /**
  * Weather hero strip for the rider booking page.
  *
- * Asks the browser for the rider's coarse location (cached 30 min so
- * we're not hammering the GPS), fetches /api/weather for that point,
- * and renders a friendly current-conditions card with a witty quip
- * tuned to the condition ("Rainy day — grab your umbrella").
+ * Compact-by-default — shows a real emoji + temperature + the short
+ * condition label, with a chevron on the right that expands a panel
+ * containing the witty quip ("Rainy day — grab your umbrella"). The
+ * collapsed state keeps the page header tight; the expanded state
+ * adds the playful copy when the rider taps to see more.
  *
- * Gradients are deliberately DEEP so the white headline + body copy
- * stay readable on every condition — the previous pastel-fog and
- * pastel-clear treatments washed out the text. Each card also gets
- * its own condition-specific motion: drifting orbs, falling rain
- * lines, lightning flashes, etc. — keeps the strip from reading as
- * a static banner.
+ * Each condition also has its own motion layer (drifting orbs, rain
+ * streaks, lightning flashes, etc.) so even the compact card feels
+ * alive instead of static. Gradients are saturated enough that the
+ * white text stays readable on every condition.
  *
- * Silently renders nothing when:
- *   - The browser has no geolocation support
- *   - The rider denies the permission prompt
- *   - The weather upstream fails
+ * Renders nothing if location permission was denied or the upstream
+ * weather service is unreachable — the booking page sits flush
+ * against the top in that case.
  */
 
 type Condition =
@@ -43,19 +41,16 @@ type Weather = {
   witty: string;
 };
 
-const ICON: Record<Condition, IconName> = {
-  clear: "star",
-  cloudy: "map",
-  rain: "navigation",
-  thunderstorm: "alert-triangle",
-  fog: "search",
-  snow: "shield",
+const EMOJI: Record<Condition, string> = {
+  clear: "☀️",
+  cloudy: "⛅",
+  rain: "🌧️",
+  thunderstorm: "⛈️",
+  fog: "🌫️",
+  snow: "❄️",
 };
 
-// Darker, saturated gradients so the white text always reads cleanly.
-// Each one keeps a hint of the condition's identity (warm gold for
-// clear, deep cyan for rain, midnight purple for storms, etc.) without
-// going so light at the start that the foreground copy disappears.
+// Saturated gradients so the white text always reads cleanly.
 const GRADIENT: Record<Condition, string> = {
   clear:
     "linear-gradient(135deg, #b45309 0%, #d97706 50%, #92400e 100%)",
@@ -71,8 +66,6 @@ const GRADIENT: Record<Condition, string> = {
     "linear-gradient(135deg, #1e3a8a 0%, #1e40af 55%, #2563eb 100%)",
 };
 
-// Hue used for the floating-orb particles + icon halo so each
-// condition's motion layer reads as a tint of that condition.
 const ACCENT: Record<Condition, string> = {
   clear: "#fcd34d",
   cloudy: "#94a3b8",
@@ -85,6 +78,7 @@ const ACCENT: Record<Condition, string> = {
 export function RiderWeatherStrip() {
   const [weather, setWeather] = useState<Weather | null>(null);
   const [denied, setDenied] = useState(false);
+  const [expanded, setExpanded] = useState(false);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
@@ -116,20 +110,26 @@ export function RiderWeatherStrip() {
   if (!weather || denied) return null;
 
   return (
-    <div
-      className="relative overflow-hidden rounded-2xl p-5 text-white shadow-lg"
+    <m.button
+      type="button"
+      onClick={() => setExpanded((v) => !v)}
+      aria-expanded={expanded}
+      // `layout` makes motion animate the height change automatically
+      // when the witty-line panel slides in or out — no manual
+      // measuring of the expanded height required.
+      layout
+      className="relative block w-full cursor-pointer overflow-hidden rounded-2xl p-5 text-left text-white shadow-lg"
       style={{ background: GRADIENT[weather.condition] }}
     >
-      {/* Condition-specific motion layer. Lives behind the content
-         at low opacity so it never competes for legibility with the
-         headline + witty line. */}
+      {/* Condition-specific motion layer. Lives behind the content at
+         low opacity so it never competes with legibility. */}
       <ConditionMotion
         condition={weather.condition}
         accent={ACCENT[weather.condition]}
       />
 
-      {/* Top-right soft glow that gently breathes — applies to every
-         condition so even fog + cloudy don't look static. */}
+      {/* Top-right soft glow that breathes — applies to every
+         condition so the card never reads as static. */}
       <m.div
         aria-hidden
         className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full blur-3xl"
@@ -145,9 +145,11 @@ export function RiderWeatherStrip() {
         }}
       />
 
-      <div className="relative flex items-center gap-4">
+      <m.div layout className="relative flex items-center gap-4">
+        {/* Emoji tile — heartbeat scale always on, an extra side-sway
+           for the sunny variant so a clear day visibly "shines". */}
         <m.span
-          className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/25 backdrop-blur"
+          className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/25 text-3xl backdrop-blur"
           animate={{
             scale: [1, 1.05, 1],
             rotate:
@@ -161,8 +163,9 @@ export function RiderWeatherStrip() {
             ease: "easeInOut",
           }}
         >
-          <Icon name={ICON[weather.condition]} className="h-7 w-7" />
+          <span aria-hidden>{EMOJI[weather.condition]}</span>
         </m.span>
+
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-extrabold leading-none tracking-tight drop-shadow-sm">
@@ -172,24 +175,55 @@ export function RiderWeatherStrip() {
               {weather.description}
             </span>
           </div>
-          <p className="mt-1 text-sm leading-snug text-white/95">
-            {weather.witty}
-          </p>
         </div>
-      </div>
-    </div>
+
+        {/* Chevron — rotates 180° when expanded. Lives inside the
+           same flex row so the layout stays balanced regardless of
+           the description's length. */}
+        <m.span
+          aria-hidden
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/20 text-white backdrop-blur"
+          animate={{ rotate: expanded ? 180 : 0 }}
+          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+        >
+          <Icon name="chevron-down" className="h-4 w-4" />
+        </m.span>
+      </m.div>
+
+      {/* Expanded panel — slides + fades the witty line in/out.
+         `layout` on the parent button handles the height transition,
+         AnimatePresence ensures the panel exits cleanly when the
+         user collapses again. */}
+      <AnimatePresence initial={false}>
+        {expanded && (
+          <m.div
+            key="witty"
+            layout
+            className="relative mt-4 border-t border-white/15 pt-4"
+            initial={{ opacity: 0, y: -4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+          >
+            <p className="text-sm leading-relaxed text-white/95">
+              {weather.witty}
+            </p>
+            {weather.apparentC != null &&
+              weather.apparentC !== weather.tempC && (
+                <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                  Feels like {weather.apparentC}°
+                </p>
+              )}
+          </m.div>
+        )}
+      </AnimatePresence>
+    </m.button>
   );
 }
 
 /**
- * Per-condition motion layer. Each branch renders something tuned to
- * the weather so the card feels alive without being noisy:
- *   - clear        → slow drifting golden orbs (sun "particles")
- *   - cloudy       → slow horizontal drift of soft white blobs (clouds)
- *   - rain         → vertical falling streaks (drops)
- *   - thunderstorm → occasional flash + falling streaks
- *   - fog          → very slow horizontal drift of low-opacity blobs
- *   - snow         → falling soft white dots
+ * Per-condition motion layer behind the content. Cheap CSS-driven
+ * animations so the card feels alive without burning CPU.
  */
 function ConditionMotion({
   condition,
@@ -198,9 +232,6 @@ function ConditionMotion({
   condition: Condition;
   accent: string;
 }) {
-  // Memoise the random positions so particles stay in place between
-  // re-renders — re-rolling them every commit would jerk the
-  // animation and ruin the calm-drift effect.
   const particles = useMemo(() => {
     return Array.from({ length: 8 }, (_, i) => ({
       id: i,
@@ -268,10 +299,7 @@ function ConditionMotion({
               opacity: 0.7,
             }}
             initial={{ top: "-10%" }}
-            animate={{
-              top: "110%",
-              x: [0, 6, -6, 0],
-            }}
+            animate={{ top: "110%", x: [0, 6, -6, 0] }}
             transition={{
               top: {
                 duration: 5 + Math.random() * 2,
@@ -291,10 +319,7 @@ function ConditionMotion({
     );
   }
 
-  // clear / cloudy / fog → slow drifting orbs. Same primitive, just
-  // different counts/speeds/opacities.
-  const drift =
-    condition === "clear" ? 14 : condition === "fog" ? 22 : 18;
+  const drift = condition === "clear" ? 14 : condition === "fog" ? 22 : 18;
   const opacity =
     condition === "clear" ? 0.35 : condition === "fog" ? 0.22 : 0.28;
 
