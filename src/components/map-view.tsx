@@ -88,6 +88,52 @@ function approxDistanceMeters(
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+// Floating info bubble that sits ABOVE a pickup/dropoff pin showing
+// the ETA. Rendered as a Google Maps Marker with an SVG-data-URL icon
+// so it stays anchored to the lat/lng and reprojects correctly on pan
+// or zoom. The SVG is an extra ~14px taller than the visual bubble so
+// the anchor (bottom-centre) puts the triangle tip a clean 4px above
+// the pin's top edge regardless of pin size.
+function buildBubbleIcon(
+  text: string,
+  accent: "red" | "black",
+): google.maps.Icon {
+  const padding = 12;
+  // Rough width estimate: 7px/char is generous for system-ui bold 12px.
+  // Bake the longest expected label in once and clamp to a minimum so
+  // tiny labels ("3 min") still look like balanced pills.
+  const bubbleW = Math.max(58, text.length * 7 + padding * 2);
+  const bubbleH = 28;
+  const tipH = 6;
+  const gap = 14; // empty space below the tip so it floats above the pin
+  const totalH = bubbleH + tipH + gap;
+  const borderColor = accent === "red" ? "#f10100" : "#111906";
+  const tipX = bubbleW / 2;
+  const tipY = bubbleH + tipH;
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${bubbleW}" height="${totalH}" viewBox="0 0 ${bubbleW} ${totalH}">` +
+    // soft drop shadow
+    `<rect x="3" y="4" width="${bubbleW - 6}" height="${bubbleH}" rx="${bubbleH / 2}" fill="#000" opacity="0.18"/>` +
+    // body pill
+    `<rect x="1.5" y="1.5" width="${bubbleW - 3}" height="${bubbleH}" rx="${bubbleH / 2}" fill="#ffffff" stroke="${borderColor}" stroke-width="1.5"/>` +
+    // triangle pointer (white fill drawn over the body's bottom border)
+    `<path d="M${tipX - 6} ${bubbleH + 1} L${tipX} ${tipY} L${tipX + 6} ${bubbleH + 1} Z" fill="#ffffff"/>` +
+    // triangle border (just the two slanted sides — the top side is
+    // hidden behind the body so we don't redraw it)
+    `<path d="M${tipX - 6} ${bubbleH + 1} L${tipX} ${tipY} L${tipX + 6} ${bubbleH + 1}" stroke="${borderColor}" stroke-width="1.5" fill="none" stroke-linejoin="round"/>` +
+    // label text
+    `<text x="${bubbleW / 2}" y="${bubbleH / 2 + 4.5}" font-family="-apple-system, system-ui, Segoe UI, sans-serif" font-size="12" font-weight="700" text-anchor="middle" fill="#111906">${text}</text>` +
+    `</svg>`;
+  return {
+    url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(bubbleW, totalH),
+    // Anchor at bottom-centre so the SVG floats above the marker
+    // position. The `gap` baked into totalH gives the tip 4px of
+    // breathing room from the pin's top edge.
+    anchor: new google.maps.Point(bubbleW / 2, totalH),
+  };
+}
+
 // 3/4 isometric car icon — shows both the TOP of the car (roof, windshield,
 // rear window, hood, trunk) AND a prominent right-side profile (side
 // panel, two side windows, two visible wheels, side mirror). The side
@@ -105,7 +151,7 @@ function approxDistanceMeters(
 // Google Maps' URL-based icon doesn't support runtime rotation. We bucket
 // to 10° steps so we cache ≤36 SVGs no matter how many drivers move.
 function carIconSvg(rotationDeg: number): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 70"><defs><linearGradient id="b" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#7a0000"/><stop offset="25%" stop-color="#cc0808"/><stop offset="55%" stop-color="#ff2424"/><stop offset="100%" stop-color="#8a0000"/></linearGradient><linearGradient id="sp" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#6a0000"/><stop offset="50%" stop-color="#3a0000"/><stop offset="100%" stop-color="#150000"/></linearGradient><linearGradient id="g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#2a3441"/><stop offset="100%" stop-color="#0d1117"/></linearGradient><radialGradient id="s" cx="50%" cy="55%" r="55%"><stop offset="0%" stop-color="#000" stop-opacity="0.5"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><g transform="rotate(${rotationDeg} 35 35)"><ellipse cx="36" cy="40" rx="20" ry="28" fill="url(#s)"/><path d="M42 12 Q42 9 45 9 L50 12 L55 16 L55 54 L50 58 L45 61 Q42 61 42 58 Z" fill="url(#sp)" stroke="#1a0000" stroke-width="0.5"/><path d="M44 17 L54 20 L54 30 L44 28 Z" fill="url(#g)"/><path d="M44 38 L54 40 L54 50 L44 48 Z" fill="url(#g)"/><rect x="44" y="30" width="10" height="3" fill="#1a0000"/><ellipse cx="50" cy="20" rx="3.2" ry="5" fill="#0a0a0a"/><ellipse cx="51" cy="20" rx="1.9" ry="3.2" fill="#2a2a2a"/><ellipse cx="51" cy="20" rx="0.8" ry="1.3" fill="#5a5a5a"/><ellipse cx="50" cy="50" rx="3.2" ry="5" fill="#0a0a0a"/><ellipse cx="51" cy="50" rx="1.9" ry="3.2" fill="#2a2a2a"/><ellipse cx="51" cy="50" rx="0.8" ry="1.3" fill="#5a5a5a"/><path d="M54 21 L57 22 L57 25 L54 24 Z" fill="#1a0000"/><path d="M22 10 Q17 10 17 16 L17 54 Q17 60 22 60 L42 60 L42 10 Z" fill="url(#b)" stroke="#3a0000" stroke-width="0.6"/><path d="M19 11 L41 11 L40 14 L21 14 Z" fill="#ff9090" opacity="0.4"/><path d="M20 14 L41 14 L41 20 L20 20 Z" fill="#d01010" opacity="0.45"/><path d="M21 20 L41 20 L39 28 L23 28 Z" fill="url(#g)"/><path d="M23 21 L29 21 L27 27 L24 27 Z" fill="#ffffff" opacity="0.25"/><path d="M22 28 L41 28 L41 42 L22 42 Z" fill="#a80000" opacity="0.45"/><line x1="31" y1="29" x2="31" y2="41" stroke="#ff7070" stroke-width="0.3" opacity="0.55"/><path d="M23 42 L41 42 L43 51 L21 51 Z" fill="url(#g)"/><path d="M20 51 L42 51 L41 56 L21 56 Z" fill="#8a0000" opacity="0.5"/><path d="M20 56 L42 56 L41 59 L21 59 Z" fill="#5a0000" opacity="0.7"/><ellipse cx="23" cy="12" rx="2" ry="1.3" fill="#fff7c2" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="38" cy="12" rx="2" ry="1.3" fill="#fff7c2" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="23" cy="12" rx="2.8" ry="1.7" fill="#fff9b0" opacity="0.32"/><ellipse cx="38" cy="12" rx="2.8" ry="1.7" fill="#fff9b0" opacity="0.32"/><ellipse cx="23" cy="58" rx="2" ry="1.2" fill="#ff2020" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="38" cy="58" rx="2" ry="1.2" fill="#ff2020" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="23" cy="58" rx="2.8" ry="1.6" fill="#ff3030" opacity="0.32"/><ellipse cx="38" cy="58" rx="2.8" ry="1.6" fill="#ff3030" opacity="0.32"/><rect x="18" y="32" width="2.5" height="0.7" fill="#1a0000"/><rect x="18" y="38" width="2.5" height="0.7" fill="#1a0000"/></g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 70"><defs><linearGradient id="b" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#8a0000"/><stop offset="25%" stop-color="#d40808"/><stop offset="55%" stop-color="#ff2a2a"/><stop offset="100%" stop-color="#a00000"/></linearGradient><linearGradient id="sp" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#b40000"/><stop offset="50%" stop-color="#8a0000"/><stop offset="100%" stop-color="#6a0000"/></linearGradient><linearGradient id="g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#2a3441"/><stop offset="100%" stop-color="#0d1117"/></linearGradient><radialGradient id="s" cx="50%" cy="55%" r="55%"><stop offset="0%" stop-color="#000" stop-opacity="0.22"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><g transform="rotate(${rotationDeg} 35 35)"><ellipse cx="36" cy="40" rx="20" ry="28" fill="url(#s)"/><path d="M42 12 Q42 9 45 9 L50 12 L55 16 L55 54 L50 58 L45 61 Q42 61 42 58 Z" fill="url(#sp)" opacity="0.92"/><path d="M44 17 L54 20 L54 30 L44 28 Z" fill="url(#g)" opacity="0.85"/><path d="M44 38 L54 40 L54 50 L44 48 Z" fill="url(#g)" opacity="0.85"/><rect x="44" y="31" width="10" height="1.2" fill="#5a0000" opacity="0.55"/><ellipse cx="50" cy="20" rx="3.2" ry="5" fill="#1a1a1a"/><ellipse cx="51" cy="20" rx="1.9" ry="3.2" fill="#3a3a3a"/><ellipse cx="51" cy="20" rx="0.8" ry="1.3" fill="#6a6a6a"/><ellipse cx="50" cy="50" rx="3.2" ry="5" fill="#1a1a1a"/><ellipse cx="51" cy="50" rx="1.9" ry="3.2" fill="#3a3a3a"/><ellipse cx="51" cy="50" rx="0.8" ry="1.3" fill="#6a6a6a"/><path d="M54 21 L57 22 L57 25 L54 24 Z" fill="#3a1010" opacity="0.85"/><path d="M22 10 Q17 10 17 16 L17 54 Q17 60 22 60 L42 60 L42 10 Z" fill="url(#b)"/><path d="M19 11 L41 11 L40 14 L21 14 Z" fill="#ff9090" opacity="0.4"/><path d="M20 14 L41 14 L41 20 L20 20 Z" fill="#d01010" opacity="0.45"/><path d="M21 20 L41 20 L39 28 L23 28 Z" fill="url(#g)"/><path d="M23 21 L29 21 L27 27 L24 27 Z" fill="#ffffff" opacity="0.25"/><path d="M22 28 L41 28 L41 42 L22 42 Z" fill="#a80000" opacity="0.45"/><line x1="31" y1="29" x2="31" y2="41" stroke="#ff7070" stroke-width="0.3" opacity="0.55"/><path d="M23 42 L41 42 L43 51 L21 51 Z" fill="url(#g)"/><path d="M20 51 L42 51 L41 56 L21 56 Z" fill="#8a0000" opacity="0.5"/><path d="M20 56 L42 56 L41 59 L21 59 Z" fill="#5a0000" opacity="0.55"/><ellipse cx="23" cy="12" rx="2" ry="1.3" fill="#fff7c2" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="38" cy="12" rx="2" ry="1.3" fill="#fff7c2" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="23" cy="12" rx="2.8" ry="1.7" fill="#fff9b0" opacity="0.32"/><ellipse cx="38" cy="12" rx="2.8" ry="1.7" fill="#fff9b0" opacity="0.32"/><ellipse cx="23" cy="58" rx="2" ry="1.2" fill="#ff2020" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="38" cy="58" rx="2" ry="1.2" fill="#ff2020" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="23" cy="58" rx="2.8" ry="1.6" fill="#ff3030" opacity="0.32"/><ellipse cx="38" cy="58" rx="2.8" ry="1.6" fill="#ff3030" opacity="0.32"/><rect x="18" y="32" width="2.5" height="0.6" fill="#5a0000" opacity="0.6"/><rect x="18" y="38" width="2.5" height="0.6" fill="#5a0000" opacity="0.6"/></g></svg>`;
 }
 
 export function MapView({
@@ -116,6 +162,8 @@ export function MapView({
   riderPosition,
   nearbyDrivers,
   liveRoute,
+  pickupEtaMinutes = null,
+  dropoffEtaMinutes = null,
   searching = false,
   searchingUntil = null,
   lockable = true,
@@ -131,6 +179,14 @@ export function MapView({
   riderPosition?: LiveDot | null;
   /** Online drivers on the booking-screen map (Phase 2A.4). */
   nearbyDrivers?: FleetDot[];
+  /** Renders a "X min" bubble above the pickup pin — typically the
+   *  estimated arrival time of the nearest online driver. Null hides
+   *  the bubble. */
+  pickupEtaMinutes?: number | null;
+  /** Renders a "X min · Drop off" bubble above the dropoff pin —
+   *  typically the full trip ETA from the fare quote. Null hides
+   *  the bubble. */
+  dropoffEtaMinutes?: number | null;
   /** When set, the polyline goes driver→pickup or driver→dropoff
    *  depending on `target`, and the driver marker is the car icon. */
   liveRoute?: LiveRoute | null;
@@ -164,6 +220,16 @@ export function MapView({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<google.maps.Map | null>(null);
   const markersRef = useRef<google.maps.Marker[]>([]);
+  // ETA bubble markers (pickup "3 min", dropoff "12 min · Drop off").
+  // Tracked in their own ref so they can refresh on every nearest-driver
+  // poll without forcing the route/Directions effect to re-run.
+  const pickupBubbleRef = useRef<google.maps.Marker | null>(null);
+  const dropoffBubbleRef = useRef<google.maps.Marker | null>(null);
+  // Last bubble text we rendered, per pin. Lets us call setIcon ONLY
+  // when the displayed value actually changed — every setIcon call
+  // re-decodes the SVG data URL, so we skip when we can.
+  const pickupBubbleTextRef = useRef<string | null>(null);
+  const dropoffBubbleTextRef = useRef<string | null>(null);
   // Static polyline (pickup → stops → dropoff). Hidden when `liveRoute`
   // is engaged — the live route has its own polyline.
   const polylineRef = useRef<google.maps.Polyline | null>(null);
@@ -591,6 +657,83 @@ export function MapView({
     };
   }, [pickup, stops, dropoff, liveRoute, mapReady]);
 
+  // Floating ETA bubbles above the pickup + dropoff pins. Lives in its
+  // own effect so a nearest-driver-ETA tick can refresh the bubble
+  // without forcing a Directions API re-fetch on the route effect.
+  // The bubble is a separate Marker so it reprojects with the map and
+  // stays anchored to the pin's lat/lng under pan/zoom.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || typeof window === "undefined" || !window.google) return;
+
+    // Pickup bubble — hidden once the trip is in progress (the rider
+    // has already been picked up so an "X min away" pickup hint is
+    // stale clutter at that point).
+    const pickupHidden = liveRoute?.target === "dropoff";
+    const pickupText =
+      pickup && pickupEtaMinutes != null && !pickupHidden
+        ? `${pickupEtaMinutes} min`
+        : null;
+    if (pickupText && pickup) {
+      if (!pickupBubbleRef.current) {
+        pickupBubbleRef.current = new google.maps.Marker({
+          map,
+          position: { lat: pickup.lat, lng: pickup.lng },
+          icon: buildBubbleIcon(pickupText, "red"),
+          zIndex: 50,
+          clickable: false,
+        });
+        pickupBubbleTextRef.current = pickupText;
+      } else {
+        pickupBubbleRef.current.setPosition({
+          lat: pickup.lat,
+          lng: pickup.lng,
+        });
+        if (pickupBubbleTextRef.current !== pickupText) {
+          pickupBubbleRef.current.setIcon(buildBubbleIcon(pickupText, "red"));
+          pickupBubbleTextRef.current = pickupText;
+        }
+      }
+    } else {
+      pickupBubbleRef.current?.setMap(null);
+      pickupBubbleRef.current = null;
+      pickupBubbleTextRef.current = null;
+    }
+
+    // Dropoff bubble — always renders when we have a dropoff + ETA.
+    const dropoffText =
+      dropoff && dropoffEtaMinutes != null
+        ? `${dropoffEtaMinutes} min · Drop off`
+        : null;
+    if (dropoffText && dropoff) {
+      if (!dropoffBubbleRef.current) {
+        dropoffBubbleRef.current = new google.maps.Marker({
+          map,
+          position: { lat: dropoff.lat, lng: dropoff.lng },
+          icon: buildBubbleIcon(dropoffText, "red"),
+          zIndex: 50,
+          clickable: false,
+        });
+        dropoffBubbleTextRef.current = dropoffText;
+      } else {
+        dropoffBubbleRef.current.setPosition({
+          lat: dropoff.lat,
+          lng: dropoff.lng,
+        });
+        if (dropoffBubbleTextRef.current !== dropoffText) {
+          dropoffBubbleRef.current.setIcon(
+            buildBubbleIcon(dropoffText, "red"),
+          );
+          dropoffBubbleTextRef.current = dropoffText;
+        }
+      }
+    } else {
+      dropoffBubbleRef.current?.setMap(null);
+      dropoffBubbleRef.current = null;
+      dropoffBubbleTextRef.current = null;
+    }
+  }, [pickup, dropoff, pickupEtaMinutes, dropoffEtaMinutes, liveRoute, mapReady]);
+
   // Live-route polyline: driver → pickup (or driver → dropoff). Refetches
   // the Directions polyline only when the driver has moved significantly
   // OR the target has flipped — moving the marker every 5s is fine, but
@@ -940,15 +1083,14 @@ export function MapView({
       }
     }
 
-    // Auto-follow: keep the puck visible on the map. We pan whenever
-    // the rider's position updates AND followMode is still armed
-    // (the dragstart listener flips it off the moment the user drags
-    // somewhere else, so this can't fight their exploration). Skipped
-    // during the searching-for-driver radar overlay since that mode
-    // owns the map view.
-    if (followModeRef.current && !searching) {
-      map.panTo(pos);
-    }
+    // NOTE: we deliberately do NOT auto-pan to the rider puck. The
+    // rider standing still (or walking around the booking screen)
+    // shouldn't drag the map with them — that hijacks their view of
+    // the pickup/dropoff/nearby drivers they're trying to look at.
+    // Auto-follow is reserved for the CAR icon (driverPosition effect
+    // above) since "the car is moving on the road" is the only state
+    // where centering the map on a marker is what the user wants.
+    // The rider can still tap the locate-me button to recenter.
   }, [riderPosition, selfPosition, riderHeading, liveRoute, searching, viewer]);
 
   // Fullscreen side-effects — Esc to exit, body-scroll lock, and a

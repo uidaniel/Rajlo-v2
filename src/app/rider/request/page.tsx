@@ -252,6 +252,30 @@ export default function RiderRequestPage() {
   // opening a websocket if we're about to redirect away).
   const fleetDrivers = useFleet(/* active */ !bootstrapping);
 
+  // Pickup ETA bubble = how long the closest online driver would take to
+  // reach pickup. We pick the closest fleet dot by great-circle distance
+  // and translate to minutes at ~30 km/h (typical Kingston average
+  // including traffic + lights). This is a heuristic — the live ETA
+  // gets refined the moment we have a real assignment + Directions
+  // response — but it's accurate enough to read as "soon" vs "a while"
+  // for a rider deciding whether to book now.
+  const pickupEtaMinutes = useMemo<number | null>(() => {
+    if (!pickup || fleetDrivers.length === 0) return null;
+    let nearestKm = Infinity;
+    for (const d of fleetDrivers) {
+      // Quick equirectangular approx — fine at the city scale we care
+      // about and 30× cheaper than a full haversine in a hot poll.
+      const dLat = d.lat - pickup.lat;
+      const dLng = (d.lng - pickup.lng) * Math.cos((pickup.lat * Math.PI) / 180);
+      const km = Math.sqrt(dLat * dLat + dLng * dLng) * 111;
+      if (km < nearestKm) nearestKm = km;
+    }
+    if (!isFinite(nearestKm)) return null;
+    // ~2 min/km at 30 km/h, plus a 1-minute floor so we never claim "0
+    // min" even when a driver is parked on the pickup spot.
+    return Math.max(1, Math.round(nearestKm * 2));
+  }, [pickup, fleetDrivers]);
+
   const canSubmit = Boolean(pickup) && Boolean(dropoff) && !submitting;
 
   const addStop = () => {
@@ -853,6 +877,8 @@ export default function RiderRequestPage() {
             stops={filledStops}
             dropoff={dropoff}
             nearbyDrivers={fleetDrivers}
+            pickupEtaMinutes={pickupEtaMinutes}
+            dropoffEtaMinutes={dropoff ? fare.etaMinutes : null}
             className="h-64 w-full"
           />
           {breadcrumb}
@@ -884,6 +910,8 @@ export default function RiderRequestPage() {
             stops={filledStops}
             dropoff={dropoff}
             nearbyDrivers={fleetDrivers}
+            pickupEtaMinutes={pickupEtaMinutes}
+            dropoffEtaMinutes={dropoff ? fare.etaMinutes : null}
             className="h-full w-full"
           />
           {breadcrumb}

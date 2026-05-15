@@ -32,6 +32,13 @@ import { Icon } from "./icons";
 const TRIGGER_DISTANCE_PX = 80;
 const MAX_PULL_DISTANCE_PX = 140;
 const REFRESH_HOLD_MS = 600;
+// Touch must START within this many pixels of the top of the viewport
+// for the pull-to-refresh to arm. Without this guard, on a page that
+// fits in the viewport (scrollY always 0), a finger-drag-down from the
+// bottom of the screen would also trigger the refresh — exactly the
+// behaviour the user complained about. 100px matches the "header zone"
+// browsers and native apps use for the same gesture.
+const TOUCH_START_TOP_ZONE_PX = 100;
 
 export function PullToRefresh() {
   const router = useRouter();
@@ -55,6 +62,15 @@ export function PullToRefresh() {
       }
       const t = e.touches[0];
       if (!t) return;
+      // AND the finger must touch down near the top of the viewport —
+      // otherwise a drag-down from the BOTTOM of a short, non-scrolling
+      // page would also arm the gesture. Native pull-to-refresh
+      // everywhere else only triggers from the page header.
+      if (t.clientY > TOUCH_START_TOP_ZONE_PX) {
+        armedRef.current = false;
+        startYRef.current = null;
+        return;
+      }
       startYRef.current = t.clientY;
       armedRef.current = true;
     };
