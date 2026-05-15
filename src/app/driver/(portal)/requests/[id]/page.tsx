@@ -258,6 +258,7 @@ export default function DriverRequestDetailPage() {
       <FadeUp delay={0.05}>
         <div className="overflow-hidden rounded-3xl border border-line bg-surface shadow-sm">
           <MapView
+            viewer="driver"
             pickup={pickup}
             stops={allStops}
             dropoff={dropoff}

@@ -261,6 +261,7 @@ export default function DriverHistoryDetailPage({
       <FadeUp delay={0.05}>
         {pickup && dropoff && (
           <MapView
+            viewer="driver"
             pickup={pickup}
             stops={stopsPlaces}
             dropoff={dropoff}

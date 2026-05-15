@@ -120,6 +120,7 @@ export function MapView({
   searching = false,
   searchingUntil = null,
   lockable = true,
+  viewer = "rider",
   className = "h-72 w-full",
 }: {
   pickup: Place | null;
@@ -151,6 +152,14 @@ export function MapView({
    *  Set false on screens where the map IS the interaction (rare —
    *  most Rajlo maps are informational). */
   lockable?: boolean;
+  /** Who's looking at the map. When `"driver"` we suppress:
+   *    - The blue rider puck (the driver doesn't need to see their
+   *      own car represented twice, and the rider's separate puck
+   *      isn't relevant on the driver's console)
+   *    - The "Driver / You" legend strip in the bottom-left
+   *  Defaults to `"rider"` for backwards compatibility with every
+   *  existing rider call-site. */
+  viewer?: "driver" | "rider";
   className?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -878,7 +887,13 @@ export function MapView({
     const map = mapRef.current;
     if (!map || typeof window === "undefined" || !window.google) return;
     const ridingInCar = liveRoute?.target === "dropoff";
-    const source = riderPosition ?? selfPosition;
+    // Suppress the rider puck entirely when the map is shown to a
+    // driver — they asked for the blue dot/halo/cone removed from
+    // their console. Streamed riderPosition (Realtime) otherwise
+    // wins; selfPosition is the one-tap locate-me fallback when no
+    // realtime stream exists yet (rider booking screen).
+    const source =
+      viewer === "driver" ? null : riderPosition ?? selfPosition;
     if (!source || ridingInCar) {
       riderDotRef.current?.setMap(null);
       riderDotRef.current = null;
@@ -935,7 +950,7 @@ export function MapView({
     if (followModeRef.current && !searching) {
       map.panTo(pos);
     }
-  }, [riderPosition, selfPosition, riderHeading, liveRoute, searching]);
+  }, [riderPosition, selfPosition, riderHeading, liveRoute, searching, viewer]);
 
   // Fullscreen side-effects — Esc to exit, body-scroll lock, and a
   // Google Maps resize trigger so tiles + bounds re-fit correctly
@@ -1186,9 +1201,10 @@ export function MapView({
         </button>
       )}
 
-      {(driverPosition ||
-        riderPosition ||
-        (nearbyDrivers && nearbyDrivers.length > 0)) && (
+      {viewer !== "driver" &&
+        (driverPosition ||
+          riderPosition ||
+          (nearbyDrivers && nearbyDrivers.length > 0)) && (
         <div className="pointer-events-none absolute bottom-3 left-3 flex flex-col gap-1.5 rounded-xl bg-white/95 px-3 py-2 text-[11px] font-bold shadow-md backdrop-blur">
           {driverPosition && (
             <div className="flex items-center gap-2">

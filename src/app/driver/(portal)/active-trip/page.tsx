@@ -542,6 +542,7 @@ export default function DriverActiveTripPage() {
              pickups + two dropoffs) rather than a single driver→target
              line, so we fall back to the static-route polyline. */}
           <MapView
+            viewer="driver"
             pickup={mapPickup}
             stops={mapStops}
             dropoff={mapDropoff}

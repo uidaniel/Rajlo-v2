@@ -1047,6 +1047,7 @@ function ActiveSessionMonitor({
               )}
             </div>
             <MapView
+              viewer="driver"
               pickup={
                 nextAction?.kind === "pickup" ? nextAction.place : null
               }
