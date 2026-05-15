@@ -1058,13 +1058,6 @@ export function MapView({
           </div>
         </div>
       )}
-      {!loadError && !pickup && stops.length === 0 && !dropoff && (
-        <div className="pointer-events-none absolute inset-0 grid place-items-center">
-          <div className="rounded-full bg-white/90 px-4 py-2 text-xs font-semibold text-muted shadow-md backdrop-blur">
-            Pick a destination to see your route
-          </div>
-        </div>
-      )}
 
       {/* Searching overlay — radar pulse + countdown, shown while
          the matcher is scanning for a driver. Three concentric
@@ -1266,40 +1259,39 @@ function buildRiderIcon(bucket: number): google.maps.Icon {
   const cached = riderIconCache.get(bucket);
   if (cached) return cached;
 
-  // 96×96 canvas. Dot anchored at (48, 60) — the glow fans upward
+  // 64×64 canvas. Dot anchored at (32, 40) — the glow fans upward
   // from there toward the top of the canvas, leaving the dot itself
-  // unobscured. Each gradient stop has the same id (`rg`) per SVG
-  // since each cached entry is its own document.
+  // unobscured. Radius halved from the previous 96×96 version that
+  // the driver flagged as too wide — the cone of sight should be a
+  // subtle hint, not a flashlight beam.
   const showGlow = bucket >= 0;
   const glow = showGlow
     ? `<defs>` +
-      `<radialGradient id="rg" cx="48" cy="60" r="48" gradientUnits="userSpaceOnUse">` +
+      `<radialGradient id="rg" cx="32" cy="40" r="24" gradientUnits="userSpaceOnUse">` +
       `<stop offset="0%" stop-color="#1d4ed8" stop-opacity="0.45"/>` +
       `<stop offset="60%" stop-color="#1d4ed8" stop-opacity="0.16"/>` +
       `<stop offset="100%" stop-color="#1d4ed8" stop-opacity="0"/>` +
       `</radialGradient>` +
       `</defs>` +
-      // Wide 90° wedge fanning upward from the dot. Drawn as
-      // M(centre) → arc up-right → arc up-left → close. The arc
-      // radius equals the gradient radius so the gradient's outer
-      // stop hits the wedge edge cleanly. Rotate the whole wedge
-      // around the dot centre for compass bearing.
-      `<g transform="rotate(${bucket} 48 60)">` +
-      `<path d="M 48 60 L 14.06 36 A 48 48 0 0 1 81.94 36 Z" fill="url(#rg)"/>` +
+      // 90° wedge fanning upward from the dot. Arc-radius matches the
+      // gradient-radius so the gradient's outer stop hits the wedge
+      // edge cleanly. Rotated around the dot centre for compass bearing.
+      `<g transform="rotate(${bucket} 32 40)">` +
+      `<path d="M 32 40 L 15.03 28 A 24 24 0 0 1 48.97 28 Z" fill="url(#rg)"/>` +
       `</g>`
     : "";
 
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">` +
     `${glow}` +
-    `<circle cx="48" cy="60" r="10" fill="#1d4ed8" stroke="#ffffff" stroke-width="3"/>` +
+    `<circle cx="32" cy="40" r="10" fill="#1d4ed8" stroke="#ffffff" stroke-width="3"/>` +
     `</svg>`;
   const icon: google.maps.Icon = {
     url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
-    scaledSize: new google.maps.Size(96, 96),
+    scaledSize: new google.maps.Size(64, 64),
     // Anchor at the dot centre so it sits exactly on the GPS
     // coordinate regardless of glow rotation.
-    anchor: new google.maps.Point(48, 60),
+    anchor: new google.maps.Point(32, 40),
   };
   riderIconCache.set(bucket, icon);
   return icon;
