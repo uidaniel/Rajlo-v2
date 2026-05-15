@@ -173,6 +173,15 @@ export function MapView({
   // when the route refreshes.
   const driverDotRef = useRef<google.maps.Marker | null>(null);
   const riderDotRef = useRef<google.maps.Marker | null>(null);
+  // Halo circle (faint blue "accuracy" disc) drawn under the rider dot
+  // for the Google-Maps-style location puck. Tracked separately so we
+  // can show/hide it alongside the dot without rebuilding it.
+  const riderHaloRef = useRef<google.maps.Circle | null>(null);
+  // Current compass heading sourced from DeviceOrientationEvent. Drives
+  // the rotation of the cone of sight on the rider puck. Null when the
+  // device can't provide one (permission denied, no sensor, etc.) —
+  // we render the puck without the cone in that case.
+  const riderHeadingBucketRef = useRef<number>(-1);
   // Driver heading state — derived from successive driverPosition values.
   // Held in refs so the marker effect can update icon rotation without
   // re-running the whole effect just because the heading number changed.
@@ -739,35 +748,122 @@ export function MapView({
     });
   }, [nearbyDrivers]);
 
-  // Live rider position — same pattern but with a blue puck.
+  // Compass heading from DeviceOrientationEvent — feeds the cone of
+  // sight on the rider's location puck. On Android Chrome this works
+  // without permission for HTTPS pages; on iOS Safari modern versions
+  // gate it behind a user-gesture permission prompt which we don't
+  // request here (the puck just renders without the cone if no events
+  // arrive). 1Hz rerender max so we don't thrash setIcon on every
+  // event. We hold the bucket in a ref + flip a state setter that the
+  // rider-puck effect lists in its deps, so changes propagate without
+  // tearing down the marker.
+  const [riderHeading, setRiderHeading] = useState<number | null>(null);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    let raf: number | null = null;
+    let pending: number | null = null;
+    const handle = (e: DeviceOrientationEvent) => {
+      // iOS prefers webkitCompassHeading (true heading 0..360 cw from N);
+      // Android Chrome uses event.alpha (ccw from north). Convert both
+      // to the same convention: 0..360 clockwise from north.
+      const w = e as DeviceOrientationEvent & {
+        webkitCompassHeading?: number;
+      };
+      let heading: number | null = null;
+      if (typeof w.webkitCompassHeading === "number") {
+        heading = w.webkitCompassHeading;
+      } else if (typeof e.alpha === "number") {
+        heading = (360 - e.alpha) % 360;
+      }
+      if (heading == null) return;
+      pending = heading;
+      // Throttle to next animation frame so a high-rate sensor doesn't
+      // re-render us at 60Hz with values that barely change.
+      if (raf == null) {
+        raf = requestAnimationFrame(() => {
+          raf = null;
+          if (pending != null) setRiderHeading(pending);
+        });
+      }
+    };
+    window.addEventListener(
+      "deviceorientationabsolute",
+      handle as EventListener,
+    );
+    window.addEventListener("deviceorientation", handle as EventListener);
+    return () => {
+      window.removeEventListener(
+        "deviceorientationabsolute",
+        handle as EventListener,
+      );
+      window.removeEventListener(
+        "deviceorientation",
+        handle as EventListener,
+      );
+      if (raf != null) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // Live rider position — Google-Maps-style "you" puck: faint blue
+  // accuracy halo + white-ringed blue dot + directional cone of sight
+  // pointing where the phone is facing. Hidden during `in_progress`
+  // because the rider is physically INSIDE the moving car at that
+  // point — the car icon (driverPosition) already represents them, and
+  // showing both would be a confusing double marker on top of itself.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || typeof window === "undefined" || !window.google) return;
-    if (!riderPosition) {
+
+    const ridingInCar = liveRoute?.target === "dropoff";
+    if (!riderPosition || ridingInCar) {
       riderDotRef.current?.setMap(null);
       riderDotRef.current = null;
+      riderHaloRef.current?.setMap(null);
+      riderHaloRef.current = null;
       return;
     }
     const pos = { lat: riderPosition.lat, lng: riderPosition.lng };
+
+    // Halo — drawn first (lower z) so it sits under the dot.
+    if (!riderHaloRef.current) {
+      riderHaloRef.current = new google.maps.Circle({
+        map,
+        center: pos,
+        radius: 35,
+        fillColor: "#1d4ed8",
+        fillOpacity: 0.12,
+        strokeWeight: 0,
+        clickable: false,
+        zIndex: 990,
+      });
+    } else {
+      riderHaloRef.current.setCenter(pos);
+    }
+
+    // Dot — bucketed-by-10° icon cache, swap setIcon only when the
+    // bucket actually changes so we don't pay for an icon re-decode
+    // on every position tick.
+    const bucket =
+      riderHeading == null
+        ? -1
+        : (((Math.round(riderHeading / 10) * 10) % 360) + 360) % 360;
     if (!riderDotRef.current) {
       riderDotRef.current = new google.maps.Marker({
         map,
         position: pos,
         zIndex: 998,
-        icon: {
-          path: google.maps.SymbolPath.CIRCLE,
-          scale: 9,
-          fillColor: "#1d4ed8",
-          fillOpacity: 1,
-          strokeColor: "#ffffff",
-          strokeWeight: 3,
-        },
+        icon: buildRiderIcon(bucket),
         title: "You",
       });
+      riderHeadingBucketRef.current = bucket;
     } else {
       riderDotRef.current.setPosition(pos);
+      if (riderHeadingBucketRef.current !== bucket) {
+        riderDotRef.current.setIcon(buildRiderIcon(bucket));
+        riderHeadingBucketRef.current = bucket;
+      }
     }
-  }, [riderPosition]);
+  }, [riderPosition, riderHeading, liveRoute]);
 
   // Fullscreen side-effects — Esc to exit, body-scroll lock, and a
   // Google Maps resize trigger so tiles + bounds re-fit correctly
@@ -1065,6 +1161,42 @@ export function MapView({
  * exist across the whole app session no matter how many drivers there
  * are. Heading null = car points up (no orientation known yet).
  */
+/**
+ * Build the rider "you are here" puck — white-ringed blue dot with an
+ * optional translucent cone of sight pointing where the device is
+ * facing. Bucket parameter follows the same pattern as buildCarIcon:
+ *   -1  → no heading available, render the puck without the cone
+ *   0..359 (multiple of 10) → rotate the cone to that compass bearing
+ * Cached so we never re-encode the same SVG twice.
+ */
+const riderIconCache = new Map<number, google.maps.Icon>();
+function buildRiderIcon(bucket: number): google.maps.Icon {
+  const cached = riderIconCache.get(bucket);
+  if (cached) return cached;
+  const showCone = bucket >= 0;
+  // SVG canvas 64×64. Dot lives at (32, 40); cone fans upward from
+  // there, anchored at the dot so rotation pivots correctly. Tip
+  // reaches the top of the viewBox so the cone has real length to
+  // read as direction at the map's natural zoom levels.
+  const cone = showCone
+    ? `<g transform="rotate(${bucket} 32 40)"><polygon points="32,2 14,38 50,38" fill="#1d4ed8" fill-opacity="0.28"/></g>`
+    : "";
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">` +
+    `${cone}` +
+    `<circle cx="32" cy="40" r="10" fill="#1d4ed8" stroke="#ffffff" stroke-width="3"/>` +
+    `</svg>`;
+  const icon: google.maps.Icon = {
+    url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
+    scaledSize: new google.maps.Size(64, 64),
+    // Anchor at the dot's centre (32, 40) so the dot sits exactly on
+    // the GPS coordinate regardless of cone rotation.
+    anchor: new google.maps.Point(32, 40),
+  };
+  riderIconCache.set(bucket, icon);
+  return icon;
+}
+
 const carIconCache = new Map<number, google.maps.Icon>();
 function buildCarIcon(heading: number | null | undefined): google.maps.Icon {
   // Bucket to 10° increments and normalise into [0, 360).
