@@ -415,7 +415,7 @@ export default function RiderRequestPage() {
     // map block, two waypoint slots) so there's no layout jump when
     // the real form mounts.
     return (
-      <div className="mx-auto max-w-3xl space-y-4 px-4 py-8">
+      <div className="mx-auto max-w-3xl space-y-4 py-2">
         <div className="flex items-center justify-between">
           <Skeleton className="h-6 w-24" rounded="full" />
           <Skeleton className="h-4 w-32" rounded="md" />
@@ -440,8 +440,8 @@ export default function RiderRequestPage() {
           {allPoints.length === 0
             ? "Where are we going?"
             : allPoints.length < 2
-              ? "Add a destination"
-              : `${stops.length + 2} stops planned`}
+            ? "Add a destination"
+            : `${stops.length + 2} stops planned`}
         </span>
       </div>
     </FadeUp>
@@ -485,9 +485,7 @@ export default function RiderRequestPage() {
               // the dropoff input is mounted + visible.
               if (!dropoff) {
                 queueMicrotask(() => {
-                  document
-                    .getElementById("waypoint-dropoff")
-                    ?.focus();
+                  document.getElementById("waypoint-dropoff")?.focus();
                 });
               }
             }}
@@ -581,7 +579,8 @@ export default function RiderRequestPage() {
                   {fare.fareJMD > 0 ? formatJMD(fare.fareJMD) : "Tap to choose"}
                 </p>
                 <p className="text-[11px] leading-relaxed text-muted">
-                  Door to door, your stops, ~{fare.etaMinutes} min ETA. Multi-stop ready.
+                  Door to door, your stops, ~{fare.etaMinutes} min ETA.
+                  Multi-stop ready.
                 </p>
               </button>
 
@@ -632,7 +631,8 @@ export default function RiderRequestPage() {
                           : `${displayMatch.route.origin} → ${displayMatch.route.destination}`}
                       </span>
                       <br />
-                      {displayMatch.route.distanceKm.toFixed(1)} km · TA-regulated · single seat
+                      {displayMatch.route.distanceKm.toFixed(1)} km ·
+                      TA-regulated · single seat
                     </p>
                   </button>
                 )}
@@ -684,7 +684,11 @@ export default function RiderRequestPage() {
                 >
                   <Icon
                     name={n === 1 ? "user" : "users"}
-                    className={`mx-auto mb-0.5 h-4 w-4 ${active ? "text-white" : "text-muted group-hover:text-rajlo-red"}`}
+                    className={`mx-auto mb-0.5 h-4 w-4 ${
+                      active
+                        ? "text-white"
+                        : "text-muted group-hover:text-rajlo-red"
+                    }`}
                   />
                   <span>{n}</span>
                 </button>
@@ -770,8 +774,8 @@ export default function RiderRequestPage() {
     mode === "route_taxi" && selectedMatch
       ? "Route taxi fare"
       : fare.fareJMD > 0
-        ? "Trip total"
-        : "Estimate appears here";
+      ? "Trip total"
+      : "Estimate appears here";
   const ctaLabel =
     mode === "route_taxi" && selectedMatch ? "Hail next car" : "Request ride";
 
@@ -916,8 +920,8 @@ function WaypointSlot({
     kind === "pickup"
       ? "bg-emerald-500"
       : kind === "dropoff"
-        ? "bg-rajlo-red"
-        : "bg-rajlo-black";
+      ? "bg-rajlo-red"
+      : "bg-rajlo-black";
 
   const [locating, setLocating] = useState(false);
   const [locateError, setLocateError] = useState<string | null>(null);
@@ -1063,8 +1067,8 @@ function WaypointSlot({
             kind === "pickup"
               ? "Pickup location"
               : kind === "stop"
-                ? "Stop along the way"
-                : "Where to?"
+              ? "Stop along the way"
+              : "Where to?"
           }
           value={place}
           onSelect={onSelect}
@@ -1073,8 +1077,8 @@ function WaypointSlot({
             kind === "pickup"
               ? "navigation"
               : kind === "stop"
-                ? "map-pin"
-                : "flag"
+              ? "map-pin"
+              : "flag"
           }
           inputId={inputId}
         />
