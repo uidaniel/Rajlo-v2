@@ -8,7 +8,6 @@ import { FadeUp } from "@/components/anim";
 import { NotificationSkeleton, Skeleton } from "@/components/skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { complianceThresholds, type TADocument } from "@/lib/mock-data";
-import { buildMockCompliancePayload } from "@/lib/compliance-utils";
 import {
   getCachedDriverData,
   setCachedDriverData,
@@ -212,23 +211,31 @@ export default function DriverNotificationsPage() {
     };
   }, []);
 
-  // Compliance reminders (fire-and-forget — non-blocking on the page).
+  // Compliance reminders — fetched against the auth-gated endpoint
+  // (no `?driverId=...` query) so each driver sees THEIR own document
+  // statuses. The previous version hit `?driverId=DRV-1031`, which is
+  // a mock external_id, and when that lookup failed it surfaced the
+  // hardcoded mock payload — that's what was showing the bogus
+  // "expired" reminder Raj flagged. Now we read the signed-in
+  // driver's real `compliance.docs` array and just render an empty
+  // section on error rather than fake data.
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch("/api/driver/compliance?driverId=DRV-1031");
+        const res = await fetch("/api/driver/compliance");
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = (await res.json()) as { docs: TADocument[] };
         if (cancelled) return;
         setDocs(json.docs ?? []);
-      } catch {
+        setReminderError(null);
+      } catch (e) {
         if (!cancelled) {
-          // Fall back to mock so the section still has something to
-          // render in dev — same pattern the old page used.
-          setDocs(buildMockCompliancePayload("DRV-1031").docs);
+          setDocs([]);
           setReminderError(
-            "Showing fallback compliance reminders. Live data needs Supabase + an active driver record.",
+            e instanceof Error
+              ? e.message
+              : "Couldn't load renewal reminders.",
           );
         }
       }

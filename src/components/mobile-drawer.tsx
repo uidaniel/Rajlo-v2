@@ -308,19 +308,23 @@ export function MobileDrawer({
         </button>
       </header>
 
-      {/* Mobile backdrop. Full-viewport (top-0, inset-0) so it covers the
-         page's mobile top bar too. Sits at z-[55] — above the sticky
-         top bar (z-40) so the bar can't poke through, but below the
-         drawer panel itself. `touch-none` blocks swipe-through; body
-         overflow is also locked by the effect below as backup. */}
-      {isOpen && (
-        <button
-          aria-hidden
-          tabIndex={-1}
-          className="fixed inset-0 z-[55] touch-none bg-black/50 md:hidden"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
+      {/* Mobile backdrop. Always in the DOM with opacity tied to
+         `isOpen` so it fades in / out smoothly via CSS transition —
+         the previous conditional-render approach popped it in
+         instantly, which read as the drawer "lagging" because the
+         backdrop appeared before the drawer slide started. Pointer
+         events disabled while hidden so it can't intercept taps. */}
+      <button
+        aria-hidden
+        tabIndex={-1}
+        onClick={() => setIsOpen(false)}
+        className={`fixed inset-0 z-[55] touch-none bg-black/50 transition-opacity duration-200 ease-out md:hidden ${
+          isOpen
+            ? "pointer-events-auto opacity-100"
+            : "pointer-events-none opacity-0"
+        }`}
+        style={{ willChange: "opacity" }}
+      />
 
       {/* ============== Sidebar ==============
          Mobile: covers the full viewport (top:0) at z-[60] so it sits
@@ -330,10 +334,17 @@ export function MobileDrawer({
          the page's mobile top bar.
          Desktop: takes the full viewport in its grid cell. */}
       <aside
-        className={`fixed left-0 top-0 z-[60] flex h-[100dvh] w-72 flex-col overflow-hidden text-white shadow-2xl transition-transform md:static md:z-auto md:h-screen md:w-auto md:translate-x-0 md:shadow-none ${
+        // `duration-200 ease-out` + a willChange:transform hint give us
+        // a GPU-promoted compositor layer that animates the slide on a
+        // single transform property — the fastest path the browser
+        // has. md:transition-none kills the transition on desktop so
+        // the static sidebar doesn't briefly slide on first paint or
+        // breakpoint switches.
+        className={`fixed left-0 top-0 z-[60] flex h-[100dvh] w-72 flex-col overflow-hidden text-white shadow-2xl transition-transform duration-200 ease-out md:static md:z-auto md:h-screen md:w-auto md:translate-x-0 md:shadow-none md:transition-none ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         style={{
+          willChange: "transform",
           // Premium dark surface: a faint white glaze at the very top for that
           // glassy SaaS feel, a warm-to-deep gradient body, and a soft red
           // bloom in the bottom-right corner so the brand still whispers.
