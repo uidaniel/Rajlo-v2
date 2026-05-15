@@ -234,6 +234,260 @@ const PATOIS: Dict = {
 
   // Footer line
   "settings.footer": "Rajlo · Jamaica red-plate ride network",
+
+  /* ─── Driver dashboard ─── */
+  "driver.dashboard.eyebrow": "Driver dashboard",
+  "driver.dashboard.greeting": "Yow {name}, yuh live.",
+  "driver.dashboard.greetingOff": "Yow {name}, yuh offline.",
+  "driver.dashboard.subtitle":
+    "Incoming ride request dem ago show below.",
+  "driver.dashboard.subtitleOff":
+    "Flip di toggle pon di right side fi start tek ride.",
+  "driver.dashboard.onlineSince": "Online since {time}",
+  "driver.dashboard.online": "Online",
+  "driver.dashboard.offline": "Offline",
+  "driver.dashboard.thisWeek": "Dis week",
+  "driver.dashboard.today": "Today",
+  "driver.dashboard.rating": "Rating",
+  "driver.dashboard.noRatings": "Nuh rating yet",
+  "driver.dashboard.trips": "{n} trip dem",
+  "driver.dashboard.liveRequests": "Live ride request",
+  "driver.dashboard.waiting": "{n} waiting",
+  "driver.dashboard.noRequests": "Nuh request right now",
+  "driver.dashboard.noRequestsDesc":
+    "Stay online — di nex one ago come in.",
+  "driver.dashboard.acceptRide": "Accept ride",
+  "driver.dashboard.justNow": "Jus now",
+  "driver.dashboard.minAgo": "{n}m ago",
+  "driver.dashboard.thisMonth": "Dis month",
+  "driver.dashboard.acceptance": "Acceptance · 30d",
+  "driver.dashboard.driverRating": "Driver rating",
+  "driver.dashboard.driverSince": "Drivin wid Rajlo since {date}",
+  "driver.dashboard.dailyBreakdown": "Daily breakdown",
+  "driver.dashboard.bestDay": "Best day",
+  "driver.dashboard.compliance": "Compliance health",
+  "driver.dashboard.compliance.allClear": "Everyting up to date",
+  "driver.dashboard.compliance.expired":
+    "{n} document expire — fix it now",
+  "driver.dashboard.compliance.urgent":
+    "{n} document ago expire pon yuh",
+  "driver.dashboard.compliance.upcoming":
+    "{n} document fi renew soon",
+  "driver.dashboard.compliance.view": "View compliance",
+  "driver.dashboard.activeTrip.banner": "Yuh have an active trip",
+  "driver.dashboard.activeTrip.bannerDesc":
+    "Tap fi go back to di trip console.",
+  "driver.dashboard.activeTrip.cta": "Open trip",
+  "driver.dashboard.locationOff": "Location sharing off",
+  "driver.dashboard.statsError": "Cyaan load yuh stats right now.",
+  "driver.dashboard.tryAgain": "Try again",
+  "driver.dashboard.quickActions": "Quick action dem",
+  "driver.dashboard.qa.verification": "TA verification",
+  "driver.dashboard.qa.history": "Trip history",
+  "driver.dashboard.qa.earnings": "Earnings",
+  "driver.dashboard.qa.profile": "Profile",
+
+  /* ─── Driver active trip ─── */
+  "driver.activeTrip.title": "Active trip",
+  "driver.activeTrip.noTrip": "Nuh active trip",
+  "driver.activeTrip.noTripDesc":
+    "Go back to di dashboard an wait fi di nex request.",
+  "driver.activeTrip.backToDashboard": "Back to dashboard",
+  "driver.activeTrip.stage.accepted.eyebrow": "Headin to pickup",
+  "driver.activeTrip.stage.accepted.headline":
+    "Drive to di pickup location",
+  "driver.activeTrip.stage.accepted.description":
+    "Tap when yuh reach so di rider know yuh outside.",
+  "driver.activeTrip.stage.accepted.action": "Mi reach pickup",
+  "driver.activeTrip.stage.arrived.eyebrow": "At pickup",
+  "driver.activeTrip.stage.arrived.headline": "Pick up yuh rider",
+  "driver.activeTrip.stage.arrived.description":
+    "Confirm di rider inna di car, den start di trip fi begin di meter.",
+  "driver.activeTrip.stage.arrived.action": "Start trip",
+  "driver.activeTrip.stage.inProgress.eyebrow": "Pon di way",
+  "driver.activeTrip.stage.inProgress.headline": "Trip in progress",
+  "driver.activeTrip.stage.inProgress.description":
+    "Drive safe. Tap complete when yuh drop di rider off.",
+  "driver.activeTrip.stage.inProgress.action": "Complete trip",
+  "driver.activeTrip.openMapsPickup": "Open Google Maps · drive to pickup",
+  "driver.activeTrip.openMapsDropoff": "Open Google Maps · drive to dropoff",
+  "driver.activeTrip.working": "A work…",
+  "driver.activeTrip.cancelTrip": "Cancel di trip",
+  "driver.activeTrip.estFare": "Estimated fare",
+  "driver.activeTrip.tripDetails": "Trip details",
+  "driver.activeTrip.from": "From",
+  "driver.activeTrip.to": "To",
+  "driver.activeTrip.seats": "{n} seat",
+  "driver.activeTrip.notes": "Note from rider",
+  "driver.activeTrip.kmAway": "{km} km away",
+  "driver.activeTrip.minAway": "~{min} min",
+
+  /* ─── Driver earnings ─── */
+  "driver.earnings.eyebrow": "Earnings · {range}",
+  "driver.earnings.range.today": "Today",
+  "driver.earnings.range.week": "Dis week",
+  "driver.earnings.range.month": "Dis month",
+  "driver.earnings.completedTrips": "{n} complete trip",
+  "driver.earnings.delta.up": "+{pct}%",
+  "driver.earnings.delta.down": "−{pct}%",
+  "driver.earnings.avgPerTrip": "Avg / trip",
+  "driver.earnings.trips": "Trip dem",
+  "driver.earnings.bestDay": "Best day",
+  "driver.earnings.dailyBreakdown": "Daily breakdown",
+  "driver.earnings.dailyHint": "Tap a bar fi see dat day trip dem",
+  "driver.earnings.nextPayout": "Next payout",
+  "driver.earnings.payoutHint":
+    "Paid out every Monday by 17:00 to yuh link account.",
+  "driver.earnings.payoutSetup": "Payout setup",
+  "driver.earnings.recent": "Recent complete trip",
+  "driver.earnings.noTrips": "Nuh trip yet inna dis range",
+  "driver.earnings.noTripsDesc":
+    "Once yuh complete a trip it ago show up here.",
+  "driver.earnings.failedToLoad": "Cyaan load yuh earnings",
+
+  /* ─── Driver history ─── */
+  "driver.history.eyebrow": "Driver history",
+  "driver.history.title": "Yuh past trip dem",
+  "driver.history.subtitle":
+    "Rider name, fare, an feedback — everyting yuh did pon Rajlo.",
+  "driver.history.pageEarnings": "Pon dis page",
+  "driver.history.completed": "Complete",
+  "driver.history.cancelled": "Cancel",
+  "driver.history.loadMore": "Load more",
+  "driver.history.loadingMore": "A load…",
+  "driver.history.empty": "Yuh nuh have past trip yet",
+  "driver.history.emptyDesc":
+    "Once yuh complete a trip, it ago show up here.",
+  "driver.history.failedToLoad": "Cyaan load yuh history",
+  "driver.history.rateRider": "Rate di rider",
+  "driver.history.youRated": "Yuh rate dem {stars} star",
+  "driver.history.riderRated": "Rider rate yuh {stars} star",
+  "driver.history.noRating": "Nuh rating yet",
+  "driver.history.carpool": "Carpool",
+  "driver.history.cancelledByYou": "Yuh cancel",
+  "driver.history.cancelledByRider": "Di rider cancel",
+
+  /* ─── Driver profile ─── */
+  "driver.profile.eyebrow": "Yuh profile",
+  "driver.profile.subtitle":
+    "Yuh details show to yuh rider. Vehicle colour, plate, an name appear pon every match.",
+  "driver.profile.banner.title": "Dese show to yuh rider",
+  "driver.profile.banner.desc":
+    "Vehicle colour, plate, an name show pon di rider live-trip view, share link, an history. Keep dem accurate.",
+  "driver.profile.section.picture": "Profile picture",
+  "driver.profile.section.personal": "Personal",
+  "driver.profile.section.vehicle": "Vehicle",
+  "driver.profile.section.compliance": "Compliance",
+  "driver.profile.section.push": "Push notification",
+  "driver.profile.personal.hint":
+    "Dese details tie to yuh TA verification. To change dem, contact support.",
+  "driver.profile.field.firstName": "First name",
+  "driver.profile.field.lastName": "Last name",
+  "driver.profile.field.phone": "Phone",
+  "driver.profile.field.email": "Email",
+  "driver.profile.field.phoneHelp":
+    "Rider call dis number through Rajlo masked-call system.",
+  "driver.profile.field.emailHelp":
+    "Email change need re-verification — contact support.",
+  "driver.profile.vehicle.type": "Type",
+  "driver.profile.vehicle.brand": "Brand",
+  "driver.profile.vehicle.model": "Model",
+  "driver.profile.vehicle.year": "Year",
+  "driver.profile.vehicle.colour": "Colour",
+  "driver.profile.vehicle.plate": "Plate",
+  "driver.profile.vehicle.preview": "Rider preview",
+  "driver.profile.vehicle.notRegistered": "Vehicle nuh register yet",
+  "driver.profile.vehicle.change.title": "Got a different car?",
+  "driver.profile.vehicle.change.desc":
+    "Vehicle change need fresh registration, COF, an insurance document dem. Submit a request an wi team ago review within 1–2 business day.",
+  "driver.profile.vehicle.change.cta": "Request change",
+  "driver.profile.compliance.hint":
+    "Dese TA-tied identifier cyaan self-edit — change need re-verification. Contact support fi update.",
+  "driver.profile.compliance.plate": "Plate number",
+  "driver.profile.compliance.licence": "Licence number",
+  "driver.profile.compliance.badge": "TA badge number",
+  "driver.profile.compliance.franchise": "Franchise number",
+  "driver.profile.compliance.viewDash": "View compliance dashboard",
+  "driver.profile.delete.title": "Delete yuh driver account",
+  "driver.profile.delete.desc":
+    "Dis permanently remove yuh profile, ride history, rating dem, wallet, an verification record. Yuh cyaan get it back.",
+  "driver.profile.delete.cta": "Delete account",
+
+  /* ─── Driver notifications ─── */
+  "driver.notifications.eyebrow": "Inbox",
+  "driver.notifications.title": "Notification",
+  "driver.notifications.subtitle":
+    "Trip update, renewal reminder, an safety alert dem.",
+  "driver.notifications.unread": "Unread",
+  "driver.notifications.markAllRead": "Mark all read",
+  "driver.notifications.tab.all": "All",
+  "driver.notifications.tab.trips": "Trip dem",
+  "driver.notifications.tab.renewals": "Renewal dem",
+  "driver.notifications.tab.system": "System",
+  "driver.notifications.empty.fresh": "Notn here yet",
+  "driver.notifications.empty.fresh.desc":
+    "Trip update, document reminder, an payout note land here.",
+  "driver.notifications.empty.allRead": "Yuh all caught up",
+  "driver.notifications.renewals": "Renewal reminder",
+  "driver.notifications.renewals.empty":
+    "All yuh document dem up to date — nice work.",
+
+  /* ─── Driver settings (extend existing rider keys for driver context) ─── */
+  "driver.settings.eyebrow": "Driver",
+  "driver.settings.title": "Setting dem",
+  "driver.settings.subtitle":
+    "Appearance, language, an notification preference dem.",
+  "driver.settings.account": "Account",
+  "driver.settings.account.name": "Name",
+  "driver.settings.account.email": "Email",
+  "driver.settings.account.manage": "Manage profile",
+  "driver.settings.appearance": "Appearance",
+  "driver.settings.appearance.theme": "Theme",
+  "driver.settings.appearance.themeDesc":
+    "Match yuh system, or pin to light or dark.",
+  "driver.settings.language": "Language",
+  "driver.settings.language.label": "Display language",
+  "driver.settings.language.desc":
+    "Switch in-app copy. Patwa cover di main driver flow.",
+  "driver.settings.notifications.title": "Notification",
+  "driver.settings.notifications.blocked":
+    "Notification block at di OS level. Open yuh phone Setting → App → Rajlo Driver → Notification an turn it on.",
+  "driver.settings.notifications.master": "Allow push notification",
+  "driver.settings.notifications.master.on":
+    "On fi dis device. Other device stay separate.",
+  "driver.settings.notifications.master.off":
+    "Master switch — turn off fi mute everyting below.",
+  "driver.settings.notifications.tripUpdates": "Ride update",
+  "driver.settings.notifications.tripUpdates.desc":
+    "Ping fi new ride request, rider chat, an trip status change.",
+  "driver.settings.notifications.safety": "Safety alert",
+  "driver.settings.notifications.safety.desc":
+    "SOS, location-off, an other safety system message.",
+  "driver.settings.notifications.promos": "Promo & announcement",
+  "driver.settings.notifications.promos.desc":
+    "Bonus programme, new feature, occasional news. Rare.",
+  "driver.settings.quickLinks": "Quick link dem",
+  "driver.settings.quickLinks.help": "Help & safety",
+  "driver.settings.quickLinks.help.desc":
+    "SOS, support contact, safety tip dem.",
+  "driver.settings.quickLinks.verification": "Verification status",
+  "driver.settings.quickLinks.verification.desc":
+    "TA document pon file + renewal date dem.",
+  "driver.settings.quickLinks.wallet": "Wallet",
+  "driver.settings.quickLinks.wallet.desc":
+    "Balance, transaction, payout setup.",
+  "driver.settings.danger.title": "Delete yuh driver account",
+  "driver.settings.danger.desc":
+    "Permanently remove yuh profile, ride history, rating, wallet, an verification record. Yuh cyaan recover it.",
+  "driver.settings.danger.cta": "Delete account",
+  "driver.settings.saved": "Save",
+
+  /* ─── Common driver actions used across pages ─── */
+  "driver.common.acceptRide": "Accept ride",
+  "driver.common.openTrip": "Open trip",
+  "driver.common.cancelTrip": "Cancel di trip",
+  "driver.common.failedToLoad": "Cyaan load",
+  "driver.common.loadAgain": "Try again",
 };
 
 const DICTS: Record<Locale, Dict> = {

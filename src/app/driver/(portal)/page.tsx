@@ -11,6 +11,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { formatJMD } from "@/lib/jamaica";
 import { announceDriverOnlineChange } from "@/components/driver-online-presence";
 import { useWakeLock } from "@/lib/use-wake-lock";
+import { useT } from "@/lib/i18n";
 import {
   HeroSkeleton,
   RideCardSkeleton,
@@ -116,6 +117,7 @@ type Compliance = {
 
 export default function DriverHomePage() {
   const router = useRouter();
+  const { t } = useT();
   // Seed every section from the bottom-nav's prefetch cache so the
   // dashboard lands fully painted on first frame: the hero shows the
   // real name + correct online state, the stat tiles + 7-day chart
@@ -529,7 +531,7 @@ export default function DriverHomePage() {
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                    Driver dashboard
+                    {t("driver.dashboard.eyebrow", "Driver dashboard")}
                   </p>
                   <h1 className="mt-2 text-3xl font-extrabold leading-[1.1] tracking-tight md:text-4xl">
                     {online === null ? (
@@ -539,9 +541,15 @@ export default function DriverHomePage() {
                         rounded="lg"
                       />
                     ) : online ? (
-                      `Hi ${firstName ?? "there"}, you're live.`
+                      t(
+                        "driver.dashboard.greeting",
+                        `Hi ${firstName ?? "there"}, you're live.`,
+                      ).replace("{name}", firstName ?? "there")
                     ) : (
-                      `Hi ${firstName ?? "there"}.`
+                      t(
+                        "driver.dashboard.greetingOff",
+                        `Hi ${firstName ?? "there"}.`,
+                      ).replace("{name}", firstName ?? "there")
                     )}
                   </h1>
                   {online === null ? (
@@ -553,8 +561,14 @@ export default function DriverHomePage() {
                   ) : (
                     <p className="mt-1 text-sm text-white/75">
                       {online
-                        ? "Incoming ride requests show up below."
-                        : "Toggle online when you're ready to take rides."}
+                        ? t(
+                            "driver.dashboard.subtitle",
+                            "Incoming ride requests show up below.",
+                          )
+                        : t(
+                            "driver.dashboard.subtitleOff",
+                            "Toggle online when you're ready to take rides.",
+                          )}
                     </p>
                   )}
                 </div>
@@ -591,21 +605,27 @@ export default function DriverHomePage() {
               {stats ? (
                 <div className="grid grid-cols-3 gap-2 border-t border-white/15 pt-5 sm:gap-4">
                   <HeroStat
-                    label="This week"
+                    label={t("driver.dashboard.thisWeek", "This week")}
                     value={formatJMD(stats.earnings.thisWeek)}
-                    caption={`${stats.tripCounts.thisWeek} trip${
-                      stats.tripCounts.thisWeek === 1 ? "" : "s"
-                    }`}
+                    caption={t(
+                      "driver.dashboard.trips",
+                      `${stats.tripCounts.thisWeek} trip${
+                        stats.tripCounts.thisWeek === 1 ? "" : "s"
+                      }`,
+                    ).replace("{n}", String(stats.tripCounts.thisWeek))}
                   />
                   <HeroStat
-                    label="Today"
+                    label={t("driver.dashboard.today", "Today")}
                     value={formatJMD(stats.earnings.today)}
-                    caption={`${stats.tripCounts.today} trip${
-                      stats.tripCounts.today === 1 ? "" : "s"
-                    }`}
+                    caption={t(
+                      "driver.dashboard.trips",
+                      `${stats.tripCounts.today} trip${
+                        stats.tripCounts.today === 1 ? "" : "s"
+                      }`,
+                    ).replace("{n}", String(stats.tripCounts.today))}
                   />
                   <HeroStat
-                    label="Rating"
+                    label={t("driver.dashboard.rating", "Rating")}
                     value={
                       stats.rating.average !== null
                         ? stats.rating.average.toFixed(1)
@@ -616,7 +636,7 @@ export default function DriverHomePage() {
                         ? `${stats.rating.count} rating${
                             stats.rating.count === 1 ? "" : "s"
                           }`
-                        : "No ratings yet"
+                        : t("driver.dashboard.noRatings", "No ratings yet")
                     }
                   />
                 </div>

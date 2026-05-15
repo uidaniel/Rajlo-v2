@@ -171,13 +171,16 @@ export default function DriverSettingsPage() {
           <div className="relative flex items-start justify-between gap-4">
             <div>
               <p className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
-                Driver
+                {t("driver.settings.eyebrow", "Driver")}
               </p>
               <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight md:text-4xl">
-                Settings
+                {t("driver.settings.title", "Settings")}
               </h1>
               <p className="mt-1 text-sm text-white/75">
-                Appearance, language, and notification preferences.
+                {t(
+                  "driver.settings.subtitle",
+                  "Appearance, language, and notification preferences.",
+                )}
               </p>
             </div>
             <span
@@ -185,7 +188,7 @@ export default function DriverSettingsPage() {
                 savedAt ? "opacity-100" : "opacity-0"
               }`}
             >
-              Saved
+              {t("driver.settings.saved", "Saved")}
             </span>
           </div>
         </div>
@@ -199,22 +202,26 @@ export default function DriverSettingsPage() {
 
       {/* Account snippet (read-only — full edit lives at /driver/profile) */}
       <FadeUp delay={0.04}>
-        <Section title="Account" icon="user">
+        <Section title={t("driver.settings.account", "Account")} icon="user">
           {profile ? (
             <div className="space-y-2 text-sm">
               <div className="flex items-center justify-between gap-3">
-                <span className="text-muted">Name</span>
+                <span className="text-muted">
+                  {t("driver.settings.account.name", "Name")}
+                </span>
                 <span className="truncate font-bold">{profile.fullName}</span>
               </div>
               <div className="flex items-center justify-between gap-3">
-                <span className="text-muted">Email</span>
+                <span className="text-muted">
+                  {t("driver.settings.account.email", "Email")}
+                </span>
                 <span className="truncate font-bold">{profile.email}</span>
               </div>
               <Link
                 href="/driver/profile"
                 className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-rajlo-red hover:underline"
               >
-                Manage profile
+                {t("driver.settings.account.manage", "Manage profile")}
                 <Icon name="arrow-right" className="h-3 w-3" />
               </Link>
             </div>
@@ -229,17 +236,23 @@ export default function DriverSettingsPage() {
 
       {/* Appearance */}
       <FadeUp delay={0.06}>
-        <Section title="Appearance" icon="settings">
+        <Section
+          title={t("driver.settings.appearance", "Appearance")}
+          icon="settings"
+        >
           {prefs ? (
             <SegmentedRow
-              label="Theme"
-              description="Match your system, or pin to light or dark."
+              label={t("driver.settings.appearance.theme", "Theme")}
+              description={t(
+                "driver.settings.appearance.themeDesc",
+                "Match your system, or pin to light or dark.",
+              )}
               value={prefs.theme}
               onChange={(v) => patch({ theme: v as "system" | "light" | "dark" })}
               options={[
-                { value: "system", label: "System" },
-                { value: "light", label: "Light" },
-                { value: "dark", label: "Dark" },
+                { value: "system", label: t("settings.app.theme.system", "System") },
+                { value: "light", label: t("settings.app.theme.light", "Light") },
+                { value: "dark", label: t("settings.app.theme.dark", "Dark") },
               ]}
             />
           ) : (
@@ -250,16 +263,25 @@ export default function DriverSettingsPage() {
 
       {/* Language */}
       <FadeUp delay={0.08}>
-        <Section title="Language" icon="flag">
+        <Section
+          title={t("driver.settings.language", "Language")}
+          icon="flag"
+        >
           {prefs ? (
             <SegmentedRow
-              label="Display language"
-              description="Switches in-app copy. Patois translations cover the core driver flow."
+              label={t("driver.settings.language.label", "Display language")}
+              description={t(
+                "driver.settings.language.desc",
+                "Switches in-app copy. Patois translations cover the core driver flow.",
+              )}
               value={prefs.language}
               onChange={(v) => patch({ language: v as "en" | "patois" })}
               options={[
-                { value: "en", label: "English" },
-                { value: "patois", label: "Patois" },
+                { value: "en", label: t("settings.app.language.en", "English") },
+                {
+                  value: "patois",
+                  label: t("settings.app.language.patois", "Patois"),
+                },
               ]}
             />
           ) : (
@@ -270,22 +292,35 @@ export default function DriverSettingsPage() {
 
       {/* Notifications */}
       <FadeUp delay={0.10}>
-        <Section title="Notifications" icon="bell">
+        <Section
+          title={t("driver.settings.notifications.title", "Notifications")}
+          icon="bell"
+        >
           {prefs ? (
             <>
               {push.ready && push.support && push.permission === "denied" && (
                 <div className="mb-3 rounded-xl border border-rajlo-red/30 bg-primary-soft px-3 py-2.5 text-xs leading-relaxed text-rajlo-red">
-                  Notifications are blocked at the OS level. Open your
-                  phone&apos;s Settings → Apps → Rajlo Driver → Notifications
-                  and turn them on, then come back here.
+                  {t(
+                    "driver.settings.notifications.blocked",
+                    "Notifications are blocked at the OS level. Open your phone's Settings → Apps → Rajlo Driver → Notifications and turn them on, then come back here.",
+                  )}
                 </div>
               )}
               <ToggleRow
-                label="Allow push notifications"
+                label={t(
+                  "driver.settings.notifications.master",
+                  "Allow push notifications",
+                )}
                 description={
                   push.subscribed
-                    ? "On for this device. Other devices stay independent."
-                    : "Master switch — turn off to mute everything below."
+                    ? t(
+                        "driver.settings.notifications.master.on",
+                        "On for this device. Other devices stay independent.",
+                      )
+                    : t(
+                        "driver.settings.notifications.master.off",
+                        "Master switch — turn off to mute everything below.",
+                      )
                 }
                 value={prefs.pushEnabled && push.subscribed}
                 disabled={push.working || !push.support}
@@ -300,24 +335,39 @@ export default function DriverSettingsPage() {
               />
               <Divider />
               <ToggleRow
-                label="Ride updates"
-                description="Pings for new ride requests, rider chats, and trip status changes."
+                label={t(
+                  "driver.settings.notifications.tripUpdates",
+                  "Ride updates",
+                )}
+                description={t(
+                  "driver.settings.notifications.tripUpdates.desc",
+                  "Pings for new ride requests, rider chats, and trip status changes.",
+                )}
                 value={prefs.pushTripUpdates}
                 disabled={!prefs.pushEnabled}
                 onChange={(next) => patch({ pushTripUpdates: next })}
               />
               <Divider />
               <ToggleRow
-                label="Safety alerts"
-                description="SOS, location-off, and other safety-system messages."
+                label={t("driver.settings.notifications.safety", "Safety alerts")}
+                description={t(
+                  "driver.settings.notifications.safety.desc",
+                  "SOS, location-off, and other safety-system messages.",
+                )}
                 value={prefs.pushSafetyTips}
                 disabled={!prefs.pushEnabled}
                 onChange={(next) => patch({ pushSafetyTips: next })}
               />
               <Divider />
               <ToggleRow
-                label="Promos & announcements"
-                description="Bonus programmes, new features, occasional news. Rare."
+                label={t(
+                  "driver.settings.notifications.promos",
+                  "Promos & announcements",
+                )}
+                description={t(
+                  "driver.settings.notifications.promos.desc",
+                  "Bonus programmes, new features, occasional news. Rare.",
+                )}
                 value={prefs.pushPromos}
                 disabled={!prefs.pushEnabled}
                 onChange={(next) => patch({ pushPromos: next })}
@@ -331,22 +381,37 @@ export default function DriverSettingsPage() {
 
       {/* Connected pages */}
       <FadeUp delay={0.14}>
-        <Section title="Quick links" icon="grid">
+        <Section
+          title={t("driver.settings.quickLinks", "Quick links")}
+          icon="grid"
+        >
           <LinkRow
-            label="Help & safety"
-            description="SOS, support contacts, safety tips."
+            label={t("driver.settings.quickLinks.help", "Help & safety")}
+            description={t(
+              "driver.settings.quickLinks.help.desc",
+              "SOS, support contacts, safety tips.",
+            )}
             href="/driver/help-safety"
             icon="shield"
           />
           <LinkRow
-            label="Verification status"
-            description="TA documents on file + renewal dates."
+            label={t(
+              "driver.settings.quickLinks.verification",
+              "Verification status",
+            )}
+            description={t(
+              "driver.settings.quickLinks.verification.desc",
+              "TA documents on file + renewal dates.",
+            )}
             href="/driver/verification"
             icon="shield-check"
           />
           <LinkRow
-            label="Wallet"
-            description="Balance, transactions, payout setup."
+            label={t("driver.settings.quickLinks.wallet", "Wallet")}
+            description={t(
+              "driver.settings.quickLinks.wallet.desc",
+              "Balance, transactions, payout setup.",
+            )}
             href="/driver/wallet"
             icon="wallet"
           />
