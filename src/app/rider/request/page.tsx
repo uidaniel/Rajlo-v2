@@ -9,6 +9,7 @@ import { MapView } from "@/components/map-view";
 import { RiderWeatherStrip } from "@/components/rider-weather-strip";
 import { SavedPlaceChips } from "@/components/saved-place-chips";
 import { Skeleton } from "@/components/skeleton";
+import { InsufficientFundsDialog } from "@/components/insufficient-funds-dialog";
 import { loadGoogleMaps } from "@/lib/google-maps";
 import { useFleet } from "@/lib/use-fleet";
 import { formatEta } from "@/lib/format-eta";
@@ -73,6 +74,14 @@ export default function RiderRequestPage() {
   const [selectedRouteId, setSelectedRouteId] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  // Triggered when the booking API returns 402 (insufficient wallet
+  // balance). Holds both numbers we need to show the "short by X"
+  // breakdown in the modal — set together from the API response so
+  // the dialog doesn't have to fetch the balance again.
+  const [insufficientFunds, setInsufficientFunds] = useState<{
+    fareJmd: number;
+    balanceJmd: number;
+  } | null>(null);
   // While we're checking on mount whether the user already has an active
   // ride (and should be sent to the live-trip view instead of the booking
   // form), hide the form to avoid a flash of "book a ride" UI.
@@ -355,12 +364,17 @@ export default function RiderRequestPage() {
           message?: string;
           error?: string;
           hail?: { id: string };
+          fareJmd?: number;
+          balanceJmd?: number;
         };
         if (res.status === 402) {
-          setSubmitError(
-            json.message ??
-              "Top up your wallet — this trip can't be hailed yet.",
-          );
+          // Surface the InsufficientFundsDialog instead of an inline
+          // error string — far more actionable, and the modal's CTA
+          // sends the rider straight into the wallet deposit flow.
+          setInsufficientFunds({
+            fareJmd: json.fareJmd ?? fare.fareJMD,
+            balanceJmd: json.balanceJmd ?? 0,
+          });
           setSubmitting(false);
           return;
         }
@@ -418,6 +432,21 @@ export default function RiderRequestPage() {
           },
         }),
       });
+      if (res.status === 402) {
+        // Same wallet-gate behaviour as the route-taxi path — open the
+        // top-up modal instead of throwing a generic error.
+        const json = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          balanceJmd?: number;
+          requiredJmd?: number;
+        };
+        setInsufficientFunds({
+          fareJmd: json.requiredJmd ?? fare.fareJMD,
+          balanceJmd: json.balanceJmd ?? 0,
+        });
+        setSubmitting(false);
+        return;
+      }
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(err.error ?? `Server returned ${res.status}`);
@@ -942,6 +971,18 @@ export default function RiderRequestPage() {
           </div>
         </div>
       </div>
+
+      {/* Insufficient-funds modal — fires when the booking API returns
+         402. CTA inside the modal navigates to /rider/wallet?deposit=open
+         so the rider lands directly on the deposit composer. Rendered
+         at the page root so the modal sits above both mobile + desktop
+         layouts. */}
+      <InsufficientFundsDialog
+        open={insufficientFunds != null}
+        fareJmd={insufficientFunds?.fareJmd ?? 0}
+        balanceJmd={insufficientFunds?.balanceJmd ?? 0}
+        onClose={() => setInsufficientFunds(null)}
+      />
     </>
   );
 }

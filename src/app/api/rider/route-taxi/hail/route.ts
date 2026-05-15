@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
-import { hasSufficientBalance } from "@/lib/wallet";
+import { getWalletBalance } from "@/lib/wallet";
 import { calculateRouteFare } from "@/lib/fare-engine";
 import { isWithinJamaica } from "@/lib/jamaica";
 import { notifyRouteTaxiDrivers } from "@/lib/notify";
@@ -144,13 +144,19 @@ export async function POST(request: Request) {
   }
 
   // Cashless gate. Don't let a hail leave the door if the rider can't
-  // cover it — they'll be sent to the wallet top-up screen.
-  if (!(await hasSufficientBalance(supabase, user.id, fareJmd))) {
+  // cover it — they'll be sent to the wallet top-up screen. We
+  // return the actual `balanceJmd` so the client modal can show
+  // "fare 220 / balance 90 / short by 130" instead of just a string.
+  const walletBalanceJmd = await getWalletBalance(supabase, user.id);
+  if (walletBalanceJmd < fareJmd) {
     return NextResponse.json(
       {
         error: "insufficient_balance",
         message: `Top up your wallet — this trip costs JMD $${fareJmd}.`,
+        insufficientFunds: true,
         fareJmd,
+        balanceJmd: walletBalanceJmd,
+        requiredJmd: fareJmd,
       },
       { status: 402 },
     );

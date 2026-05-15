@@ -9,6 +9,13 @@ import { NativeBottomNav } from "@/components/native-bottom-nav";
 import { NativeBackButton } from "@/components/native-back-button";
 import { NativePageTransition } from "@/components/native-page-transition";
 import { NO_FOUC_SCRIPT } from "@/lib/preferences-client";
+import {
+  OG_IMAGE_PATH,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TAGLINE,
+  SITE_URL,
+} from "@/lib/site-config";
 
 /**
  * Brand fonts (per Rajlo Brand Guidelines, Sept 2024):
@@ -40,9 +47,75 @@ const secondary = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Rajlo — Let's go!",
-  description:
-    "Rajlo is Jamaica's trusted rideshare platform. Verified red-plate drivers, transparent parish-based pricing, multi-seat bookings, and real-time tracking.",
+  // metadataBase resolves every relative URL (OG image, twitter:image,
+  // canonical, manifest) against the production domain. Without it
+  // Next.js emits warnings in build logs AND falls back to
+  // `http://localhost:3000` in social-card previews, which is what
+  // causes the "OG image is broken on share" symptom on launch day.
+  metadataBase: new URL(SITE_URL),
+  // `title.template` makes every page-level title automatically
+  // render as "Page Name — Rajlo" without each page hand-rolling the
+  // suffix. The `default` is what serves the homepage and any page
+  // that doesn't declare its own title.
+  title: {
+    default: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    template: `%s — ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  authors: [{ name: SITE_NAME }],
+  keywords: [
+    "Jamaica rideshare",
+    "Jamaica taxi app",
+    "Rajlo",
+    "rideshare Kingston",
+    "rideshare Montego Bay",
+    "route taxi Jamaica",
+    "red plate taxi Jamaica",
+    "book a taxi Jamaica",
+    "Jamaica ride app",
+  ],
+  // Tell Google to crawl and index, follow links, and use the largest
+  // available image preview when rendering rich-result snippets.
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+      "max-video-preview": -1,
+    },
+  },
+  alternates: {
+    // Canonical URL for the homepage — every other page should set its
+    // own alternates.canonical. Without a canonical Google may pick a
+    // tracking-parameter-laden URL as the representative one.
+    canonical: "/",
+  },
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    locale: "en_JM",
+    images: [
+      {
+        url: OG_IMAGE_PATH,
+        width: 1200,
+        height: 630,
+        alt: `${SITE_NAME} — Jamaica's rideshare platform`,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} — ${SITE_TAGLINE}`,
+    description: SITE_DESCRIPTION,
+    images: [OG_IMAGE_PATH],
+  },
   // Next.js auto-detects `app/icon.png` + `app/apple-icon.png` and
   // attaches them as <link rel="icon"> + <link rel="apple-touch-icon">
   // so we don't need to declare them here. The manifest link drives
@@ -50,6 +123,41 @@ export const metadata: Metadata = {
   manifest: "/manifest.webmanifest",
   // themeColor lives on the `viewport` export below — it moved out
   // of `metadata` in Next.js 14+ and Next will warn about it here.
+};
+
+/**
+ * Organization-level structured data — emitted as a JSON-LD script in
+ * the document head so every page implicitly carries the brand schema.
+ * Google parses this to populate the knowledge-panel sidebar, brand
+ * card, and "About this result" tile for any rajlo.com URL.
+ *
+ * Kept in this file (not a component) so it renders in the static HTML
+ * shipped by the server — JSON-LD that mounts client-side is ignored
+ * by Googlebot's first pass.
+ */
+const ORGANIZATION_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "Organization",
+  name: SITE_NAME,
+  alternateName: "Rajlo Jamaica",
+  url: SITE_URL,
+  logo: `${SITE_URL}/icon.svg`,
+  description: SITE_DESCRIPTION,
+  foundingDate: "2025",
+  areaServed: {
+    "@type": "Country",
+    name: "Jamaica",
+  },
+  contactPoint: {
+    "@type": "ContactPoint",
+    contactType: "customer support",
+    email: "hello@rajlo.com",
+    availableLanguage: ["English", "Jamaican Patois"],
+  },
+  sameAs: [
+    // Add real social profiles once they're claimed — placeholders
+    // omitted because Google penalises sameAs entries that 404.
+  ],
 };
 
 /**
@@ -105,6 +213,15 @@ export default function RootLayout({
            so dark-mode users never flash white on navigation. */}
         <script
           dangerouslySetInnerHTML={{ __html: NO_FOUC_SCRIPT }}
+        />
+        {/* Organization JSON-LD — present on every page so Googlebot's
+           first crawl of any URL already understands the brand. */}
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(ORGANIZATION_JSON_LD),
+          }}
         />
         <MotionProvider>
           {/* No-op on web. In the Capacitor driver app it snaps any

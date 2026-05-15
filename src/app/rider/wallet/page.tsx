@@ -75,8 +75,18 @@ export default function RiderWalletPage() {
   const balance = wallet.data?.balanceJmd ?? 0;
   const txns = wallet.data?.transactions ?? [];
 
+  // Initial composer state — opens "deposit" pre-expanded when the
+  // URL carries `?deposit=open`. That contract is set by the
+  // InsufficientFundsDialog on the request page so a rider who
+  // bounced off the wallet gate lands directly on the top-up form
+  // instead of having to tap "Deposit" again. Read once via lazy
+  // initial state so the first paint already shows the composer.
   const [composer, setComposer] = useState<"none" | "deposit" | "transfer">(
-    "none",
+    () => {
+      if (typeof window === "undefined") return "none";
+      const sp = new URLSearchParams(window.location.search);
+      return sp.get("deposit") === "open" ? "deposit" : "none";
+    },
   );
 
   return (

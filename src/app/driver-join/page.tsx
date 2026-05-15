@@ -1,9 +1,81 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { MarketingShell } from "@/components/marketing-shell";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { LogoIcon } from "@/components/logo";
 import { Icon, type IconName } from "@/components/icons";
+import { SITE_NAME, SITE_URL } from "@/lib/site-config";
+
+/**
+ * Page-level metadata override. The default title/description from the
+ * root layout would target the rider funnel ("Jamaica's trusted
+ * rideshare platform") — this page wants to rank for driver intent
+ * ("drive with Rajlo", "driver jobs Jamaica") so we surface that
+ * keyword in the title + description + OG card.
+ */
+export const metadata: Metadata = {
+  title: "Drive with Rajlo — Earn as a verified Jamaica rideshare driver",
+  description:
+    "Join Rajlo as a verified red-plate driver in Jamaica. Transparent payouts, in-app dispatch, all 14 parishes covered. Sign up takes minutes.",
+  alternates: { canonical: "/driver-join" },
+  openGraph: {
+    title: "Drive with Rajlo — Earn as a verified Jamaica rideshare driver",
+    description:
+      "Join Rajlo as a verified red-plate driver. Transparent payouts, in-app dispatch, all 14 parishes covered.",
+    url: `${SITE_URL}/driver-join`,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Drive with Rajlo",
+    description:
+      "Join Rajlo as a verified red-plate driver in Jamaica. Transparent payouts, in-app dispatch.",
+  },
+};
+
+/**
+ * JobPosting JSON-LD — registers this page as an open employment
+ * opportunity so it can appear in Google's "Jobs" rich result
+ * cluster (search for "driver jobs in Jamaica" and you'll see the
+ * Jobs widget at the top). Each parish-specific page emits its own
+ * variant with the parish in the location field.
+ *
+ * `employmentType: "CONTRACTOR"` because Rajlo drivers are
+ * independent (no W2/PAYE relationship). `directApply: true` tells
+ * Google to send the user to the in-page form rather than expecting
+ * a third-party ATS.
+ */
+const DRIVER_JOB_POSTING_JSON_LD = {
+  "@context": "https://schema.org",
+  "@type": "JobPosting",
+  title: "Rideshare Driver — Rajlo Jamaica",
+  description:
+    "Drive with Rajlo, Jamaica's rideshare platform. Verified red-plate drivers earn transparent fares with in-app dispatch, real-time tracking, and wallet payouts. Open to any of the 14 parishes.",
+  datePosted: "2026-01-01",
+  validThrough: "2027-01-01",
+  employmentType: "CONTRACTOR",
+  hiringOrganization: {
+    "@type": "Organization",
+    name: SITE_NAME,
+    sameAs: SITE_URL,
+    logo: `${SITE_URL}/icon.svg`,
+  },
+  jobLocation: {
+    "@type": "Place",
+    address: {
+      "@type": "PostalAddress",
+      addressCountry: "JM",
+      addressRegion: "Jamaica",
+    },
+  },
+  applicantLocationRequirements: {
+    "@type": "Country",
+    name: "Jamaica",
+  },
+  directApply: true,
+  url: `${SITE_URL}/driver-join`,
+};
 
 /**
  * Driver recruitment / marketing landing page.
@@ -139,6 +211,13 @@ const ONBOARDING_STEPS: Array<[string, string]> = [
 export default function DriverJoinPage() {
   return (
     <MarketingShell>
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(DRIVER_JOB_POSTING_JSON_LD),
+        }}
+      />
       {/* ─── HERO ─── */}
       <section className="relative overflow-hidden bg-rajlo-black py-20 text-white md:py-28">
         <ArcWatermark
