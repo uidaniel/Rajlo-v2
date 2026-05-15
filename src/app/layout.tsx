@@ -10,7 +10,6 @@ import { NativeBackButton } from "@/components/native-back-button";
 import { NativePageTransition } from "@/components/native-page-transition";
 import { NO_FOUC_SCRIPT } from "@/lib/preferences-client";
 import {
-  OG_IMAGE_PATH,
   SITE_DESCRIPTION,
   SITE_NAME,
   SITE_TAGLINE,
@@ -94,6 +93,12 @@ export const metadata: Metadata = {
     // tracking-parameter-laden URL as the representative one.
     canonical: "/",
   },
+  // Note: og:image + twitter:image are not declared here — the
+  // file-based `app/opengraph-image.tsx` and `app/twitter-image.tsx`
+  // sibling files auto-render a brand-aligned 1200×630 PNG and Next
+  // injects the matching meta tags on every page that inherits this
+  // metadata. Declaring `images` here too would produce duplicate
+  // tags that some scrapers (LinkedIn especially) handle badly.
   openGraph: {
     type: "website",
     siteName: SITE_NAME,
@@ -101,20 +106,11 @@ export const metadata: Metadata = {
     description: SITE_DESCRIPTION,
     url: SITE_URL,
     locale: "en_JM",
-    images: [
-      {
-        url: OG_IMAGE_PATH,
-        width: 1200,
-        height: 630,
-        alt: `${SITE_NAME} — Jamaica's rideshare platform`,
-      },
-    ],
   },
   twitter: {
     card: "summary_large_image",
     title: `${SITE_NAME} — ${SITE_TAGLINE}`,
     description: SITE_DESCRIPTION,
-    images: [OG_IMAGE_PATH],
   },
   // Next.js auto-detects `app/icon.png` + `app/apple-icon.png` and
   // attaches them as <link rel="icon"> + <link rel="apple-touch-icon">

@@ -37,8 +37,11 @@ export const SITE_DESCRIPTION =
 /** Public-facing contact email surfaced in Organization schema. */
 export const SITE_EMAIL = "hello@rajlo.com";
 
-/** Default social-share image. Sized 1200×630 (Twitter/OG spec). */
-export const OG_IMAGE_PATH = "/og-default.png";
+// OG / Twitter share images are not configured here — they're served
+// from the file-based `src/app/opengraph-image.tsx` (and the matching
+// `twitter-image.tsx` re-export) which Next.js auto-detects and
+// injects on every page inheriting the root metadata. Edit those
+// files to redesign the share card.
 
 /** Approximate central coordinates of Jamaica — used in LocalBusiness
  *  geo schema and area-served polygon centre. */

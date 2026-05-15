@@ -145,6 +145,52 @@ export default async function ParishRideshareLanding({
     ],
   };
 
+  // FAQ content — parish-aware where it matters (capital name,
+  // popular destinations) so each parish page has a genuinely unique
+  // FAQ block rather than a templated dupe Google would penalise.
+  // Surfaced AS visible accordion-style content AND as FAQPage
+  // JSON-LD so the page is eligible for the FAQ rich-result widget
+  // (expandable Q&A snippet directly in the search result).
+  const faqItems = [
+    {
+      q: `How long does a Rajlo pickup take in ${parish}?`,
+      a: `Pickup times in ${parish} depend on driver supply at the moment you book — most ${info.capital}-area rides match a driver within 3 to 8 minutes. The ${SITE_NAME} app shows a live ETA in the pickup bubble before you confirm so there are no surprises.`,
+    },
+    {
+      q: `How much does a ride from ${info.popularDestinations[0]} to ${info.popularDestinations[1]} cost?`,
+      a: `${SITE_NAME} fares follow Jamaica's Transport Authority rate schedule — JMD $113 base plus $7 per kilometre, rounded to the nearest $10. A typical run between popular ${parish} destinations falls in the ${formatJMD(fareSamples[0].jmd)} to ${formatJMD(fareSamples[2].jmd)} range. Open the app to see the exact price for your trip before booking.`,
+    },
+    {
+      q: `Do Rajlo drivers operate at night in ${parish}?`,
+      a: `Yes — ${SITE_NAME} runs 24/7. Driver availability is highest during peak hours (7–9 am, 4–7 pm) and busy weekend evenings, but you can request a ride in ${parish} at any time. Every driver is verified and red-plate licensed.`,
+    },
+    {
+      q: "How do I pay for my ride?",
+      a: `${SITE_NAME} is fully cashless. Top up your Rajlo Wallet by bank transfer or QR before booking — the trip cost is held when you confirm and settled to the driver on completion. No cash, no card-readers in the car.`,
+    },
+    {
+      q: `Is Rajlo available across all of ${parish}?`,
+      a: `${SITE_NAME} serves every parish in Jamaica, including ${info.capital} and the surrounding ${parish} towns. Driver density is highest in the parish capital and main commuter corridors; more remote areas may have slightly longer pickup windows.`,
+    },
+  ];
+
+  // FAQPage schema — eligible for Google's "People also ask" / FAQ
+  // rich-result accordion in the SERP. Worth a few extra lines of
+  // markup because the rich-result takes vertical space on mobile
+  // SERPs that competitors without FAQ schema can't claim.
+  const faqJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    mainEntity: faqItems.map((item) => ({
+      "@type": "Question",
+      name: item.q,
+      acceptedAnswer: {
+        "@type": "Answer",
+        text: item.a,
+      },
+    })),
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <SiteHeader bookHref={cta.riderHref} bookLabel="Book a ride" />
@@ -158,6 +204,11 @@ export default async function ParishRideshareLanding({
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger
         dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }}
+      />
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }}
       />
 
       {/* ── Hero ───────────────────────────────────────────────── */}
@@ -295,6 +346,45 @@ export default async function ParishRideshareLanding({
               </li>
             ))}
           </ol>
+        </div>
+      </section>
+
+      {/* ── FAQ ─────────────────────────────────────────────── */}
+      {/* `<details>` is a native HTML disclosure — no JS needed, fully
+         keyboard accessible, and Googlebot reads the inner text the
+         same whether the section is open or closed (so collapsing
+         long answers doesn't cost ranking signal). Pairs with the
+         FAQPage JSON-LD above to qualify for SERP rich results. */}
+      <section className="border-b border-line">
+        <div className="mx-auto max-w-3xl px-6 py-14">
+          <h2 className="text-2xl font-extrabold tracking-tight md:text-3xl">
+            Frequently asked questions about {SITE_NAME} in {parish}
+          </h2>
+          <p className="mt-2 text-muted">
+            Quick answers for first-time riders in {parish}.
+          </p>
+          <div className="mt-8 space-y-3">
+            {faqItems.map((item, i) => (
+              <details
+                key={item.q}
+                className="group rounded-2xl border border-line bg-surface open:bg-background"
+                // Default-open the first question so visitors see a
+                // sample answer without having to click — gives the
+                // section visible content weight on first paint.
+                open={i === 0}
+              >
+                <summary className="flex cursor-pointer items-center justify-between gap-4 px-5 py-4 text-left text-base font-bold marker:hidden [&::-webkit-details-marker]:hidden">
+                  <span>{item.q}</span>
+                  <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-rajlo-red/10 text-rajlo-red transition-transform group-open:rotate-180">
+                    <Icon name="chevron-down" className="h-4 w-4" />
+                  </span>
+                </summary>
+                <p className="px-5 pb-5 text-sm leading-relaxed text-muted">
+                  {item.a}
+                </p>
+              </details>
+            ))}
+          </div>
         </div>
       </section>
 
