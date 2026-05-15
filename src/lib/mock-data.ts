@@ -62,6 +62,7 @@ export const driverNav: NavItem[] = [
   { label: "Notifications", labelKey: "nav.driver.notifications", href: "/driver/notifications", icon: "bell" },
   { label: "Profile", labelKey: "nav.driver.profile", href: "/driver/profile", icon: "user" },
   { label: "Help & safety", labelKey: "nav.driver.support", href: "/driver/help-safety", icon: "shield" },
+  { label: "Settings", labelKey: "nav.driver.settings", href: "/driver/settings", icon: "settings" },
 ];
 
 // Admin nav stays English-only — admin is internal ops staff who all
