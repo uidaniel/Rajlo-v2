@@ -118,7 +118,9 @@ export function RiderWeatherStrip() {
       // when the witty-line panel slides in or out — no manual
       // measuring of the expanded height required.
       layout
-      className="relative block w-full cursor-pointer overflow-hidden rounded-2xl p-5 text-left text-white shadow-lg"
+      className={`relative block w-full cursor-pointer overflow-hidden rounded-2xl text-left text-white shadow-lg transition-[padding] duration-200 ease-out ${
+        expanded ? "p-5" : "p-3"
+      }`}
       style={{ background: GRADIENT[weather.condition] }}
     >
       {/* Condition-specific motion layer. Lives behind the content at
@@ -145,11 +147,21 @@ export function RiderWeatherStrip() {
         }}
       />
 
-      <m.div layout className="relative flex items-center gap-4">
+      <m.div
+        layout
+        className={`relative flex items-center transition-[gap] duration-200 ease-out ${
+          expanded ? "gap-4" : "gap-3"
+        }`}
+      >
         {/* Emoji tile — heartbeat scale always on, an extra side-sway
-           for the sunny variant so a clear day visibly "shines". */}
+           for the sunny variant so a clear day visibly "shines".
+           Tile and emoji sizes shrink in the collapsed state so the
+           strip doesn't eat header space; they grow back when the
+           rider taps to see the full detail. */}
         <m.span
-          className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-white/25 text-3xl backdrop-blur"
+          className={`grid shrink-0 place-items-center rounded-2xl bg-white/25 backdrop-blur transition-all duration-200 ease-out ${
+            expanded ? "h-14 w-14 text-3xl" : "h-9 w-9 text-lg"
+          }`}
           animate={{
             scale: [1, 1.05, 1],
             rotate:
@@ -168,10 +180,18 @@ export function RiderWeatherStrip() {
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-extrabold leading-none tracking-tight drop-shadow-sm">
+            <span
+              className={`font-extrabold leading-none tracking-tight drop-shadow-sm transition-all duration-200 ease-out ${
+                expanded ? "text-3xl" : "text-lg"
+              }`}
+            >
               {weather.tempC}°
             </span>
-            <span className="text-sm font-bold uppercase tracking-wider text-white/95">
+            <span
+              className={`font-bold uppercase tracking-wider text-white/95 transition-all duration-200 ease-out ${
+                expanded ? "text-sm" : "text-[11px]"
+              }`}
+            >
               {weather.description}
             </span>
           </div>
@@ -182,11 +202,16 @@ export function RiderWeatherStrip() {
            the description's length. */}
         <m.span
           aria-hidden
-          className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/20 text-white backdrop-blur"
+          className={`grid shrink-0 place-items-center rounded-full bg-white/20 text-white backdrop-blur transition-all duration-200 ease-out ${
+            expanded ? "h-9 w-9" : "h-7 w-7"
+          }`}
           animate={{ rotate: expanded ? 180 : 0 }}
           transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         >
-          <Icon name="chevron-down" className="h-4 w-4" />
+          <Icon
+            name="chevron-down"
+            className={expanded ? "h-4 w-4" : "h-3.5 w-3.5"}
+          />
         </m.span>
       </m.div>
 

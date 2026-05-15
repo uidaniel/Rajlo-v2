@@ -88,17 +88,24 @@ function approxDistanceMeters(
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// Premium "depth-shaded top-down" car icon. Reads as 3D at every heading
-// because the cues are gradient-based (not perspective-based): a metallic
-// body gradient gives the body its curved sheen, the glass uses a vertical
-// gradient + a shine streak so the windshield catches the light, wheel
-// arches poke out below the body, and a soft radial ground shadow sits
-// under everything. A small Rajlo dot crowns the roof so the brand is
-// readable even at thumb-size.
+// Premium 3/4-perspective car icon — reads like a tiny render of a sedan
+// rather than a flat top-down decal. Built from layered SVG primitives so
+// each surface (front bumper / hood / windshield / roof / rear window /
+// trunk / rear bumper) is drawn separately with its own gradient, giving
+// the eye the same cues a real photo would: darker leading + trailing
+// edges (front and rear bumper "depth strips"), a hood gradient that
+// fades from dark up front into bright near the windshield, a brighter
+// roof catching the light, glossy glass with a highlight streak, and
+// glowing headlight + taillight halos. A soft radial ground shadow
+// floats under the chassis. Side mirrors and a thin grille slat add the
+// last bit of detail that sells the angle.
 //
-// A literal 3/4 perspective render would invert and look broken the moment
-// the car heads south. Depth-shaded top-down rotates cleanly at every
-// angle while still feeling like a render rather than a sticker.
+// The whole render rotates around the chassis centre with heading. A
+// strict perspective render would feel "upside-down" when the car heads
+// south, but because our cues are symmetric front-to-back the brain
+// still reads "car pointing south" instead of "broken render". The
+// asymmetric cue that always shows the leading edge is the headlights +
+// brighter hood, which keeps it intuitive at every angle.
 //
 // Rotation is baked into the SVG (`<g transform="rotate(...)">`) because
 // Google Maps' URL-based icon doesn't support runtime rotation. We bucket
@@ -110,7 +117,7 @@ function approxDistanceMeters(
 // body is √(13² + 27²) ≈ 30, so 35px of margin around the rotation
 // centre is plenty — at 45° the corners still sit ~5px inside the edge.
 function carIconSvg(rotationDeg: number): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 70"><defs><linearGradient id="b" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#6a0000"/><stop offset="22%" stop-color="#b50000"/><stop offset="50%" stop-color="#ff2424"/><stop offset="78%" stop-color="#b50000"/><stop offset="100%" stop-color="#6a0000"/></linearGradient><linearGradient id="g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#2a3441"/><stop offset="100%" stop-color="#0d1117"/></linearGradient><radialGradient id="s" cx="50%" cy="50%" r="50%"><stop offset="0%" stop-color="#000" stop-opacity="0.55"/><stop offset="60%" stop-color="#000" stop-opacity="0.2"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><g transform="rotate(${rotationDeg} 35 35)"><ellipse cx="35" cy="38" rx="16" ry="28" fill="url(#s)"/><rect x="19" y="17" width="4" height="9" rx="1.5" fill="#0a0a0a"/><rect x="47" y="17" width="4" height="9" rx="1.5" fill="#0a0a0a"/><rect x="19" y="42" width="4" height="9" rx="1.5" fill="#0a0a0a"/><rect x="47" y="42" width="4" height="9" rx="1.5" fill="#0a0a0a"/><path d="M27 8 Q22 8 22 14 L22 56 Q22 62 27 62 L43 62 Q48 62 48 56 L48 14 Q48 8 43 8 Z" fill="url(#b)" stroke="#3a0000" stroke-width="0.6"/><path d="M24 14 L46 14 L44 16 L26 16 Z" fill="#5a0000" opacity="0.55"/><path d="M26 17 L44 17 L42 27 L28 27 Z" fill="url(#g)"/><path d="M28 18 L34 18 L32 25 L29 25 Z" fill="#ffffff" opacity="0.22"/><path d="M27 28 L43 28 L43 42 L27 42 Z" fill="#ff4040" opacity="0.32"/><line x1="35" y1="28" x2="35" y2="42" stroke="#ff8080" stroke-width="0.4" opacity="0.55"/><path d="M28 43 L42 43 L44 53 L26 53 Z" fill="url(#g)"/><path d="M24 56 L46 56 L44 58 L26 58 Z" fill="#5a0000" opacity="0.55"/><ellipse cx="21.5" cy="23" rx="1.5" ry="1.1" fill="#1a1a1a"/><ellipse cx="48.5" cy="23" rx="1.5" ry="1.1" fill="#1a1a1a"/><ellipse cx="29" cy="11" rx="2" ry="1.3" fill="#fff7c2" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="41" cy="11" rx="2" ry="1.3" fill="#fff7c2" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="28" cy="59" rx="2.2" ry="1.2" fill="#ff2020" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="42" cy="59" rx="2.2" ry="1.2" fill="#ff2020" stroke="#1a1a1a" stroke-width="0.3"/><circle cx="35" cy="35" r="1.8" fill="#ffffff" opacity="0.88"/><circle cx="35" cy="35" r="1.1" fill="#f10100"/></g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 70"><defs><linearGradient id="b" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#5a0000"/><stop offset="15%" stop-color="#a80000"/><stop offset="50%" stop-color="#ff2a2a"/><stop offset="85%" stop-color="#a80000"/><stop offset="100%" stop-color="#5a0000"/></linearGradient><linearGradient id="h" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#9a0000"/><stop offset="100%" stop-color="#ff4848"/></linearGradient><linearGradient id="t" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#d81818"/><stop offset="100%" stop-color="#7a0000"/></linearGradient><linearGradient id="w" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#3a4866"/><stop offset="100%" stop-color="#0a0f1f"/></linearGradient><radialGradient id="s" cx="50%" cy="55%" r="55%"><stop offset="0%" stop-color="#000" stop-opacity="0.5"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><g transform="rotate(${rotationDeg} 35 35)"><ellipse cx="35" cy="39" rx="17" ry="30" fill="url(#s)"/><rect x="18" y="17" width="4.5" height="9" rx="1.5" fill="#0a0a0a"/><rect x="47.5" y="17" width="4.5" height="9" rx="1.5" fill="#0a0a0a"/><rect x="18" y="43" width="4.5" height="9" rx="1.5" fill="#0a0a0a"/><rect x="47.5" y="43" width="4.5" height="9" rx="1.5" fill="#0a0a0a"/><path d="M28 8 Q22.5 8 22.5 14 L22.5 56 Q22.5 62 28 62 L42 62 Q47.5 62 47.5 56 L47.5 14 Q47.5 8 42 8 Z" fill="url(#b)" stroke="#3a0000" stroke-width="0.7"/><path d="M26 9 L44 9 L44 13 L26 13 Z" fill="#3a0000" opacity="0.75"/><path d="M26 13 L44 13 L42 25 L28 25 Z" fill="url(#h)"/><rect x="32" y="11" width="6" height="1" rx="0.3" fill="#1a1a1a" opacity="0.6"/><path d="M28 25 L42 25 L40.5 31 L29.5 31 Z" fill="url(#w)"/><path d="M30 26 L35 26 L32 30 L29.5 30 Z" fill="#ffffff" opacity="0.22"/><path d="M29.5 31 L40.5 31 L40.5 41 L29.5 41 Z" fill="#ff3838"/><line x1="35" y1="31" x2="35" y2="41" stroke="#ffffff" stroke-width="0.4" opacity="0.35"/><path d="M29.5 41 L40.5 41 L42 49 L28 49 Z" fill="url(#w)"/><path d="M28 49 L42 49 L43 58 L27 58 Z" fill="url(#t)"/><path d="M26 58 L44 58 L44 61 L26 61 Z" fill="#3a0000" opacity="0.75"/><ellipse cx="29" cy="11" rx="2" ry="1.2" fill="#fffac4" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="41" cy="11" rx="2" ry="1.2" fill="#fffac4" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="29" cy="11" rx="2.6" ry="1.6" fill="#fff9b0" opacity="0.32"/><ellipse cx="41" cy="11" rx="2.6" ry="1.6" fill="#fff9b0" opacity="0.32"/><ellipse cx="29" cy="59" rx="2.2" ry="1.2" fill="#ff1818" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="41" cy="59" rx="2.2" ry="1.2" fill="#ff1818" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="29" cy="59" rx="2.8" ry="1.6" fill="#ff3030" opacity="0.35"/><ellipse cx="41" cy="59" rx="2.8" ry="1.6" fill="#ff3030" opacity="0.35"/><ellipse cx="22" cy="24" rx="1.5" ry="1.1" fill="#1a1a1a"/><ellipse cx="48" cy="24" rx="1.5" ry="1.1" fill="#1a1a1a"/></g></svg>`;
 }
 
 export function MapView({

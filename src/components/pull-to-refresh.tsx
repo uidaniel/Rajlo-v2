@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Icon } from "./icons";
 
 /**
- * Pull-to-refresh for the rider portal.
+ * Pull-to-refresh for the driver portal.
  *
  * Touch-only widget that listens at the window level. When the user
  * is scrolled to the top of the page and starts swiping DOWN, we
@@ -17,9 +17,11 @@ import { Icon } from "./icons";
  * down, with a chevron that rotates as you approach the trigger
  * threshold, then a spinner while the refresh is in flight.
  *
- * Mounted at the rider portal layout level so every rider page (home,
- * request, history, wallet, etc.) gets pull-to-refresh — exactly
- * what users coming from native ride-share apps expect.
+ * Mounted at the driver portal layout level: the driver app runs
+ * inside the Capacitor WebView where the browser's native refresh
+ * isn't reachable, so this gesture is the driver's only way to
+ * re-fetch. Riders are on a real browser and use the browser's own
+ * pull-to-refresh, so we deliberately don't mount this on /rider.
  *
  * Disabled when scrolled past the top, when refresh is already in
  * flight, or when the user starts the swipe inside a horizontally-

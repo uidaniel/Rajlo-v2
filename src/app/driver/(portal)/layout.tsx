@@ -5,6 +5,7 @@ import { SessionGuard } from "@/components/session-guard";
 import { DriverActivityTracker } from "@/components/driver-activity-tracker";
 import { DriverPortalGate } from "@/components/driver-portal-gate";
 import { DriverOnlinePresence } from "@/components/driver-online-presence";
+import { PullToRefresh } from "@/components/pull-to-refresh";
 import { driverNav } from "@/lib/mock-data";
 import { getDriverStatus } from "@/lib/driver-status";
 
@@ -59,6 +60,12 @@ export default async function DriverPortalLayout({
       nav={driverNav}
     >
       <SessionGuard />
+      {/* Pull-to-refresh — touch-only, mobile-only. The driver
+         portal runs inside the Capacitor WebView where the native
+         browser refresh isn't reachable, so the gesture is the only
+         way to force a re-fetch. Riders use the browser's native
+         refresh instead, so it's not mounted there. */}
+      <PullToRefresh />
       {/* Pings /api/driver/heartbeat every 5 minutes while the
          driver is interacting with the portal, and flips them
          offline after 1hr of no interaction. Renders nothing. */}
