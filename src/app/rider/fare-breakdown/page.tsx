@@ -6,6 +6,7 @@ import { Icon, type IconName } from "@/components/icons";
 import { ArcWatermark } from "@/components/arc-pattern";
 import { FadeUp } from "@/components/anim";
 import { FARE_CONFIG, estimateFare, formatJMD } from "@/lib/jamaica";
+import { formatEta } from "@/lib/format-eta";
 import {
   calculateRouteFare,
   calculateConcessionFare,
@@ -137,7 +138,7 @@ export default function RiderFareBreakdownPage() {
               )}
             </div>
             <p className="mt-1 text-xs text-muted">
-              ~{fare.etaMinutes} min · {distanceKm.toFixed(1)} km · {seats} seat
+              ~{formatEta(fare.etaMinutes)} · {distanceKm.toFixed(1)} km · {seats} seat
               {seats === 1 ? "" : "s"}
               {stops > 0 ? ` · ${stops} stop${stops === 1 ? "" : "s"}` : ""}
             </p>

@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { loadGoogleMaps } from "@/lib/google-maps";
 import { JAMAICA_CENTER, type Place } from "@/lib/jamaica";
+import { formatEta } from "@/lib/format-eta";
 
 /**
  * Branded Google Map showing pickup → stops → dropoff with red markers and a
@@ -134,24 +135,89 @@ function buildBubbleIcon(
   };
 }
 
-// 3/4 isometric car icon — shows both the TOP of the car (roof, windshield,
-// rear window, hood, trunk) AND a prominent right-side profile (side
-// panel, two side windows, two visible wheels, side mirror). The side
-// slab is wide enough to read clearly at 40px on the map, so the icon
-// looks like a small 3D car rather than a flat top-down sticker.
-//
-// Rotation tradeoff (real, unavoidable): a perspective view rotates with
-// the heading, so when the car heads south the side profile drawn on
-// the right ends up on the screen-left. Every nav app that uses 3/4
-// perspective has this property — accepted because heading is the most
-// important signal, and the "wrong side visible" issue is barely
-// perceptible at thumb-size.
+// Route polyline gradient: bright Rajlo red at the pickup (A) deepening
+// to a dark crimson at the dropoff (B), so the eye reads "this is
+// where you're going" along the line itself. The dropoff pin is
+// painted in the END colour so the final destination matches the
+// shade the gradient settles into.
+const ROUTE_COLOR_START = "#f10100"; // Rajlo brand red — at pickup (A)
+const ROUTE_COLOR_END = "#6a0000"; // Deep crimson — at dropoff (B)
+// Parsed channels (avoids slicing the hex strings on every interpolation
+// call inside the per-segment loop).
+const ROUTE_START_R = 0xf1;
+const ROUTE_START_G = 0x01;
+const ROUTE_START_B = 0x00;
+const ROUTE_END_R = 0x6a;
+const ROUTE_END_G = 0x00;
+const ROUTE_END_B = 0x00;
+
+function interpolateRouteColor(t: number): string {
+  const tc = Math.max(0, Math.min(1, t));
+  const r = Math.round(ROUTE_START_R + (ROUTE_END_R - ROUTE_START_R) * tc);
+  const g = Math.round(ROUTE_START_G + (ROUTE_END_G - ROUTE_START_G) * tc);
+  const b = Math.round(ROUTE_START_B + (ROUTE_END_B - ROUTE_START_B) * tc);
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
+/**
+ * Render a single conceptual polyline as N short polylines, each with
+ * an interpolated colour. Google Maps' native Polyline takes one
+ * `strokeColor`, so a gradient line is faked by stitching small
+ * uniformly-coloured pieces together.
+ *
+ * 18 segments is the sweet spot — any more and the perf gain of
+ * batching is wiped out by extra Maps overlay objects; any fewer and
+ * the bands become visible at typical city zoom.
+ */
+function drawGradientPolyline(
+  map: google.maps.Map,
+  path: Array<google.maps.LatLng | { lat: number; lng: number }>,
+  strokeWeight: number,
+): google.maps.Polyline[] {
+  const polylines: google.maps.Polyline[] = [];
+  if (path.length < 2) return polylines;
+  const N = Math.min(18, path.length - 1);
+  for (let i = 0; i < N; i++) {
+    const startIdx = Math.floor((i * (path.length - 1)) / N);
+    // +1 to the end index so segment i's last point is the same as
+    // segment i+1's first point — keeps the line visually continuous
+    // instead of breaking into 18 disconnected sticks.
+    const endIdx = Math.min(
+      path.length,
+      Math.floor(((i + 1) * (path.length - 1)) / N) + 1,
+    );
+    const segmentPath = path.slice(startIdx, endIdx);
+    if (segmentPath.length < 2) continue;
+    const t = N === 1 ? 1 : i / (N - 1);
+    polylines.push(
+      new google.maps.Polyline({
+        map,
+        path: segmentPath,
+        strokeColor: interpolateRouteColor(t),
+        strokeWeight,
+        strokeOpacity: 0.92,
+      }),
+    );
+  }
+  return polylines;
+}
+
+// Sleek top-down car icon — Bolt-style minimalist. A smooth rounded-pill
+// body in Rajlo red with subtle horizontal gradient (left/right edges
+// shaded slightly darker than the centre for a "polished metal"
+// roundedness), two clean tinted-glass trapezoids (windshield + rear),
+// two tiny side-mirror dots, a single brake-light strip across the
+// rear, a faint headlight strip across the front, and a very soft
+// ground shadow. No outline, no 3/4 slab, no visible wheels — every
+// piece earns its place. The result reads as a sleek modern hatchback
+// at thumb-size and stays readable at any heading because the design
+// is rotationally symmetric front-to-back-axis.
 //
 // Rotation is baked into the SVG (`<g transform="rotate(...)">`) because
 // Google Maps' URL-based icon doesn't support runtime rotation. We bucket
 // to 10° steps so we cache ≤36 SVGs no matter how many drivers move.
 function carIconSvg(rotationDeg: number): string {
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 70"><defs><linearGradient id="b" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#8a0000"/><stop offset="25%" stop-color="#d40808"/><stop offset="55%" stop-color="#ff2a2a"/><stop offset="100%" stop-color="#a00000"/></linearGradient><linearGradient id="sp" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#b40000"/><stop offset="50%" stop-color="#8a0000"/><stop offset="100%" stop-color="#6a0000"/></linearGradient><linearGradient id="g" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#2a3441"/><stop offset="100%" stop-color="#0d1117"/></linearGradient><radialGradient id="s" cx="50%" cy="55%" r="55%"><stop offset="0%" stop-color="#000" stop-opacity="0.22"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><g transform="rotate(${rotationDeg} 35 35)"><ellipse cx="36" cy="40" rx="20" ry="28" fill="url(#s)"/><path d="M42 12 Q42 9 45 9 L50 12 L55 16 L55 54 L50 58 L45 61 Q42 61 42 58 Z" fill="url(#sp)" opacity="0.92"/><path d="M44 17 L54 20 L54 30 L44 28 Z" fill="url(#g)" opacity="0.85"/><path d="M44 38 L54 40 L54 50 L44 48 Z" fill="url(#g)" opacity="0.85"/><rect x="44" y="31" width="10" height="1.2" fill="#5a0000" opacity="0.55"/><ellipse cx="50" cy="20" rx="3.2" ry="5" fill="#1a1a1a"/><ellipse cx="51" cy="20" rx="1.9" ry="3.2" fill="#3a3a3a"/><ellipse cx="51" cy="20" rx="0.8" ry="1.3" fill="#6a6a6a"/><ellipse cx="50" cy="50" rx="3.2" ry="5" fill="#1a1a1a"/><ellipse cx="51" cy="50" rx="1.9" ry="3.2" fill="#3a3a3a"/><ellipse cx="51" cy="50" rx="0.8" ry="1.3" fill="#6a6a6a"/><path d="M54 21 L57 22 L57 25 L54 24 Z" fill="#3a1010" opacity="0.85"/><path d="M22 10 Q17 10 17 16 L17 54 Q17 60 22 60 L42 60 L42 10 Z" fill="url(#b)"/><path d="M19 11 L41 11 L40 14 L21 14 Z" fill="#ff9090" opacity="0.4"/><path d="M20 14 L41 14 L41 20 L20 20 Z" fill="#d01010" opacity="0.45"/><path d="M21 20 L41 20 L39 28 L23 28 Z" fill="url(#g)"/><path d="M23 21 L29 21 L27 27 L24 27 Z" fill="#ffffff" opacity="0.25"/><path d="M22 28 L41 28 L41 42 L22 42 Z" fill="#a80000" opacity="0.45"/><line x1="31" y1="29" x2="31" y2="41" stroke="#ff7070" stroke-width="0.3" opacity="0.55"/><path d="M23 42 L41 42 L43 51 L21 51 Z" fill="url(#g)"/><path d="M20 51 L42 51 L41 56 L21 56 Z" fill="#8a0000" opacity="0.5"/><path d="M20 56 L42 56 L41 59 L21 59 Z" fill="#5a0000" opacity="0.55"/><ellipse cx="23" cy="12" rx="2" ry="1.3" fill="#fff7c2" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="38" cy="12" rx="2" ry="1.3" fill="#fff7c2" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="23" cy="12" rx="2.8" ry="1.7" fill="#fff9b0" opacity="0.32"/><ellipse cx="38" cy="12" rx="2.8" ry="1.7" fill="#fff9b0" opacity="0.32"/><ellipse cx="23" cy="58" rx="2" ry="1.2" fill="#ff2020" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="38" cy="58" rx="2" ry="1.2" fill="#ff2020" stroke="#1a1a1a" stroke-width="0.3"/><ellipse cx="23" cy="58" rx="2.8" ry="1.6" fill="#ff3030" opacity="0.32"/><ellipse cx="38" cy="58" rx="2.8" ry="1.6" fill="#ff3030" opacity="0.32"/><rect x="18" y="32" width="2.5" height="0.6" fill="#5a0000" opacity="0.6"/><rect x="18" y="38" width="2.5" height="0.6" fill="#5a0000" opacity="0.6"/></g></svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 70 70"><defs><linearGradient id="b" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#a80000"/><stop offset="20%" stop-color="#dc0a0a"/><stop offset="50%" stop-color="#ff2828"/><stop offset="80%" stop-color="#dc0a0a"/><stop offset="100%" stop-color="#a80000"/></linearGradient><linearGradient id="w" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" stop-color="#3a4554"/><stop offset="100%" stop-color="#161b22"/></linearGradient><radialGradient id="s" cx="50%" cy="55%" r="50%"><stop offset="0%" stop-color="#000" stop-opacity="0.18"/><stop offset="100%" stop-color="#000" stop-opacity="0"/></radialGradient></defs><g transform="rotate(${rotationDeg} 35 35)"><ellipse cx="35" cy="38" rx="16" ry="26" fill="url(#s)"/><rect x="22" y="10" width="26" height="50" rx="13" fill="url(#b)"/><ellipse cx="35" cy="35" rx="9" ry="20" fill="#ff5050" opacity="0.16"/><path d="M24 19 Q35 17 46 19 L44 28 Q35 26 26 28 Z" fill="url(#w)"/><path d="M26 30 L28 30 L27 26 L26.5 26 Z" fill="#ffffff" opacity="0.28"/><path d="M26 42 Q35 40 44 42 L46 51 Q35 49 24 51 Z" fill="url(#w)"/><ellipse cx="20" cy="22" rx="1.6" ry="1.1" fill="#1a1a1a"/><ellipse cx="50" cy="22" rx="1.6" ry="1.1" fill="#1a1a1a"/><rect x="25" y="11" width="6" height="1.6" rx="0.8" fill="#fff5c0"/><rect x="39" y="11" width="6" height="1.6" rx="0.8" fill="#fff5c0"/><rect x="26" y="55" width="18" height="2" rx="1" fill="#ff2828"/><rect x="26" y="55" width="18" height="0.7" rx="0.3" fill="#ffffff" opacity="0.35"/></g></svg>`;
 }
 
 export function MapView({
@@ -232,7 +298,11 @@ export function MapView({
   const dropoffBubbleTextRef = useRef<string | null>(null);
   // Static polyline (pickup → stops → dropoff). Hidden when `liveRoute`
   // is engaged — the live route has its own polyline.
-  const polylineRef = useRef<google.maps.Polyline | null>(null);
+  // Multiple polylines now: the route is rendered as ~18 short
+  // segments each with a slightly darker shade of red so the visible
+  // line gradients from brand red at pickup (A) to deep crimson at
+  // dropoff (B). Same logic for `livePolylineRef`.
+  const polylineRef = useRef<google.maps.Polyline[]>([]);
   // Signature of the last route we drew, so we can skip the tear-down
   // + Directions re-fetch when a polling parent re-renders with the
   // same pickup / stops / dropoff content but new array/object refs.
@@ -241,7 +311,7 @@ export function MapView({
   const lastRouteSignatureRef = useRef<string>("");
   // Live route polyline (driver → target). Tracked separately so the
   // static-route effect doesn't accidentally clear it on every status flip.
-  const livePolylineRef = useRef<google.maps.Polyline | null>(null);
+  const livePolylineRef = useRef<google.maps.Polyline[]>([]);
   const directionsServiceRef = useRef<google.maps.DirectionsService | null>(null);
   // Live-position markers are tracked separately so they don't get wiped
   // when the route refreshes.
@@ -501,7 +571,9 @@ export function MapView({
       // Only short-circuit if we've actually drawn the previous run's
       // overlays — otherwise the very first render after mapReady
       // would skip drawing because the signature was already set.
-      (polylineRef.current || liveRoute || markersRef.current.length > 0)
+      (polylineRef.current.length > 0 ||
+        liveRoute ||
+        markersRef.current.length > 0)
     ) {
       return;
     }
@@ -510,8 +582,8 @@ export function MapView({
     // Wipe previous overlays.
     markersRef.current.forEach((m) => m.setMap(null));
     markersRef.current = [];
-    polylineRef.current?.setMap(null);
-    polylineRef.current = null;
+    polylineRef.current.forEach((p) => p.setMap(null));
+    polylineRef.current = [];
 
     const points: { place: Place; label: string }[] = [];
     if (pickup) points.push({ place: pickup, label: "A" });
@@ -548,11 +620,18 @@ export function MapView({
           fontWeight: "700",
           fontSize: "12px",
         },
-        // Red for pickup + dropoff endpoints, black for intermediate stops.
+        // Pickup (A) uses the gradient START colour, dropoff (B) uses
+        // the END colour — so the endpoints match the shades the
+        // gradient polyline transitions between. Intermediate stops
+        // stay Rajlo-black for clear visual separation.
         icon: {
           path: google.maps.SymbolPath.CIRCLE,
           scale: 14,
-          fillColor: isPickup || isDropoff ? "#f10100" : "#111906",
+          fillColor: isDropoff
+            ? ROUTE_COLOR_END
+            : isPickup
+              ? ROUTE_COLOR_START
+              : "#111906",
           fillOpacity: 1,
           strokeColor: "#ffffff",
           strokeWeight: 3,
@@ -578,13 +657,11 @@ export function MapView({
 
     const drawStraightLineFallback = () => {
       if (cancelled) return;
-      polylineRef.current = new google.maps.Polyline({
+      polylineRef.current = drawGradientPolyline(
         map,
-        path: points.map((p) => ({ lat: p.place.lat, lng: p.place.lng })),
-        strokeColor: "#f10100",
-        strokeWeight: 4,
-        strokeOpacity: 0.85,
-      });
+        points.map((p) => ({ lat: p.place.lat, lng: p.place.lng })),
+        4,
+      );
       const bounds = new google.maps.LatLngBounds();
       points.forEach((p) =>
         bounds.extend({ lat: p.place.lat, lng: p.place.lng }),
@@ -624,14 +701,14 @@ export function MapView({
           return;
         }
         // overview_path is the smoothed driving path — already a flat
-        // LatLng[] across all legs.
-        polylineRef.current = new google.maps.Polyline({
+        // LatLng[] across all legs. Render it as a gradient strip
+        // (brand red → deep crimson) so the rider can read direction
+        // from the colour alone.
+        polylineRef.current = drawGradientPolyline(
           map,
-          path: route.overview_path,
-          strokeColor: "#f10100",
-          strokeWeight: 5,
-          strokeOpacity: 0.9,
-        });
+          route.overview_path,
+          5,
+        );
         // Use the route's own bounds — tighter than fitting to stops alone.
         if (route.bounds) {
           map.fitBounds(route.bounds, {
@@ -672,7 +749,7 @@ export function MapView({
     const pickupHidden = liveRoute?.target === "dropoff";
     const pickupText =
       pickup && pickupEtaMinutes != null && !pickupHidden
-        ? `${pickupEtaMinutes} min`
+        ? formatEta(pickupEtaMinutes)
         : null;
     if (pickupText && pickup) {
       if (!pickupBubbleRef.current) {
@@ -703,7 +780,7 @@ export function MapView({
     // Dropoff bubble — always renders when we have a dropoff + ETA.
     const dropoffText =
       dropoff && dropoffEtaMinutes != null
-        ? `${dropoffEtaMinutes} min · Drop off`
+        ? `${formatEta(dropoffEtaMinutes)} · Drop off`
         : null;
     if (dropoffText && dropoff) {
       if (!dropoffBubbleRef.current) {
@@ -744,8 +821,8 @@ export function MapView({
 
     // Tear down when liveRoute is disengaged or there's no driver pos.
     if (!liveRoute || !driverPosition) {
-      livePolylineRef.current?.setMap(null);
-      livePolylineRef.current = null;
+      livePolylineRef.current.forEach((p) => p.setMap(null));
+      livePolylineRef.current = [];
       liveRouteOriginRef.current = null;
       liveRouteTargetRef.current = null;
       return;
@@ -764,7 +841,7 @@ export function MapView({
       approxDistanceMeters(liveRouteOriginRef.current, driverLatLng) >
         LIVE_ROUTE_REFRESH_THRESHOLD_M;
 
-    if (!targetChanged && !movedFar && livePolylineRef.current) {
+    if (!targetChanged && !movedFar && livePolylineRef.current.length > 0) {
       // Driver moved but only slightly — leave the existing polyline in
       // place. The car marker still updates via the driverPosition effect.
       return;
@@ -787,15 +864,15 @@ export function MapView({
         if (cancelled) return;
         const route = response.routes[0];
         if (!route) return;
-        // Replace previous live polyline (if any) with the new one.
-        livePolylineRef.current?.setMap(null);
-        livePolylineRef.current = new google.maps.Polyline({
+        // Replace previous live polyline segments with the new gradient
+        // strip. driver→target reads brand red at the car, deepening
+        // to the pickup/dropoff pin's colour at the far end.
+        livePolylineRef.current.forEach((p) => p.setMap(null));
+        livePolylineRef.current = drawGradientPolyline(
           map,
-          path: route.overview_path,
-          strokeColor: "#f10100",
-          strokeWeight: 5,
-          strokeOpacity: 0.9,
-        });
+          route.overview_path,
+          5,
+        );
         // Fit the camera to driver+target the first time we draw the
         // route OR when the target changes. Subsequent refetches keep
         // the user's existing pan/zoom — they may have zoomed in

@@ -11,6 +11,7 @@ import { SavedPlaceChips } from "@/components/saved-place-chips";
 import { Skeleton } from "@/components/skeleton";
 import { loadGoogleMaps } from "@/lib/google-maps";
 import { useFleet } from "@/lib/use-fleet";
+import { formatEta } from "@/lib/format-eta";
 import {
   detectParish,
   estimateFare,
@@ -632,7 +633,7 @@ export default function RiderRequestPage() {
                   {fare.fareJMD > 0 ? formatJMD(fare.fareJMD) : "Tap to choose"}
                 </p>
                 <p className="text-[11px] leading-relaxed text-muted">
-                  Door to door, your stops, ~{fare.etaMinutes} min ETA.
+                  Door to door, your stops, ~{formatEta(fare.etaMinutes)} ETA.
                   Multi-stop ready.
                 </p>
               </button>
@@ -788,7 +789,7 @@ export default function RiderRequestPage() {
                   ETA
                 </p>
                 <p className="mt-0.5 text-base font-extrabold">
-                  ~{fare.etaMinutes} min
+                  ~{formatEta(fare.etaMinutes)}
                 </p>
               </div>
             </div>
