@@ -249,6 +249,12 @@ export function MapView({
   // Active watchPosition id while continuous tracking is on. Set the
   // moment locate-me succeeds; cleared on unmount.
   const selfWatchIdRef = useRef<number | null>(null);
+  // Tracks whether the locate-me tap has already done its one-shot
+  // pan + zoom for this watch session. Without this, the watchPosition
+  // callback's stale closure kept seeing `locating === true` on every
+  // subsequent fix and re-panned/re-zoomed the map on every GPS
+  // heartbeat — what the driver saw as "rolling and rolling and rolling".
+  const selfFirstPanDoneRef = useRef(false);
 
   const handleLocate = () => {
     const map = mapRef.current;
@@ -280,11 +286,17 @@ export function MapView({
 
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     setLocating(true);
+    // Re-arm the "do the one-shot pan on the next fix" gate for this
+    // tap. The watchPosition callback below reads this ref (NOT React
+    // state, because the callback's closure outlives state updates)
+    // and only performs the pan-once on the very next fix it sees.
+    selfFirstPanDoneRef.current = false;
     // Start a continuous watch (not a one-shot fix) so the puck moves
     // as the user moves — Google-Maps-style "follow me" once locate
-    // is engaged. Pan happens on the first fix; subsequent fixes just
+    // is engaged. Pan happens on the FIRST fix; subsequent fixes just
     // update selfPosition + the puck re-renders. If a watch is already
-    // running we don't double-start.
+    // running we don't double-start; we just re-arm the pan ref so the
+    // next fix recenters.
     const onFix = (pos: GeolocationPosition) => {
       const next = {
         lat: pos.coords.latitude,
@@ -292,8 +304,8 @@ export function MapView({
       };
       setSelfPosition(next);
       const m = mapRef.current;
-      if (m && locating) {
-        // First fix only — pan + unlock + drop the spinner.
+      if (m && !selfFirstPanDoneRef.current) {
+        selfFirstPanDoneRef.current = true;
         m.panTo(next);
         m.setZoom(Math.max(m.getZoom() ?? 9, 16));
         setLocked(false);
@@ -301,10 +313,9 @@ export function MapView({
       }
     };
     const onErr = () => {
-      // Permission denied / unavailable — silent. The user already
-      // sees the button "click" via the spinner toggle; spamming an
-      // alert here would be hostile.
       setLocating(false);
+      // Don't kill the watch on a single error — transient timeouts
+      // happen indoors. The next event might land just fine.
     };
     if (selfWatchIdRef.current == null) {
       selfWatchIdRef.current = navigator.geolocation.watchPosition(
@@ -312,14 +323,10 @@ export function MapView({
         onErr,
         { enableHighAccuracy: true, timeout: 8_000, maximumAge: 30_000 },
       );
-    } else {
-      // Already watching — kick off a one-shot to refresh + recenter now.
-      navigator.geolocation.getCurrentPosition(onFix, onErr, {
-        enableHighAccuracy: true,
-        timeout: 8_000,
-        maximumAge: 0,
-      });
     }
+    // If a watch is already running, the `selfFirstPanDoneRef = false`
+    // we set above means the next fix the watch already produces will
+    // re-pan. No need to fire a separate getCurrentPosition.
   };
 
   // Stop the self-GPS watch on unmount so we're not holding the
@@ -799,43 +806,63 @@ export function MapView({
     });
   }, [nearbyDrivers]);
 
-  // Compass heading from DeviceOrientationEvent — feeds the cone of
-  // sight on the rider's location puck. On Android Chrome this works
-  // without permission for HTTPS pages; on iOS Safari modern versions
-  // gate it behind a user-gesture permission prompt which we don't
-  // request here (the puck just renders without the cone if no events
-  // arrive). 1Hz rerender max so we don't thrash setIcon on every
-  // event. We hold the bucket in a ref + flip a state setter that the
-  // rider-puck effect lists in its deps, so changes propagate without
-  // tearing down the marker.
+  // Compass heading from DeviceOrientationEvent — feeds the soft glow
+  // cone on the rider's location puck. We accept readings only when
+  // they're *absolute* (relative to true north): either
+  // `deviceorientationabsolute` events, or `webkitCompassHeading` from
+  // iOS Safari. Relative `deviceorientation` events (where alpha is
+  // zeroed at the orientation the page loaded with) are ignored — they
+  // were what made the cone "glitch", pointing the wrong way and
+  // jittering every time the phone rotated even slightly.
+  //
+  // We also smooth out raw sensor noise with two filters:
+  //   • Low-pass: ema the heading by ~30% per sample so single-frame
+  //     jitter doesn't translate into icon re-renders.
+  //   • Bucket-only-on-meaningful-change: only update state when the
+  //     smoothed heading has moved at least 5°. Stops the magnetometer
+  //     wiggle from re-decoding the SVG every few hundred ms.
   const [riderHeading, setRiderHeading] = useState<number | null>(null);
+  const smoothedHeadingRef = useRef<number | null>(null);
   useEffect(() => {
     if (typeof window === "undefined") return;
-    let raf: number | null = null;
-    let pending: number | null = null;
     const handle = (e: DeviceOrientationEvent) => {
-      // iOS prefers webkitCompassHeading (true heading 0..360 cw from N);
-      // Android Chrome uses event.alpha (ccw from north). Convert both
-      // to the same convention: 0..360 clockwise from north.
       const w = e as DeviceOrientationEvent & {
         webkitCompassHeading?: number;
+        absolute?: boolean;
       };
-      let heading: number | null = null;
+      let raw: number | null = null;
       if (typeof w.webkitCompassHeading === "number") {
-        heading = w.webkitCompassHeading;
-      } else if (typeof e.alpha === "number") {
-        heading = (360 - e.alpha) % 360;
+        raw = w.webkitCompassHeading;
+      } else if (e.type === "deviceorientationabsolute" || w.absolute) {
+        if (typeof e.alpha === "number") {
+          raw = (360 - e.alpha) % 360;
+        }
       }
-      if (heading == null) return;
-      pending = heading;
-      // Throttle to next animation frame so a high-rate sensor doesn't
-      // re-render us at 60Hz with values that barely change.
-      if (raf == null) {
-        raf = requestAnimationFrame(() => {
-          raf = null;
-          if (pending != null) setRiderHeading(pending);
-        });
+      if (raw == null) return;
+
+      // Low-pass smoothing. Shortest-arc lerp so wrapping 359° → 1°
+      // doesn't spin the cone the long way around.
+      const prev = smoothedHeadingRef.current;
+      let smoothed: number;
+      if (prev == null) {
+        smoothed = raw;
+      } else {
+        let delta = raw - prev;
+        if (delta > 180) delta -= 360;
+        if (delta < -180) delta += 360;
+        smoothed = (prev + delta * 0.3 + 360) % 360;
       }
+      smoothedHeadingRef.current = smoothed;
+
+      // Only commit to state when the rounded value actually changed
+      // by 5° or more; the cone bucket below quantizes to 5° anyway,
+      // so micro-jitter never reaches the marker.
+      setRiderHeading((current) => {
+        if (current == null) return smoothed;
+        let diff = Math.abs(smoothed - current);
+        if (diff > 180) diff = 360 - diff;
+        return diff >= 5 ? smoothed : current;
+      });
     };
     window.addEventListener(
       "deviceorientationabsolute",
@@ -851,7 +878,6 @@ export function MapView({
         "deviceorientation",
         handle as EventListener,
       );
-      if (raf != null) cancelAnimationFrame(raf);
     };
   }, []);
 
@@ -897,13 +923,14 @@ export function MapView({
       riderHaloRef.current.setCenter(pos);
     }
 
-    // Dot — bucketed-by-10° icon cache, swap setIcon only when the
+    // Dot — bucketed-by-5° icon cache, swap setIcon only when the
     // bucket actually changes so we don't pay for an icon re-decode
-    // on every position tick.
+    // on every position tick. The heading state already filters
+    // sub-5° micro-jitter out so the cache stays small.
     const bucket =
       riderHeading == null
         ? -1
-        : (((Math.round(riderHeading / 10) * 10) % 360) + 360) % 360;
+        : (((Math.round(riderHeading / 5) * 5) % 360) + 360) % 360;
     if (!riderDotRef.current) {
       riderDotRef.current = new google.maps.Marker({
         map,
@@ -1220,35 +1247,59 @@ export function MapView({
  */
 /**
  * Build the rider "you are here" puck — white-ringed blue dot with an
- * optional translucent cone of sight pointing where the device is
- * facing. Bucket parameter follows the same pattern as buildCarIcon:
- *   -1  → no heading available, render the puck without the cone
- *   0..359 (multiple of 10) → rotate the cone to that compass bearing
+ * optional soft glow fanning out in the direction the device is
+ * facing. Bucket parameter:
+ *   -1   → no heading available, render the puck without the glow
+ *   0..355 (multiple of 5) → rotate the glow to that compass bearing
+ *
+ * The glow is a wide fan (90°) drawn with a radial gradient that
+ * fades from a low-opacity blue at the dot's centre to fully
+ * transparent at its outer edge. No sharp polygon edges — what the
+ * user described as "a soft shadow facing the direction" rather
+ * than the previous sharp triangle. Larger canvas (96×96) gives the
+ * glow room to fall off naturally.
+ *
  * Cached so we never re-encode the same SVG twice.
  */
 const riderIconCache = new Map<number, google.maps.Icon>();
 function buildRiderIcon(bucket: number): google.maps.Icon {
   const cached = riderIconCache.get(bucket);
   if (cached) return cached;
-  const showCone = bucket >= 0;
-  // SVG canvas 64×64. Dot lives at (32, 40); cone fans upward from
-  // there, anchored at the dot so rotation pivots correctly. Tip
-  // reaches the top of the viewBox so the cone has real length to
-  // read as direction at the map's natural zoom levels.
-  const cone = showCone
-    ? `<g transform="rotate(${bucket} 32 40)"><polygon points="32,2 14,38 50,38" fill="#1d4ed8" fill-opacity="0.28"/></g>`
+
+  // 96×96 canvas. Dot anchored at (48, 60) — the glow fans upward
+  // from there toward the top of the canvas, leaving the dot itself
+  // unobscured. Each gradient stop has the same id (`rg`) per SVG
+  // since each cached entry is its own document.
+  const showGlow = bucket >= 0;
+  const glow = showGlow
+    ? `<defs>` +
+      `<radialGradient id="rg" cx="48" cy="60" r="48" gradientUnits="userSpaceOnUse">` +
+      `<stop offset="0%" stop-color="#1d4ed8" stop-opacity="0.45"/>` +
+      `<stop offset="60%" stop-color="#1d4ed8" stop-opacity="0.16"/>` +
+      `<stop offset="100%" stop-color="#1d4ed8" stop-opacity="0"/>` +
+      `</radialGradient>` +
+      `</defs>` +
+      // Wide 90° wedge fanning upward from the dot. Drawn as
+      // M(centre) → arc up-right → arc up-left → close. The arc
+      // radius equals the gradient radius so the gradient's outer
+      // stop hits the wedge edge cleanly. Rotate the whole wedge
+      // around the dot centre for compass bearing.
+      `<g transform="rotate(${bucket} 48 60)">` +
+      `<path d="M 48 60 L 14.06 36 A 48 48 0 0 1 81.94 36 Z" fill="url(#rg)"/>` +
+      `</g>`
     : "";
+
   const svg =
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">` +
-    `${cone}` +
-    `<circle cx="32" cy="40" r="10" fill="#1d4ed8" stroke="#ffffff" stroke-width="3"/>` +
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">` +
+    `${glow}` +
+    `<circle cx="48" cy="60" r="10" fill="#1d4ed8" stroke="#ffffff" stroke-width="3"/>` +
     `</svg>`;
   const icon: google.maps.Icon = {
     url: `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`,
-    scaledSize: new google.maps.Size(64, 64),
-    // Anchor at the dot's centre (32, 40) so the dot sits exactly on
-    // the GPS coordinate regardless of cone rotation.
-    anchor: new google.maps.Point(32, 40),
+    scaledSize: new google.maps.Size(96, 96),
+    // Anchor at the dot centre so it sits exactly on the GPS
+    // coordinate regardless of glow rotation.
+    anchor: new google.maps.Point(48, 60),
   };
   riderIconCache.set(bucket, icon);
   return icon;
