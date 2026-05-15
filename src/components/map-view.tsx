@@ -1273,11 +1273,14 @@ function buildRiderIcon(bucket: number): google.maps.Icon {
       `<stop offset="100%" stop-color="#1d4ed8" stop-opacity="0"/>` +
       `</radialGradient>` +
       `</defs>` +
-      // 90° wedge fanning upward from the dot. Arc-radius matches the
-      // gradient-radius so the gradient's outer stop hits the wedge
-      // edge cleanly. Rotated around the dot centre for compass bearing.
+      // 60° wedge fanning upward from the dot — narrower than the
+      // previous 90° spread so the direction reads more focused, less
+      // like a flashlight beam. Arc radius (24) matches the gradient
+      // radius so the gradient's outer stop hits the wedge edge
+      // cleanly. Wedge endpoints derived from r=24 at ±30° off the
+      // upward axis: ( 32 ± r·sin(30°), 40 − r·cos(30°) ).
       `<g transform="rotate(${bucket} 32 40)">` +
-      `<path d="M 32 40 L 15.03 28 A 24 24 0 0 1 48.97 28 Z" fill="url(#rg)"/>` +
+      `<path d="M 32 40 L 20 19.22 A 24 24 0 0 1 44 19.22 Z" fill="url(#rg)"/>` +
       `</g>`
     : "";
 
