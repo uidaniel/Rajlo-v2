@@ -240,6 +240,15 @@ export function MapView({
   // button. Default ON because most page-loads land on a moving
   // trip where the centered behaviour is wanted.
   const followModeRef = useRef(true);
+  // Internal "self GPS" state — populated when the user taps the
+  // locate-me button on a page that doesn't otherwise feed riderPosition
+  // (e.g. the rider booking screen). The puck renders from
+  // `riderPosition ?? selfPosition`, so streamed positions always win
+  // but a one-tap locate still produces a visible blue dot.
+  const [selfPosition, setSelfPosition] = useState<LiveDot | null>(null);
+  // Active watchPosition id while continuous tracking is on. Set the
+  // moment locate-me succeeds; cleared on unmount.
+  const selfWatchIdRef = useRef<number | null>(null);
 
   const handleLocate = () => {
     const map = mapRef.current;
@@ -254,7 +263,12 @@ export function MapView({
     // The component is used by both driver and rider surfaces so we
     // accept either side's streamed location as "me" and only fall
     // back to navigator.geolocation if neither is available.
-    const streamed = driverPosition ?? riderPosition;
+    //
+    // ALSO check selfPosition — if the user has already tapped locate
+    // once on this page and we've been watching their GPS since, we
+    // already have a fresh fix sitting in state. Use it for the
+    // pan and skip the second permission round-trip.
+    const streamed = driverPosition ?? riderPosition ?? selfPosition;
     if (streamed) {
       map.panTo({ lat: streamed.lat, lng: streamed.lng });
       map.setZoom(Math.max(map.getZoom() ?? 9, 16));
@@ -266,25 +280,62 @@ export function MapView({
 
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
     setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const m = mapRef.current;
-        if (m) {
-          m.panTo({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-          m.setZoom(Math.max(m.getZoom() ?? 9, 16));
-          setLocked(false);
-        }
+    // Start a continuous watch (not a one-shot fix) so the puck moves
+    // as the user moves — Google-Maps-style "follow me" once locate
+    // is engaged. Pan happens on the first fix; subsequent fixes just
+    // update selfPosition + the puck re-renders. If a watch is already
+    // running we don't double-start.
+    const onFix = (pos: GeolocationPosition) => {
+      const next = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+      };
+      setSelfPosition(next);
+      const m = mapRef.current;
+      if (m && locating) {
+        // First fix only — pan + unlock + drop the spinner.
+        m.panTo(next);
+        m.setZoom(Math.max(m.getZoom() ?? 9, 16));
+        setLocked(false);
         setLocating(false);
-      },
-      () => {
-        // Permission denied / unavailable — silent. The user already
-        // sees the button "click" via the spinner toggle; spamming an
-        // alert here would be hostile.
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 8_000, maximumAge: 30_000 },
-    );
+      }
+    };
+    const onErr = () => {
+      // Permission denied / unavailable — silent. The user already
+      // sees the button "click" via the spinner toggle; spamming an
+      // alert here would be hostile.
+      setLocating(false);
+    };
+    if (selfWatchIdRef.current == null) {
+      selfWatchIdRef.current = navigator.geolocation.watchPosition(
+        onFix,
+        onErr,
+        { enableHighAccuracy: true, timeout: 8_000, maximumAge: 30_000 },
+      );
+    } else {
+      // Already watching — kick off a one-shot to refresh + recenter now.
+      navigator.geolocation.getCurrentPosition(onFix, onErr, {
+        enableHighAccuracy: true,
+        timeout: 8_000,
+        maximumAge: 0,
+      });
+    }
   };
+
+  // Stop the self-GPS watch on unmount so we're not holding the
+  // location sensor open across page navigations.
+  useEffect(() => {
+    return () => {
+      if (
+        selfWatchIdRef.current != null &&
+        typeof navigator !== "undefined" &&
+        navigator.geolocation
+      ) {
+        navigator.geolocation.clearWatch(selfWatchIdRef.current);
+        selfWatchIdRef.current = null;
+      }
+    };
+  }, []);
 
   // Init map + DirectionsService once. We retry once on a small delay if
   // the container isn't sized yet — that happens on iOS Safari when the
@@ -815,14 +866,20 @@ export function MapView({
     if (!map || typeof window === "undefined" || !window.google) return;
 
     const ridingInCar = liveRoute?.target === "dropoff";
-    if (!riderPosition || ridingInCar) {
+    // Streamed riderPosition (from Realtime) wins when present; fall
+    // back to selfPosition (one-tap locate-me on a booking screen
+    // where nothing is streaming yet). This is what makes the puck
+    // appear immediately after the user taps the bottom-right
+    // crosshair button.
+    const source = riderPosition ?? selfPosition;
+    if (!source || ridingInCar) {
       riderDotRef.current?.setMap(null);
       riderDotRef.current = null;
       riderHaloRef.current?.setMap(null);
       riderHaloRef.current = null;
       return;
     }
-    const pos = { lat: riderPosition.lat, lng: riderPosition.lng };
+    const pos = { lat: source.lat, lng: source.lng };
 
     // Halo — drawn first (lower z) so it sits under the dot.
     if (!riderHaloRef.current) {
@@ -863,7 +920,7 @@ export function MapView({
         riderHeadingBucketRef.current = bucket;
       }
     }
-  }, [riderPosition, riderHeading, liveRoute]);
+  }, [riderPosition, selfPosition, riderHeading, liveRoute]);
 
   // Fullscreen side-effects — Esc to exit, body-scroll lock, and a
   // Google Maps resize trigger so tiles + bounds re-fit correctly
