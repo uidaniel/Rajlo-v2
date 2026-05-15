@@ -6,6 +6,8 @@ import { Icon } from "@/components/icons";
 import { FadeUp } from "@/components/anim";
 import { PlacesAutocomplete } from "@/components/places-autocomplete";
 import { MapView } from "@/components/map-view";
+import { RiderWeatherStrip } from "@/components/rider-weather-strip";
+import { SavedPlaceChips } from "@/components/saved-place-chips";
 import { Skeleton } from "@/components/skeleton";
 import { loadGoogleMaps } from "@/lib/google-maps";
 import { useFleet } from "@/lib/use-fleet";
@@ -454,7 +456,17 @@ export default function RiderRequestPage() {
           {submitError}
         </div>
       )}
+
+      {/* Welcoming hero — local weather with a contextual quip. Renders
+         nothing if location permission was denied or the upstream is
+         unreachable, so the form below sits flush against the top. */}
       <FadeUp>
+        <div className="mb-5">
+          <RiderWeatherStrip />
+        </div>
+      </FadeUp>
+
+      <FadeUp delay={0.04}>
         <div className="mb-2 flex items-center gap-2">
           <span className="font-secondary text-xs font-bold uppercase tracking-wider text-rajlo-red">
             Where to?
@@ -468,6 +480,23 @@ export default function RiderRequestPage() {
           Add up to 4 stops along the way — pick up groceries, grab a BBQ, swing
           by a friend. We&apos;ll route through every one.
         </p>
+      </FadeUp>
+
+      {/* Saved-place chips. Tap one to fill pickup if empty, otherwise
+         dropoff — the most common "go from where I am to a saved
+         place" flow becomes a single tap. */}
+      <FadeUp delay={0.07}>
+        <div className="mt-4">
+          <SavedPlaceChips
+            onPick={(place) => {
+              if (!pickup) {
+                setPickup(place);
+              } else {
+                setDropoff(place);
+              }
+            }}
+          />
+        </div>
       </FadeUp>
 
       <FadeUp delay={0.1}>

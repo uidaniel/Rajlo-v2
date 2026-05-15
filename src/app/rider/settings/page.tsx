@@ -609,6 +609,12 @@ export default function RiderSettingsPage() {
       <FadeUp delay={0.2}>
         <Section title="Connected" icon="grid">
           <LinkRow
+            label="Saved places"
+            description="Home, office, gym — one-tap destinations when you book."
+            href="/rider/saved-places"
+            icon="map-pin"
+          />
+          <LinkRow
             label="Wallet & top-ups"
             description="Balance, deposit history, and saved cards."
             href="/rider/wallet"
