@@ -1,17 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence, MotionConfig, m } from "motion/react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { MotionConfig, m } from "motion/react";
 import { Icon } from "./icons";
 
-// Shared expand/collapse curve. outQuart — starts moving quickly, eases
-// into a long silky tail at the end. The exact curve Apple uses for
-// system-level expand/collapse panels; gives the whole strip that
-// liquid "settling into place" feel rather than a snappy linear pop.
-const SMOOTH_DURATION = 0.55;
-const SMOOTH_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
-const SMOOTH_CSS = `cubic-bezier(0.22, 1, 0.36, 1)`;
-const SMOOTH_CSS_DURATION = "550ms";
+// Shared expand/collapse spring. Critically damped (no overshoot), unit
+// mass so the motion feels physical, stiffness tuned so the whole thing
+// settles in ~600ms. Spring beats a duration curve here because every
+// animated property (padding, gap, tile size, font size, chevron) rides
+// the SAME physics solver, so they finish on the same frame instead of
+// drifting apart the way parallel CSS transitions do. That frame-level
+// synchronization is what reads as one liquid motion instead of several
+// near-misses fighting each other.
+const SMOOTH = {
+  type: "spring" as const,
+  stiffness: 170,
+  damping: 26,
+  mass: 1,
+};
 
 /**
  * Weather hero strip for the rider booking page.
@@ -88,6 +94,29 @@ export function RiderWeatherStrip() {
   const [weather, setWeather] = useState<Weather | null>(null);
   const [denied, setDenied] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  // Measured pixel height of the witty-panel content. We animate this
+  // number → 0 instead of `height: "auto"` → 0, because motion has a
+  // separate value resolver for "auto" that doesn't always honour the
+  // MotionConfig spring — that mismatch was making the bottom edge
+  // snap on collapse while expand felt smooth. With a concrete pixel
+  // height, the spring drives both directions on the same timeline.
+  const panelContentRef = useRef<HTMLDivElement>(null);
+  const [panelHeight, setPanelHeight] = useState(0);
+
+  // Keep `panelHeight` synced with the real measured height of the
+  // witty paragraph (which can wrap differently as the weather copy
+  // or viewport changes). ResizeObserver covers re-flows from font
+  // load, copy swap, or window resize.
+  useEffect(() => {
+    const el = panelContentRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      setPanelHeight(el.scrollHeight);
+    });
+    ro.observe(el);
+    setPanelHeight(el.scrollHeight);
+    return () => ro.disconnect();
+  }, [weather]);
 
   useEffect(() => {
     if (typeof navigator === "undefined" || !navigator.geolocation) return;
@@ -119,38 +148,24 @@ export function RiderWeatherStrip() {
   if (!weather || denied) return null;
 
   return (
-    // Single source of timing truth. Every nested `m.*` (the inner
-    // layout flex row, the chevron rotate, etc.) inherits this curve
-    // unless it overrides — so when the user taps, all the moving
-    // parts (padding, emoji size, font size, tile size, height of the
-    // witty panel) sweep along the same outQuart curve in lockstep
-    // instead of each motion element using its own default.
-    <MotionConfig
-      transition={{ duration: SMOOTH_DURATION, ease: SMOOTH_EASE }}
-    >
+    // Single source of timing truth. Every nested `m.*` that doesn't
+    // override its own `transition` inherits this spring — so padding,
+    // gap, tile size, font size, chevron tile size and the witty panel
+    // all settle on the same frame as one liquid motion.
+    <MotionConfig transition={SMOOTH}>
     <m.button
       type="button"
       onClick={() => setExpanded((v) => !v)}
       aria-expanded={expanded}
-      // `layout` makes motion animate the height change automatically
-      // when the witty-line panel slides in or out — no manual
-      // measuring of the expanded height required.
-      layout
-      style={{
-        background: GRADIENT[weather.condition],
-        // CSS-property transition for `padding`, matched to the motion
-        // duration + curve so the box smoothly inflates/deflates around
-        // the content rather than snapping in two steps.
-        transitionProperty: "padding",
-        transitionDuration: SMOOTH_CSS_DURATION,
-        transitionTimingFunction: SMOOTH_CSS,
-        // Hint the compositor we're about to repaint geometry so the
-        // first frame doesn't hiccup.
-        willChange: "padding, transform, height",
-      }}
-      className={`relative block w-full cursor-pointer overflow-hidden rounded-2xl text-left text-white shadow-lg ${
-        expanded ? "p-5" : "p-3"
-      }`}
+      // No `layout` here — the witty panel below animates its own
+      // height explicitly, so the button's height shrinks via natural
+      // flow (which IS smooth). Adding `layout` on top of that ran two
+      // motion systems on the same box, which is what made the bottom
+      // edge appear to snap at collapse-end.
+      initial={{ padding: 12 }}
+      animate={{ padding: expanded ? 20 : 12 }}
+      style={{ background: GRADIENT[weather.condition] }}
+      className="relative block w-full cursor-pointer overflow-hidden rounded-2xl text-left text-white shadow-lg"
     >
       {/* Condition-specific motion layer. Lives behind the content at
          low opacity so it never competes with legibility. */}
@@ -177,33 +192,24 @@ export function RiderWeatherStrip() {
       />
 
       <m.div
-        layout
-        style={{
-          transitionProperty: "gap",
-          transitionDuration: SMOOTH_CSS_DURATION,
-          transitionTimingFunction: SMOOTH_CSS,
-        }}
-        className={`relative flex items-center ${
-          expanded ? "gap-4" : "gap-3"
-        }`}
+        initial={{ gap: 12 }}
+        animate={{ gap: expanded ? 16 : 12 }}
+        className="relative flex items-center"
       >
         {/* Emoji tile — silky size sweep on tap, heartbeat scale and
-           clear-day side-sway layered on as continuous motion. Pulling
-           the two animations apart (outer = size, inner = heartbeat)
-           keeps motion from having to interpolate scale and width on
-           the same element, which is what was making the tap-to-expand
+           clear-day side-sway layered on as continuous motion. The
+           outer span owns size; the inner span owns heartbeat. Splitting
+           them means motion doesn't have to interpolate scale and width
+           on the same element, which is what made the earlier version
            feel "elastic but rough". */}
         <m.span
-          layout
-          style={{
-            transitionProperty: "width, height, font-size",
-            transitionDuration: SMOOTH_CSS_DURATION,
-            transitionTimingFunction: SMOOTH_CSS,
-            willChange: "width, height, font-size",
+          initial={{ width: 36, height: 36, fontSize: 18 }}
+          animate={{
+            width: expanded ? 56 : 36,
+            height: expanded ? 56 : 36,
+            fontSize: expanded ? 30 : 18,
           }}
-          className={`grid shrink-0 place-items-center rounded-2xl bg-white/25 backdrop-blur ${
-            expanded ? "h-14 w-14 text-3xl" : "h-9 w-9 text-lg"
-          }`}
+          className="grid shrink-0 place-items-center rounded-2xl bg-white/25 backdrop-blur"
         >
           <m.span
             aria-hidden
@@ -225,32 +231,22 @@ export function RiderWeatherStrip() {
           </m.span>
         </m.span>
 
-        <m.div layout className="min-w-0 flex-1">
+        <m.div className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
-            <span
-              style={{
-                transitionProperty: "font-size",
-                transitionDuration: SMOOTH_CSS_DURATION,
-                transitionTimingFunction: SMOOTH_CSS,
-              }}
-              className={`font-extrabold leading-none tracking-tight drop-shadow-sm ${
-                expanded ? "text-3xl" : "text-lg"
-              }`}
+            <m.span
+              initial={{ fontSize: 18 }}
+              animate={{ fontSize: expanded ? 30 : 18 }}
+              className="font-extrabold leading-none tracking-tight drop-shadow-sm"
             >
               {weather.tempC}°
-            </span>
-            <span
-              style={{
-                transitionProperty: "font-size",
-                transitionDuration: SMOOTH_CSS_DURATION,
-                transitionTimingFunction: SMOOTH_CSS,
-              }}
-              className={`font-bold uppercase tracking-wider text-white/95 ${
-                expanded ? "text-sm" : "text-[11px]"
-              }`}
+            </m.span>
+            <m.span
+              initial={{ fontSize: 11 }}
+              animate={{ fontSize: expanded ? 14 : 11 }}
+              className="font-bold uppercase tracking-wider text-white/95"
             >
               {weather.description}
-            </span>
+            </m.span>
           </div>
         </m.div>
 
@@ -258,65 +254,59 @@ export function RiderWeatherStrip() {
            same flex row so the layout stays balanced regardless of
            the description's length. */}
         <m.span
-          layout
           aria-hidden
-          style={{
-            transitionProperty: "width, height",
-            transitionDuration: SMOOTH_CSS_DURATION,
-            transitionTimingFunction: SMOOTH_CSS,
-          }}
-          className={`grid shrink-0 place-items-center rounded-full bg-white/20 text-white backdrop-blur ${
-            expanded ? "h-9 w-9" : "h-7 w-7"
-          }`}
+          initial={{ width: 28, height: 28 }}
+          animate={{ width: expanded ? 36 : 28, height: expanded ? 36 : 28 }}
+          className="grid shrink-0 place-items-center rounded-full bg-white/20 text-white backdrop-blur"
         >
           <m.span
             className="inline-flex"
             animate={{ rotate: expanded ? 180 : 0 }}
           >
-            <span
-              style={{
-                transitionProperty: "width, height",
-                transitionDuration: SMOOTH_CSS_DURATION,
-                transitionTimingFunction: SMOOTH_CSS,
-              }}
-              className={`inline-flex ${expanded ? "h-4 w-4" : "h-3.5 w-3.5"}`}
-            >
-              <Icon name="chevron-down" className="h-full w-full" />
-            </span>
+            <Icon name="chevron-down" className="h-4 w-4" />
           </m.span>
         </m.span>
       </m.div>
 
-      {/* Expanded panel — slides + fades the witty line in/out.
-         `layout` on the parent button handles the height transition,
-         AnimatePresence ensures the panel exits cleanly when the
-         user collapses again. */}
-      <AnimatePresence initial={false}>
-        {expanded && (
-          <m.div
-            key="witty"
-            layout
-            className="relative mt-4 border-t border-white/15 pt-4"
-            initial={{ opacity: 0, y: -6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            // Matched to the global SMOOTH curve so the witty line
-            // fades in along the SAME timing rail the tile/font-size
-            // sweep rides — no second-stage "stutter".
-            transition={{ duration: SMOOTH_DURATION, ease: SMOOTH_EASE }}
-          >
-            <p className="text-sm leading-relaxed text-white/95">
-              {weather.witty}
-            </p>
-            {weather.apparentC != null &&
-              weather.apparentC !== weather.tempC && (
-                <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-white/70">
-                  Feels like {weather.apparentC}°
-                </p>
-              )}
-          </m.div>
-        )}
-      </AnimatePresence>
+      {/* Witty panel — kept mounted at all times and collapsed via a
+         pixel-height tween (NOT `height: "auto"` — that channel uses
+         motion's own value resolver and silently ignored our spring,
+         which is why expand felt smooth but collapse snapped at the
+         end). `panelHeight` is the live measured scrollHeight of the
+         inner content; on expand we spring 0 → panelHeight, on
+         collapse panelHeight → 0, both on the same spring as the
+         rest of the strip — so every edge of the card moves on the
+         same frame in both directions. */}
+      <m.div
+        aria-hidden={!expanded}
+        initial={false}
+        animate={{
+          height: expanded ? panelHeight : 0,
+          opacity: expanded ? 1 : 0,
+          marginTop: expanded ? 16 : 0,
+          paddingTop: expanded ? 16 : 0,
+          borderTopWidth: expanded ? 1 : 0,
+        }}
+        transition={SMOOTH}
+        style={{
+          overflow: "hidden",
+          borderTopStyle: "solid",
+          borderTopColor: "rgba(255,255,255,0.15)",
+        }}
+        className="relative"
+      >
+        <div ref={panelContentRef}>
+          <p className="text-sm leading-relaxed text-white/95">
+            {weather.witty}
+          </p>
+          {weather.apparentC != null &&
+            weather.apparentC !== weather.tempC && (
+              <p className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-white/70">
+                Feels like {weather.apparentC}°
+              </p>
+            )}
+        </div>
+      </m.div>
     </m.button>
     </MotionConfig>
   );
