@@ -1,8 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence, m } from "motion/react";
+import { AnimatePresence, MotionConfig, m } from "motion/react";
 import { Icon } from "./icons";
+
+// Shared expand/collapse curve. outQuart — starts moving quickly, eases
+// into a long silky tail at the end. The exact curve Apple uses for
+// system-level expand/collapse panels; gives the whole strip that
+// liquid "settling into place" feel rather than a snappy linear pop.
+const SMOOTH_DURATION = 0.55;
+const SMOOTH_EASE: [number, number, number, number] = [0.22, 1, 0.36, 1];
+const SMOOTH_CSS = `cubic-bezier(0.22, 1, 0.36, 1)`;
+const SMOOTH_CSS_DURATION = "550ms";
 
 /**
  * Weather hero strip for the rider booking page.
@@ -110,6 +119,15 @@ export function RiderWeatherStrip() {
   if (!weather || denied) return null;
 
   return (
+    // Single source of timing truth. Every nested `m.*` (the inner
+    // layout flex row, the chevron rotate, etc.) inherits this curve
+    // unless it overrides — so when the user taps, all the moving
+    // parts (padding, emoji size, font size, tile size, height of the
+    // witty panel) sweep along the same outQuart curve in lockstep
+    // instead of each motion element using its own default.
+    <MotionConfig
+      transition={{ duration: SMOOTH_DURATION, ease: SMOOTH_EASE }}
+    >
     <m.button
       type="button"
       onClick={() => setExpanded((v) => !v)}
@@ -118,10 +136,21 @@ export function RiderWeatherStrip() {
       // when the witty-line panel slides in or out — no manual
       // measuring of the expanded height required.
       layout
-      className={`relative block w-full cursor-pointer overflow-hidden rounded-2xl text-left text-white shadow-lg transition-[padding] duration-200 ease-out ${
+      style={{
+        background: GRADIENT[weather.condition],
+        // CSS-property transition for `padding`, matched to the motion
+        // duration + curve so the box smoothly inflates/deflates around
+        // the content rather than snapping in two steps.
+        transitionProperty: "padding",
+        transitionDuration: SMOOTH_CSS_DURATION,
+        transitionTimingFunction: SMOOTH_CSS,
+        // Hint the compositor we're about to repaint geometry so the
+        // first frame doesn't hiccup.
+        willChange: "padding, transform, height",
+      }}
+      className={`relative block w-full cursor-pointer overflow-hidden rounded-2xl text-left text-white shadow-lg ${
         expanded ? "p-5" : "p-3"
       }`}
-      style={{ background: GRADIENT[weather.condition] }}
     >
       {/* Condition-specific motion layer. Lives behind the content at
          low opacity so it never competes with legibility. */}
@@ -149,69 +178,112 @@ export function RiderWeatherStrip() {
 
       <m.div
         layout
-        className={`relative flex items-center transition-[gap] duration-200 ease-out ${
+        style={{
+          transitionProperty: "gap",
+          transitionDuration: SMOOTH_CSS_DURATION,
+          transitionTimingFunction: SMOOTH_CSS,
+        }}
+        className={`relative flex items-center ${
           expanded ? "gap-4" : "gap-3"
         }`}
       >
-        {/* Emoji tile — heartbeat scale always on, an extra side-sway
-           for the sunny variant so a clear day visibly "shines".
-           Tile and emoji sizes shrink in the collapsed state so the
-           strip doesn't eat header space; they grow back when the
-           rider taps to see the full detail. */}
+        {/* Emoji tile — silky size sweep on tap, heartbeat scale and
+           clear-day side-sway layered on as continuous motion. Pulling
+           the two animations apart (outer = size, inner = heartbeat)
+           keeps motion from having to interpolate scale and width on
+           the same element, which is what was making the tap-to-expand
+           feel "elastic but rough". */}
         <m.span
-          className={`grid shrink-0 place-items-center rounded-2xl bg-white/25 backdrop-blur transition-all duration-200 ease-out ${
+          layout
+          style={{
+            transitionProperty: "width, height, font-size",
+            transitionDuration: SMOOTH_CSS_DURATION,
+            transitionTimingFunction: SMOOTH_CSS,
+            willChange: "width, height, font-size",
+          }}
+          className={`grid shrink-0 place-items-center rounded-2xl bg-white/25 backdrop-blur ${
             expanded ? "h-14 w-14 text-3xl" : "h-9 w-9 text-lg"
           }`}
-          animate={{
-            scale: [1, 1.05, 1],
-            rotate:
-              weather.condition === "clear"
-                ? [0, 8, 0, -8, 0]
-                : [0, 0],
-          }}
-          transition={{
-            duration: weather.condition === "clear" ? 8 : 3.5,
-            repeat: Infinity,
-            ease: "easeInOut",
-          }}
         >
-          <span aria-hidden>{EMOJI[weather.condition]}</span>
+          <m.span
+            aria-hidden
+            className="inline-flex"
+            animate={{
+              scale: [1, 1.05, 1],
+              rotate:
+                weather.condition === "clear"
+                  ? [0, 8, 0, -8, 0]
+                  : [0, 0],
+            }}
+            transition={{
+              duration: weather.condition === "clear" ? 8 : 3.5,
+              repeat: Infinity,
+              ease: "easeInOut",
+            }}
+          >
+            {EMOJI[weather.condition]}
+          </m.span>
         </m.span>
 
-        <div className="min-w-0 flex-1">
+        <m.div layout className="min-w-0 flex-1">
           <div className="flex items-baseline gap-2">
             <span
-              className={`font-extrabold leading-none tracking-tight drop-shadow-sm transition-all duration-200 ease-out ${
+              style={{
+                transitionProperty: "font-size",
+                transitionDuration: SMOOTH_CSS_DURATION,
+                transitionTimingFunction: SMOOTH_CSS,
+              }}
+              className={`font-extrabold leading-none tracking-tight drop-shadow-sm ${
                 expanded ? "text-3xl" : "text-lg"
               }`}
             >
               {weather.tempC}°
             </span>
             <span
-              className={`font-bold uppercase tracking-wider text-white/95 transition-all duration-200 ease-out ${
+              style={{
+                transitionProperty: "font-size",
+                transitionDuration: SMOOTH_CSS_DURATION,
+                transitionTimingFunction: SMOOTH_CSS,
+              }}
+              className={`font-bold uppercase tracking-wider text-white/95 ${
                 expanded ? "text-sm" : "text-[11px]"
               }`}
             >
               {weather.description}
             </span>
           </div>
-        </div>
+        </m.div>
 
         {/* Chevron — rotates 180° when expanded. Lives inside the
            same flex row so the layout stays balanced regardless of
            the description's length. */}
         <m.span
+          layout
           aria-hidden
-          className={`grid shrink-0 place-items-center rounded-full bg-white/20 text-white backdrop-blur transition-all duration-200 ease-out ${
+          style={{
+            transitionProperty: "width, height",
+            transitionDuration: SMOOTH_CSS_DURATION,
+            transitionTimingFunction: SMOOTH_CSS,
+          }}
+          className={`grid shrink-0 place-items-center rounded-full bg-white/20 text-white backdrop-blur ${
             expanded ? "h-9 w-9" : "h-7 w-7"
           }`}
-          animate={{ rotate: expanded ? 180 : 0 }}
-          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         >
-          <Icon
-            name="chevron-down"
-            className={expanded ? "h-4 w-4" : "h-3.5 w-3.5"}
-          />
+          <m.span
+            className="inline-flex"
+            animate={{ rotate: expanded ? 180 : 0 }}
+          >
+            <span
+              style={{
+                transitionProperty: "width, height",
+                transitionDuration: SMOOTH_CSS_DURATION,
+                transitionTimingFunction: SMOOTH_CSS,
+              }}
+              className={`inline-flex ${expanded ? "h-4 w-4" : "h-3.5 w-3.5"}`}
+            >
+              <Icon name="chevron-down" className="h-full w-full" />
+            </span>
+          </m.span>
         </m.span>
       </m.div>
 
@@ -225,10 +297,13 @@ export function RiderWeatherStrip() {
             key="witty"
             layout
             className="relative mt-4 border-t border-white/15 pt-4"
-            initial={{ opacity: 0, y: -4 }}
+            initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+            exit={{ opacity: 0, y: -6 }}
+            // Matched to the global SMOOTH curve so the witty line
+            // fades in along the SAME timing rail the tile/font-size
+            // sweep rides — no second-stage "stutter".
+            transition={{ duration: SMOOTH_DURATION, ease: SMOOTH_EASE }}
           >
             <p className="text-sm leading-relaxed text-white/95">
               {weather.witty}
@@ -243,6 +318,7 @@ export function RiderWeatherStrip() {
         )}
       </AnimatePresence>
     </m.button>
+    </MotionConfig>
   );
 }
 
