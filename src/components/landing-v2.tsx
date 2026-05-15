@@ -201,7 +201,7 @@ function Hero({ cta }: { cta: LandingCtaTargets }) {
             pay the regulated fare. <span className="text-white">One app.</span>
           </p>
 
-          <div className="mt-10 flex flex-col gap-4 sm:flex-row">
+          <div className="mt-10 flex flex-col gap-5 sm:flex-row sm:gap-4">
             <Link
               data-anim="cta"
               href={cta.riderHref}
@@ -1109,7 +1109,7 @@ function FinalCta({ cta }: { cta: LandingCtaTargets }) {
           Sign up in under a minute. Top up when you&apos;re ready. Move across
           Jamaica without ever touching cash.
         </p>
-        <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+        <div className="mt-10 flex flex-col items-center justify-center gap-5 sm:flex-row sm:gap-4">
           <Link
             data-anim="cta-btn"
             href={cta.riderHref}
