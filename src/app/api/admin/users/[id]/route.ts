@@ -3,9 +3,10 @@ import { logAdminAction, requireAdmin } from "@/lib/admin-auth";
 
 /**
  * GET    /api/admin/users/[id]    full user detail
- * DELETE /api/admin/users/[id]    hard-delete the auth user (cascades to
- *                                  profile, drivers, rides, ratings via
- *                                  ON DELETE CASCADE on each FK)
+ * DELETE /api/admin/users/[id]    soft-delete: anonymise the account but
+ *                                  retain the rides / wallet / audit
+ *                                  trail (same model as the rider's
+ *                                  own self-delete flow)
  *
  * Detail returns:
  *   - profile + auth metadata
@@ -13,6 +14,14 @@ import { logAdminAction, requireAdmin } from "@/lib/admin-auth";
  *   - rides count, last ride
  *   - rating summary (if rated)
  *   - audit log entries that target this user
+ *
+ * DELETE intentionally does NOT hard-delete. An admin removing a
+ * fraudster or abusive user must not destroy the very evidence the
+ * safety + finance team needs afterwards. It runs the same
+ * `anonymize_user_account` function as the self-delete flow, then
+ * bans the auth user. The only true hard-delete left is the raw
+ * Supabase dashboard button (which still fires the legacy cascade
+ * trigger) — reserved for genuine data-removal requests.
  */
 
 export async function GET(
@@ -26,7 +35,7 @@ export async function GET(
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("id, full_name, phone, role, created_at, updated_at")
+    .select("id, full_name, phone, role, created_at, updated_at, deleted_at")
     .eq("id", id)
     .maybeSingle();
 
@@ -153,6 +162,11 @@ export async function GET(
       role: profile.role,
       createdAt,
       updatedAt: (profile as { updated_at: string }).updated_at,
+      // Set when the user self-deleted their account. The profile +
+      // rides + wallet + logs are retained (anonymised) for the
+      // security/financial audit trail — `deletedAt` lets the admin
+      // UI badge the account as deleted rather than just "banned".
+      deletedAt: (profile as { deleted_at: string | null }).deleted_at,
     },
     auth: {
       email,
@@ -206,12 +220,34 @@ export async function DELETE(
     return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
 
-  // Best-effort: delete the auth user. ON DELETE CASCADE on profiles +
-  // drivers + rides + ratings cleans up the rest. If the auth call
-  // fails, we surface the error and leave the database untouched.
-  const { error: authError } = await supabase.auth.admin.deleteUser(id);
-  if (authError) {
-    return NextResponse.json({ error: authError.message }, { status: 500 });
+  // Step 1: anonymise — strip every personal identifier but retain
+  // the rides / wallet ledger / audit logs so the admin + safety team
+  // keep the trail (essential when the reason for removal IS a fraud
+  // or safety case).
+  const { error: anonError } = await supabase.rpc("anonymize_user_account", {
+    victim_id: id,
+  });
+  if (anonError) {
+    return NextResponse.json(
+      { error: `anonymize_failed: ${anonError.message}` },
+      { status: 500 },
+    );
+  }
+
+  // Step 2: lock the auth account — ban ~100 years + scramble the
+  // email. NOT a hard delete: that would cascade-delete the profile
+  // and orphan everything Step 1 just preserved.
+  const tombstoneEmail = `deleted+${id}@rajlo.invalid`;
+  const { error: lockError } = await supabase.auth.admin.updateUserById(id, {
+    ban_duration: "876600h",
+    email: tombstoneEmail,
+    user_metadata: {},
+  });
+  if (lockError) {
+    return NextResponse.json(
+      { error: `auth_lock_failed: ${lockError.message}` },
+      { status: 500 },
+    );
   }
 
   await logAdminAction(supabase, actor, {
@@ -224,7 +260,7 @@ export async function DELETE(
     targetId: id,
     targetLabel: profile.full_name ?? "Unnamed user",
     action: "delete",
-    summary: `${actor.label} deleted ${profile.role} account ${profile.full_name ?? id}`,
+    summary: `${actor.label} deleted (anonymised) ${profile.role} account ${profile.full_name ?? id} — rides/wallet/audit trail retained`,
   });
 
   return NextResponse.json({ ok: true });

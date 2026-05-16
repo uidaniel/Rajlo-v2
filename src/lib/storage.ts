@@ -1,11 +1,23 @@
 import { createSupabaseBrowserClient } from "./supabase-browser";
+import { compressImage, DOCUMENT_COMPRESS } from "./compress-image";
 
 const BUCKET = "driver-documents";
+
+/** One year, in seconds. Safe as an immutable cache lifetime because
+ *  every uploaded file lands at a unique timestamped path — the
+ *  content at a given URL never changes, so there's nothing to
+ *  invalidate. A short cache just means every viewer re-downloads the
+ *  same bytes repeatedly, which is pure wasted Supabase egress. */
+const IMMUTABLE_CACHE_SECONDS = "31536000";
 
 /**
  * Uploads a single driver document directly from the browser to Supabase
  * Storage. Files are stored under `<user_id>/<doc_key>-<timestamp>.<ext>`
  * so RLS can scope them per-driver (see storage-migration.sql).
+ *
+ * Image documents are compressed first (see compress-image.ts) — a raw
+ * 4 MB phone photo becomes ~300–500 KB while staying legible for the
+ * admin verification review. PDF uploads pass through untouched.
  */
 export async function uploadDriverDocument({
   userId,
@@ -17,13 +29,14 @@ export async function uploadDriverDocument({
   file: File;
 }): Promise<{ path: string } | { error: string }> {
   const supabase = createSupabaseBrowserClient();
-  const ext = file.name.split(".").pop()?.toLowerCase() || "bin";
+  const compressed = await compressImage(file, DOCUMENT_COMPRESS);
+  const ext = compressed.name.split(".").pop()?.toLowerCase() || "bin";
   const path = `${userId}/${docKey}-${Date.now()}.${ext}`;
 
-  const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
-    cacheControl: "3600",
+  const { error } = await supabase.storage.from(BUCKET).upload(path, compressed, {
+    cacheControl: IMMUTABLE_CACHE_SECONDS,
     upsert: false,
-    contentType: file.type || undefined,
+    contentType: compressed.type || undefined,
   });
 
   if (error) return { error: error.message };

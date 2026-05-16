@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { Icon } from "./icons";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { compressImage, AVATAR_COMPRESS } from "@/lib/compress-image";
 
 /**
  * Avatar upload tile. Shared by /rider/profile and /driver/profile.
@@ -78,10 +79,16 @@ export function AvatarUploader({
       } = await supabase.auth.getUser();
       if (!user) throw new Error("You're not signed in.");
 
+      // Compress before upload — a 512px JPEG is ample for every
+      // avatar render in the app (largest display is ~96px) and turns
+      // a 5 MB selfie into ~40–80 KB. Cuts both storage size and the
+      // egress every viewer pays each time the avatar loads.
+      const compressed = await compressImage(file, AVATAR_COMPRESS);
+
       // Path convention enforced by storage RLS: <auth.uid>/<file>
       // The timestamp suffix makes each upload a fresh path so the
       // URL is naturally cache-busted across changes.
-      const ext = (file.name.split(".").pop() ?? "jpg")
+      const ext = (compressed.name.split(".").pop() ?? "jpg")
         .toLowerCase()
         .replace(/[^a-z0-9]/g, "")
         .slice(0, 5);
@@ -89,10 +96,14 @@ export function AvatarUploader({
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(path, file, {
-          cacheControl: "3600",
+        .upload(path, compressed, {
+          // One year, immutable — the timestamped path means the
+          // content at this URL never changes, so a long cache just
+          // stops every viewer re-downloading the same bytes. A short
+          // cache here was pure wasted egress.
+          cacheControl: "31536000",
           upsert: false,
-          contentType: file.type,
+          contentType: compressed.type,
         });
       if (uploadError) throw uploadError;
 

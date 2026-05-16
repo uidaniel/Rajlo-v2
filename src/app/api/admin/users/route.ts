@@ -35,6 +35,9 @@ type UserListRow = {
   driverOnboardingStatus: string | null;
   deactivatedAt: string | null;
   banned: boolean;
+  // Set when the user self-deleted their account (anonymised, but
+  // their rides/wallet/audit trail is retained for the admin).
+  deletedAt: string | null;
   // Activity counts — best-effort, kept light (1 query each, batched)
   ridesCount: number;
 };
@@ -57,7 +60,9 @@ export async function GET(request: NextRequest) {
   // 1. Pull profiles (server-side filter on role + name search)
   let profileQuery = supabase
     .from("profiles")
-    .select("id, full_name, phone, role, created_at", { count: "exact" });
+    .select("id, full_name, phone, role, created_at, deleted_at", {
+      count: "exact",
+    });
 
   if (role !== "all") profileQuery = profileQuery.eq("role", role);
   if (q) profileQuery = profileQuery.ilike("full_name", `%${q}%`);
@@ -79,6 +84,7 @@ export async function GET(request: NextRequest) {
     phone: string | null;
     role: "rider" | "driver" | "admin";
     created_at: string;
+    deleted_at: string | null;
   };
   const profiles = (profileRows ?? []) as ProfileRow[];
   const ids = profiles.map((p) => p.id);
@@ -221,6 +227,9 @@ export async function GET(request: NextRequest) {
       driverOnboardingStatus: driver?.onboarding_status ?? null,
       deactivatedAt: driver?.deactivated_at ?? null,
       banned: auth?.banned ?? false,
+      // Set when the user self-deleted. Lets the admin list badge a
+      // "Deleted" account distinctly from one an admin merely banned.
+      deletedAt: p.deleted_at,
       ridesCount: ridesByUser.get(p.id) ?? 0,
     };
   });

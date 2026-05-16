@@ -8,6 +8,7 @@ import {
 import { Icon } from "./icons";
 import { Skeleton } from "./skeleton";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { compressImage, CHAT_COMPRESS } from "@/lib/compress-image";
 import type { ChatMessage } from "@/lib/use-ride-chat";
 
 /**
@@ -337,17 +338,24 @@ export function ChatSheet({
 
     try {
       const supabase = createSupabaseBrowserClient();
+      // Compress photo attachments before upload (voice notes + other
+      // non-images pass straight through). Keeps a shared trip photo
+      // from re-downloading as a multi-MB original every time the
+      // chat is reopened.
+      const toUpload = await compressImage(file, CHAT_COMPRESS);
       // Path inside the bucket — lead with the ride_id folder so the
       // storage RLS policy can scope by foldername.
-      const ext = file.name.split(".").pop()?.toLowerCase() ?? "bin";
+      const ext = toUpload.name.split(".").pop()?.toLowerCase() ?? "bin";
       const random = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
       const path = `${rideId}/${kind}-${random}.${ext}`;
 
       const { error: uploadError } = await supabase.storage
         .from(RIDE_CHAT_BUCKET)
-        .upload(path, file, {
-          contentType: file.type,
-          cacheControl: "3600",
+        .upload(path, toUpload, {
+          contentType: toUpload.type,
+          // One year, immutable — the path is randomised so the
+          // content at this URL never changes.
+          cacheControl: "31536000",
           upsert: false,
         });
       if (uploadError) throw uploadError;

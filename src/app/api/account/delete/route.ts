@@ -21,24 +21,29 @@ import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
  *   - The user is a driver with any in-flight assignment
  *   - The user is a driver currently online — must go offline first
  *
- * Side effects:
- *   - `auth.users` row deleted via `supabase.auth.admin.deleteUser`
- *   - The `on_auth_user_before_delete` trigger
- *     (user-delete-cascade-migration.sql) wipes every public-schema
- *     row owned by this user atomically: rides, ratings, messages,
- *     wallet, push subs, notifications, driver record + docs,
- *     trusted contacts, etc.
- *   - Trip share links the user issued get tombstoned by the same
- *     cascade.
+ * Deletion model — SOFT delete (anonymise + retain audit trail):
  *
- * NOT deleted (intentionally retained, per privacy policy):
- *   - Other users' rides where this user appears as the OTHER
- *     party — those rows mention the user via a UUID that now
- *     points at nothing. The driver / rider on the other side
- *     keeps their trip history. The deleted user's identity is
- *     gone (cascade clears profiles), so the row reads as "Unknown".
- *   - Admin audit logs: actor_id is set to NULL but the action
- *     summary stays for compliance / dispute review.
+ *   1. `anonymize_user_account(uuid)` runs (see
+ *      account-deletion-retention-migration.sql). It strips every
+ *      personal identifier — name → "Deleted User", phone, gov IDs,
+ *      saved addresses, push tokens, ID-document scans all removed —
+ *      but RETAINS the rides, wallet ledger, ratings, safety alerts,
+ *      and audit logs so the admin + safety team keep a complete,
+ *      readable security + financial trail. The trail now reads as
+ *      "Deleted User" rather than a real identity.
+ *
+ *   2. The `auth.users` row is NOT deleted. Instead it's banned for
+ *      ~100 years (so the person can never sign back in) and its
+ *      email is scrambled to a tombstone address (so the real email
+ *      is freed for a fresh signup and we no longer hold it).
+ *      Hard-deleting auth.users would cascade-delete the profile and
+ *      orphan every retained record — exactly what we're avoiding.
+ *
+ * Retained on purpose (must be disclosed in the privacy policy —
+ * permitted by Play Article 4.1 for security / fraud / regulatory
+ * compliance, and Jamaica tax law requires financial-record
+ * retention): rides, ride events, wallet transactions, QR charges,
+ * ratings, safety alerts, admin + driver audit logs.
  */
 
 type Body = { confirm?: string };
@@ -125,16 +130,41 @@ export async function POST(request: Request) {
   }
 
   // ─── Do it ───
-  // The `on_auth_user_before_delete` trigger runs first inside the
-  // same transaction and wipes every public.* row owned by this user.
-  // If anything in the trigger fails, the auth.users delete rolls
-  // back too — no half-deleted state.
-  const { error: deleteError } = await supabase.auth.admin.deleteUser(
-    user.id,
-  );
-  if (deleteError) {
+  // Step 1: anonymise. Strips all PII but keeps the rides / wallet /
+  // audit trail intact for the admin + safety team. Runs first so
+  // that if it fails we haven't touched the auth account yet.
+  const { error: anonError } = await supabase.rpc("anonymize_user_account", {
+    victim_id: user.id,
+  });
+  if (anonError) {
     return NextResponse.json(
-      { error: deleteError.message },
+      { error: `anonymize_failed: ${anonError.message}` },
+      { status: 500 },
+    );
+  }
+
+  // Step 2: lock the auth account. We deliberately do NOT call
+  // `auth.admin.deleteUser` — that cascades through profiles and
+  // would orphan every record Step 1 just preserved. Instead:
+  //   - ban for ~100 years  → the person can never sign in again
+  //   - scramble the email  → frees the real address for a future
+  //                           signup and drops the last PII we held
+  //   - clear user_metadata → removes name/phone cached on the JWT
+  const tombstoneEmail = `deleted+${user.id}@rajlo.invalid`;
+  const { error: lockError } = await supabase.auth.admin.updateUserById(
+    user.id,
+    {
+      ban_duration: "876600h",
+      email: tombstoneEmail,
+      user_metadata: {},
+    },
+  );
+  if (lockError) {
+    // The data is already anonymised at this point — surface the
+    // error so the client knows the auth lock didn't complete, but
+    // the user's personal data is already gone either way.
+    return NextResponse.json(
+      { error: `auth_lock_failed: ${lockError.message}` },
       { status: 500 },
     );
   }

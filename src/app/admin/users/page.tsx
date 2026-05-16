@@ -42,6 +42,7 @@ type UserRow = {
   driverOnboardingStatus: string | null;
   deactivatedAt: string | null;
   banned: boolean;
+  deletedAt: string | null;
   ridesCount: number;
 };
 
@@ -160,7 +161,7 @@ export default function AdminUsersPage() {
   const handleDelete = async (user: UserRow) => {
     if (
       !confirm(
-        `Delete ${user.fullName} permanently?\n\nThis cascades through rides, ratings, documents, and chat history. There is no undo.`,
+        `Delete ${user.fullName}'s account?\n\nTheir name, phone, gov IDs, saved addresses, and ID documents are wiped and they can no longer sign in. Their rides, wallet transactions, and audit logs are RETAINED (anonymised) so the safety + finance team keeps the trail. There is no undo.`,
       )
     )
       return;
@@ -415,10 +416,19 @@ function UserRowItem({
               {user.fullName}
             </p>
             <RoleBadge role={user.role} />
-            {isDeactivated && (
-              <span className="rounded-full border border-rajlo-red/30 bg-primary-soft px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-rajlo-red">
-                Deactivated
+            {user.deletedAt ? (
+              // Self-deleted account. Identity is anonymised but the
+              // rides / wallet / audit trail is retained — the row is
+              // still clickable so the admin can review that history.
+              <span className="rounded-full border border-slate-400/40 bg-slate-100 px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-600">
+                Deleted
               </span>
+            ) : (
+              isDeactivated && (
+                <span className="rounded-full border border-rajlo-red/30 bg-primary-soft px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-rajlo-red">
+                  Deactivated
+                </span>
+              )
             )}
             {user.role === "driver" &&
               user.driverOnboardingStatus === "rejected" && (
