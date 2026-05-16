@@ -15,12 +15,12 @@ import {
  *      `PUBLIC_MARKETING_ROUTES` in site-config so adding a new
  *      marketing page is a one-line change.
  *
- *   2. **Per-parish rideshare landing pages** — `/rideshare-in-[parish]`
+ *   2. **Per-parish rideshare landing pages** — `/rideshare-in/[parish]`
  *      for each of the 14 Jamaican parishes. These target geo-specific
  *      long-tail queries ("rideshare in Kingston", "taxi in Montego
  *      Bay") that the homepage alone can't rank for.
  *
- *   3. **Per-parish driver acquisition pages** — `/driver-jobs-in-[parish]`
+ *   3. **Per-parish driver acquisition pages** — `/driver-jobs-in/[parish]`
  *      for each parish, targeting "driver jobs in Jamaica" intent.
  *
  * Every URL is absolute (built from `SITE_URL`) so Google never
@@ -42,7 +42,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const parishRideshareRoutes: MetadataRoute.Sitemap = PARISH_SLUGS.map(
     (slug) => ({
-      url: `${SITE_URL}/rideshare-in-${slug}`,
+      url: `${SITE_URL}/rideshare-in/${slug}`,
       lastModified: now,
       changeFrequency: "monthly" as const,
       priority: 0.8,
@@ -51,7 +51,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
 
   const parishDriverRoutes: MetadataRoute.Sitemap = PARISH_SLUGS.map(
     (slug) => ({
-      url: `${SITE_URL}/driver-jobs-in-${slug}`,
+      url: `${SITE_URL}/driver-jobs-in/${slug}`,
       lastModified: now,
       changeFrequency: "monthly" as const,
       priority: 0.7,

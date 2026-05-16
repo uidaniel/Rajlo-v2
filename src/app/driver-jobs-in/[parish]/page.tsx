@@ -15,7 +15,7 @@ import {
 /**
  * Per-parish driver acquisition landing page.
  *
- * Route: `/driver-jobs-in-[parish]` for every parish. Each page is
+ * Route: `/driver-jobs-in/[parish]` for every parish. Each page is
  * statically generated at build time. Targets local search intent
  * like "driver jobs in Kingston Jamaica" — queries the generic
  * /driver-join page can't rank for because it lacks the parish in
@@ -47,7 +47,7 @@ export async function generateMetadata({
   if (!parish) return {};
   const title = `Driver Jobs in ${parish}, Jamaica`;
   const description = `Drive with ${SITE_NAME} in ${parish}. Verified red-plate driver opportunities, transparent payouts, in-app dispatch. Apply in minutes.`;
-  const canonicalPath = `/driver-jobs-in-${slug}`;
+  const canonicalPath = `/driver-jobs-in/${slug}`;
   return {
     title,
     description,
@@ -76,7 +76,7 @@ export default async function DriverJobsInParish({
   if (!parish) notFound();
 
   const info = PARISH_INFO[parish];
-  const canonicalPath = `/driver-jobs-in-${slug}`;
+  const canonicalPath = `/driver-jobs-in/${slug}`;
 
   // Parish-scoped JobPosting. The `jobLocation` is the parish (not
   // just "Jamaica") which is what differentiates this page from the
@@ -265,7 +265,7 @@ export default async function DriverJobsInParish({
               return (
                 <li key={otherSlug}>
                   <Link
-                    href={`/driver-jobs-in-${otherSlug}`}
+                    href={`/driver-jobs-in/${otherSlug}`}
                     className="inline-flex items-center rounded-full border border-line bg-background px-4 py-2 text-sm font-semibold hover:border-rajlo-red hover:text-rajlo-red"
                   >
                     Driver jobs in {other}

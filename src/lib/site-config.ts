@@ -66,7 +66,11 @@ export function parishToSlug(parish: Parish): string {
 /** Inverse of parishToSlug — used by the dynamic route to recover the
  *  display name from a URL segment. Returns null for unknown slugs so
  *  the page can 404 cleanly instead of rendering garbage. */
-export function slugToParish(slug: string): Parish | null {
+export function slugToParish(slug: string | undefined | null): Parish | null {
+  // Guard against an undefined/empty segment — a caller getting a bad
+  // route param should cleanly 404 (via the page's notFound()), not
+  // crash on `.toLowerCase()`.
+  if (!slug) return null;
   const normalized = slug.toLowerCase();
   for (const parish of PARISHES) {
     if (parishToSlug(parish) === normalized) return parish;
@@ -78,8 +82,8 @@ export function slugToParish(slug: string): Parish | null {
 export const PARISH_SLUGS = PARISHES.map(parishToSlug);
 
 /**
- * Per-parish editorial metadata used to give each `/rideshare-in-[parish]`
- * and `/driver-jobs-in-[parish]` page genuinely unique content. Google
+ * Per-parish editorial metadata used to give each `/rideshare-in/[parish]`
+ * and `/driver-jobs-in/[parish]` page genuinely unique content. Google
  * penalises thin geo-modified duplicate pages ("rideshare in X" templates
  * that just swap one word), so each entry contributes:
  *   - `capital`: parish capital town, surfaced in the hero copy.

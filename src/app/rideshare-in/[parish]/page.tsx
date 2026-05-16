@@ -18,7 +18,7 @@ import { getLandingCtaTargets } from "@/lib/landing-cta-targets";
 /**
  * Per-parish rideshare landing page.
  *
- * Route: `/rideshare-in-[parish]` for all 14 Jamaican parishes
+ * Route: `/rideshare-in/[parish]` for all 14 Jamaican parishes
  * (kingston, st-andrew, st-catherine, ...). Each page is statically
  * generated at build time via `generateStaticParams`, so they're
  * effectively as fast as a static HTML file and Google can crawl them
@@ -56,7 +56,7 @@ export async function generateMetadata({
   const info = PARISH_INFO[parish];
   const title = `Rideshare in ${parish}, Jamaica`;
   const description = `Book a ride anywhere in ${parish} with ${SITE_NAME}. Verified red-plate drivers, transparent fares, real-time tracking — from ${info.popularDestinations[0]} to ${info.popularDestinations[1]} and beyond.`;
-  const canonicalPath = `/rideshare-in-${slug}`;
+  const canonicalPath = `/rideshare-in/${slug}`;
   return {
     title,
     description,
@@ -86,7 +86,7 @@ export default async function ParishRideshareLanding({
 
   const info = PARISH_INFO[parish];
   const cta = await getLandingCtaTargets();
-  const canonicalPath = `/rideshare-in-${slug}`;
+  const canonicalPath = `/rideshare-in/${slug}`;
   // Sample fares at three typical distances so visitors get a
   // concrete price expectation without having to open the calculator.
   // Uses the TA-anchored route-taxi formula — same engine the live app
@@ -404,7 +404,7 @@ export default async function ParishRideshareLanding({
               return (
                 <li key={otherSlug}>
                   <Link
-                    href={`/rideshare-in-${otherSlug}`}
+                    href={`/rideshare-in/${otherSlug}`}
                     className="inline-flex items-center rounded-full border border-line bg-background px-4 py-2 text-sm font-semibold hover:border-rajlo-red hover:text-rajlo-red"
                   >
                     Rideshare in {other}

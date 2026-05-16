@@ -57,8 +57,8 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
           "/download",
           "/legal/",
           // SEO landing-page families:
-          "/rideshare-in-",
-          "/driver-jobs-in-",
+          "/rideshare-in/",
+          "/driver-jobs-in/",
         ],
         // Block the portals + API. Googlebot can't sign in so indexing
         // these creates rotted search results that always 401/redirect.
@@ -67,7 +67,7 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
           "/admin/",
           "/api/",
           "/auth/",
-          "/driver/", // portal — separate from /driver-join + /driver-jobs-in-*
+          "/driver/", // portal — separate from /driver-join + /driver-jobs-in/*
           "/rider/",
           "/trip/", // single-trip share links (private to the trip recipient)
           "/dev/",
