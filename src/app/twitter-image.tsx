@@ -1,14 +1,15 @@
 /**
- * Twitter-card image. Identical to the Open Graph image — Twitter and
- * Facebook share the same 1200×630 spec, but Next.js requires a
- * separate file so it knows to inject `<meta name="twitter:image">`
- * rather than `<meta property="og:image">`. Re-exports keep them in
- * lockstep: edit `opengraph-image.tsx`, both cards update.
+ * Twitter-card image. Twitter/X and Facebook share the same 1200×630
+ * spec, so the actual image is the `default` render function imported
+ * from `opengraph-image.tsx` — edit that one file and both cards
+ * update together.
+ *
+ * The metadata exports (`alt`, `size`, `contentType`) are declared
+ * directly here rather than re-exported: Next.js statically parses
+ * metadata config at compile time and can't follow a re-export chain.
  */
-export {
-  default,
-  runtime,
-  alt,
-  size,
-  contentType,
-} from "./opengraph-image";
+export { default } from "./opengraph-image";
+
+export const alt = "Rajlo — Jamaica's rideshare platform";
+export const size = { width: 1200, height: 630 };
+export const contentType = "image/png";

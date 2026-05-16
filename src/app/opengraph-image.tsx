@@ -25,7 +25,6 @@ import { ImageResponse } from "next/og";
  * no PNG asset to maintain, no Figma round-trip.
  */
 
-export const runtime = "edge";
 export const alt = "Rajlo — Jamaica's rideshare platform";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
