@@ -33,7 +33,7 @@ export async function GET(request: NextRequest) {
     Math.min(365, parseInt(sp.get("days") ?? "30", 10) || 30),
   );
   const limit = Math.min(
-    500,
+    2000,
     Math.max(10, parseInt(sp.get("limit") ?? "100", 10) || 100),
   );
   const offset = Math.max(0, parseInt(sp.get("offset") ?? "0", 10) || 0);

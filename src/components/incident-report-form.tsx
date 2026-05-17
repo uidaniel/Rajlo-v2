@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Icon } from "./icons";
 
@@ -8,7 +8,13 @@ import { Icon } from "./icons";
  * Shared incident reporting form for riders and drivers. Submits to
  * POST /api/incidents. Critical categories (accident, assault, …) are
  * auto-escalated server-side, so the form just collects the facts.
+ *
+ * The "which trip" field is a dropdown of the caller's recent trips
+ * (loaded from /api/incidents/my-trips) so the reporter picks rather
+ * than hunts for a trip id.
  */
+
+type Trip = { id: string; label: string };
 
 const INCIDENT_TYPES: { value: string; label: string }[] = [
   { value: "accident", label: "Vehicle accident" },
@@ -35,9 +41,26 @@ export function IncidentReportForm() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [tripId, setTripId] = useState("");
+  const [trips, setTrips] = useState<Trip[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+
+  // Load the reporter's recent trips for the "which trip" dropdown.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/incidents/my-trips", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((json: { trips?: Trip[] } | null) => {
+        if (!cancelled && json?.trips) setTrips(json.trips);
+      })
+      .catch(() => {
+        /* dropdown just stays empty — trip is optional anyway */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const canSubmit =
     incidentType && title.trim() && description.trim().length >= 10;
@@ -161,14 +184,26 @@ export function IncidentReportForm() {
 
       <label className="block">
         <span className="text-xs font-bold uppercase tracking-wider text-muted">
-          Trip ID <span className="font-normal lowercase">(optional)</span>
+          Which trip? <span className="font-normal lowercase">(optional)</span>
         </span>
-        <input
-          value={tripId}
-          onChange={(e) => setTripId(e.target.value)}
-          placeholder="If this relates to a specific trip"
-          className="mt-1.5 w-full rounded-xl border border-line bg-background px-3.5 py-2.5 text-sm focus:border-rajlo-red focus:outline-none"
-        />
+        {trips.length > 0 ? (
+          <select
+            value={tripId}
+            onChange={(e) => setTripId(e.target.value)}
+            className="mt-1.5 w-full rounded-xl border border-line bg-background px-3.5 py-2.5 text-sm focus:border-rajlo-red focus:outline-none"
+          >
+            <option value="">Not about a specific trip</option>
+            {trips.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <p className="mt-1.5 rounded-xl border border-line bg-surface px-3.5 py-2.5 text-sm text-muted">
+            No past trips to link.
+          </p>
+        )}
       </label>
 
       {error && (

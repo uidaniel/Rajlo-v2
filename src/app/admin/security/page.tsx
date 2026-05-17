@@ -70,6 +70,47 @@ export default function AdminSecurityPage() {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // "Add admin" form state.
+  const [addEmail, setAddEmail] = useState("");
+  const [addName, setAddName] = useState("");
+  const [addRole, setAddRole] = useState<AdminRole>("moderator");
+  const [adding, setAdding] = useState(false);
+  const [addNotice, setAddNotice] = useState<string | null>(null);
+
+  const addAdmin = async () => {
+    setAdding(true);
+    setError(null);
+    setAddNotice(null);
+    try {
+      const res = await fetch("/api/admin/admins", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: addEmail.trim(),
+          fullName: addName.trim() || undefined,
+          adminRole: addRole,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        promoted?: boolean;
+      };
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      setAddNotice(
+        json.promoted
+          ? "Existing account promoted to admin."
+          : "Invite sent — they become an admin once they accept.",
+      );
+      setAddEmail("");
+      setAddName("");
+      await query.refresh();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't add the admin.");
+    } finally {
+      setAdding(false);
+    }
+  };
+
   const patchAdmin = async (
     id: string,
     body: { adminRole?: AdminRole; suspended?: boolean },
@@ -115,6 +156,60 @@ export default function AdminSecurityPage() {
           {error}
         </p>
       )}
+
+      {/* ── Add admin ── */}
+      <section className="mb-8 rounded-2xl border border-line bg-surface p-5">
+        <h2 className="text-sm font-extrabold uppercase tracking-wider text-muted">
+          Add an admin
+        </h2>
+        <p className="mt-1 text-xs text-muted">
+          Enter an email. If the person already has a RAJLO account it&apos;s
+          promoted to admin; otherwise they get a magic-link invite. Pick
+          the tier that fits their job — keep access to the minimum.
+        </p>
+        <div className="mt-3 space-y-2.5">
+          <input
+            type="email"
+            value={addEmail}
+            onChange={(e) => setAddEmail(e.target.value)}
+            placeholder="Email address"
+            className="w-full rounded-xl border border-line bg-background px-3.5 py-2.5 text-sm focus:border-rajlo-red focus:outline-none"
+          />
+          <input
+            value={addName}
+            onChange={(e) => setAddName(e.target.value)}
+            placeholder="Full name (required for a new invite)"
+            className="w-full rounded-xl border border-line bg-background px-3.5 py-2.5 text-sm focus:border-rajlo-red focus:outline-none"
+          />
+          <select
+            value={addRole}
+            onChange={(e) => setAddRole(e.target.value as AdminRole)}
+            className="w-full rounded-xl border border-line bg-background px-3.5 py-2.5 text-sm focus:border-rajlo-red focus:outline-none"
+          >
+            {ADMIN_ROLES.map((role) => (
+              <option key={role} value={role}>
+                {ADMIN_ROLE_LABEL[role]}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] leading-relaxed text-muted">
+            {ADMIN_ROLE_DESCRIPTION[addRole]}
+          </p>
+          {addNotice && (
+            <p className="text-xs font-semibold text-emerald-700">
+              {addNotice}
+            </p>
+          )}
+          <button
+            type="button"
+            disabled={!addEmail.trim() || adding}
+            onClick={addAdmin}
+            className="inline-flex w-full items-center justify-center rounded-full bg-rajlo-red px-5 py-2.5 text-sm font-bold text-white transition-all hover:-translate-y-0.5 hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
+          >
+            {adding ? "Adding…" : "Add admin"}
+          </button>
+        </div>
+      </section>
 
       {/* ── Admin roster ── */}
       <section className="mb-8">

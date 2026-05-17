@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { requirePermission, requireAdmin } from "@/lib/admin-auth";
+import {
+  requirePermission,
+  requireAdmin,
+  logAdminAction,
+} from "@/lib/admin-auth";
 import { hasPermission } from "@/lib/admin-rbac";
 
 /**
@@ -214,6 +218,15 @@ export async function PATCH(
       action_description: `${actor.label} set status to ${body.status}`,
       admin_user_id: actor.userId,
       metadata: { from: incident.status, to: body.status },
+    });
+    // Also surface in the platform-wide audit feed so the compliance
+    // trail at /admin/audit-logs is complete.
+    await logAdminAction(supabase, actor, {
+      targetType: "system",
+      targetId: id,
+      targetLabel: "Incident",
+      action: "incident_status_changed",
+      summary: `${actor.label} set incident status to ${body.status}`,
     });
     return NextResponse.json({ ok: true });
   }

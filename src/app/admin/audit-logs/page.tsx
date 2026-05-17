@@ -40,6 +40,10 @@ export default function AdminAuditLogsPage() {
   const [days, setDays] = useState(30);
   const [search, setSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  // How many entries to fetch. "Load more" raises it; the API caps at
+  // 2000. Without this the feed silently stopped at 200 entries with
+  // no way to reach older ones.
+  const [limit, setLimit] = useState(200);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(search.trim()), 250);
@@ -52,7 +56,7 @@ export default function AdminAuditLogsPage() {
     if (target !== "all") params.set("targetType", target);
     if (debouncedSearch) params.set("q", debouncedSearch);
     params.set("days", String(days));
-    params.set("limit", "200");
+    params.set("limit", String(limit));
     return `/api/admin/audit-logs?${params.toString()}`;
   })();
 
@@ -233,6 +237,24 @@ export default function AdminAuditLogsPage() {
                   </ul>
                 </div>
               ))}
+
+              {/* Load more — appears while the feed is saturated (more
+                 entries likely exist) and we're under the API cap. */}
+              {entries.length >= limit && limit < 2000 && (
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setLimit((l) => Math.min(2000, l + 300))}
+                    className="rounded-full border border-line bg-surface-soft px-5 py-2 text-xs font-bold hover:bg-surface-2"
+                  >
+                    Load more
+                  </button>
+                  <p className="mt-2 text-[11px] text-muted">
+                    Showing {entries.length}. Use the time range +
+                    filters to narrow a large trail.
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </div>
