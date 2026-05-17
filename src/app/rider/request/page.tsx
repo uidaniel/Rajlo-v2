@@ -193,11 +193,15 @@ export default function RiderRequestPage() {
               name: pickup.name,
               address: pickup.address,
               parish: pickup.parish,
+              lat: pickup.lat,
+              lng: pickup.lng,
             },
             dropoff: {
               name: dropoff.name,
               address: dropoff.address,
               parish: dropoff.parish,
+              lat: dropoff.lat,
+              lng: dropoff.lng,
             },
           }),
         });

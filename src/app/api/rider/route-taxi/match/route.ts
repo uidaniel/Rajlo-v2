@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import { haversineKm } from "@/lib/jamaica";
 
 /**
  * POST /api/rider/route-taxi/match
@@ -18,6 +19,13 @@ import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
  * boost the score; when they conflict, we filter the route out (a
  * "Hopewell" in Hanover is not the same as a "Hopewell" in St. James).
  *
+ * GEOGRAPHIC SANITY GATE: name-token overlap alone false-matches
+ * unrelated corridors that share a generic word ("Park", "Bay",
+ * "Town") — e.g. a 240 km Kingston→Negril trip matching a 15 km
+ * "Moore Park → Montego Bay" corridor on "park" + "bay". So when the
+ * client sends pickup/dropoff coordinates we reject any corridor the
+ * trip physically can't fit on (trip distance ≫ corridor length).
+ *
  * Body:
  *   { pickup: { name, address?, parish?, lat?, lng? },
  *     dropoff: { name, address?, parish?, lat?, lng? } }
@@ -34,6 +42,8 @@ type RiderPlace = {
   name?: unknown;
   address?: unknown;
   parish?: unknown;
+  lat?: unknown;
+  lng?: unknown;
 };
 
 type MatchBody = { pickup?: RiderPlace; dropoff?: RiderPlace };
@@ -125,6 +135,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ matches: [] });
   }
 
+  // Straight-line trip distance for the geographic sanity gate. Null
+  // when the client didn't send coordinates — the gate is then skipped
+  // and we fall back to name-only matching.
+  const pickupCoord = asCoord(body.pickup);
+  const dropoffCoord = asCoord(body.dropoff);
+  const tripKm =
+    pickupCoord && dropoffCoord
+      ? haversineKm(pickupCoord, dropoffCoord)
+      : null;
+
   // We could narrow by parish at the SQL layer but our parish column on
   // routes uses the TA's combined string ("Kingston and St. Andrew")
   // while Google returns just "Kingston" — easier to do parish
@@ -150,7 +170,19 @@ export async function POST(request: Request) {
 
   const candidates: Candidate[] = [];
 
+  let gatedOut = 0;
+  let parishGated = 0;
   for (const r of (routes ?? []) as RouteRow[]) {
+    // Geographic sanity gate. A route taxi rider boards a segment of
+    // the corridor, so the trip can't be meaningfully longer than the
+    // corridor itself. 1.3× absorbs straight-line-vs-road slack and
+    // +2 km helps very short corridors. Skipped when no coords.
+    const routeKm = Number(r.distance_km);
+    if (tripKm !== null && tripKm > routeKm * 1.3 + 2) {
+      gatedOut++;
+      continue;
+    }
+
     const originTokens = tokenize(r.origin_name);
     const destTokens = tokenize(r.destination_name);
 
@@ -158,36 +190,44 @@ export async function POST(request: Request) {
     const fOriginScore = overlapScore(originTokens, pickupTokens);
     const fDestScore = overlapScore(destTokens, dropoffTokens);
     if (fOriginScore > 0 && fDestScore > 0) {
-      const parishBoost =
+      // Parish hard-filter: a corridor whose parish doesn't line up
+      // with the rider's trip is rejected outright — name-token
+      // overlap alone ("Hopewell" exists in two parishes) is not
+      // enough. Skipped per-end when the rider's parish is unknown.
+      if (
         parishCompatible(r.origin_parish, pickupParish) &&
         parishCompatible(r.destination_parish, dropoffParish)
-          ? 0.5
-          : 0;
-      const total = fOriginScore + fDestScore + parishBoost;
-      candidates.push({
-        route: r,
-        direction: "forward",
-        score: total,
-        confidence: bucket(total),
-      });
+      ) {
+        const total = fOriginScore + fDestScore + 0.5;
+        candidates.push({
+          route: r,
+          direction: "forward",
+          score: total,
+          confidence: bucket(total),
+        });
+      } else {
+        parishGated++;
+      }
     }
 
     // Reverse: route origin ↔ rider dropoff, route dest ↔ rider pickup
     const rOriginScore = overlapScore(originTokens, dropoffTokens);
     const rDestScore = overlapScore(destTokens, pickupTokens);
     if (rOriginScore > 0 && rDestScore > 0) {
-      const parishBoost =
+      if (
         parishCompatible(r.origin_parish, dropoffParish) &&
         parishCompatible(r.destination_parish, pickupParish)
-          ? 0.5
-          : 0;
-      const total = rOriginScore + rDestScore + parishBoost;
-      candidates.push({
-        route: r,
-        direction: "reverse",
-        score: total,
-        confidence: bucket(total),
-      });
+      ) {
+        const total = rOriginScore + rDestScore + 0.5;
+        candidates.push({
+          route: r,
+          direction: "reverse",
+          score: total,
+          confidence: bucket(total),
+        });
+      } else {
+        parishGated++;
+      }
     }
   }
 
@@ -209,7 +249,10 @@ export async function POST(request: Request) {
   // debug "matcher returned nothing for an obvious corridor" reports.
   console.log(
     `[route-match] pickupTokens=${pickupTokens.size} dropoffTokens=${dropoffTokens.size} ` +
-      `routesScanned=${routes?.length ?? 0} candidates=${candidates.length} returned=${top.length}` +
+      `routesScanned=${routes?.length ?? 0} distanceGated=${gatedOut} ` +
+      `parishGated=${parishGated} ` +
+      `tripKm=${tripKm !== null ? tripKm.toFixed(1) : "n/a"} ` +
+      `candidates=${candidates.length} returned=${top.length}` +
       (top.length > 0 ? ` topScore=${top[0].score.toFixed(2)}` : ""),
   );
 
@@ -235,6 +278,19 @@ export async function POST(request: Request) {
 
 function asString(v: unknown): string | null {
   return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+/** Pull a usable {lat,lng} from a rider place, or null. Rejects the
+ *  stuck-on-zero (0,0) fix that means "no GPS yet". */
+function asCoord(
+  p: RiderPlace | undefined,
+): { lat: number; lng: number } | null {
+  if (!p) return null;
+  const lat = Number(p.lat);
+  const lng = Number(p.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  if (lat === 0 && lng === 0) return null;
+  return { lat, lng };
 }
 
 /**
@@ -279,20 +335,43 @@ function bucket(score: number): "high" | "medium" | "low" {
   return "low";
 }
 
+/** Words that carry no parish identity — dropped before comparison so
+ *  "Saint James" / "St. James" / "St James Parish" all reduce to the
+ *  single distinctive token {james}. */
+const PARISH_STOP = new Set(["st", "saint", "and", "the", "parish"]);
+
+/** Reduce a parish string to its distinctive tokens. "Kingston and
+ *  St. Andrew" → {kingston, andrew}; "Saint James" → {james}. */
+function parishTokens(s: string): Set<string> {
+  const out = new Set<string>();
+  for (const w of s.toLowerCase().replace(/[.,]/g, " ").split(/\s+/)) {
+    const t = w.trim();
+    if (t.length < 3 || PARISH_STOP.has(t)) continue;
+    out.add(t);
+  }
+  return out;
+}
+
 /**
- * Parishes are "compatible" when either side is missing (rider may
- * not have parish from Google), or the route's parish string contains
- * the rider's parish (TA uses "Kingston and St. Andrew", Google
- * returns just "Kingston" or "St. Andrew").
+ * Parishes are "compatible" when either side is missing (the rider may
+ * not have a parish from Google — we don't reject on absent data), or
+ * when their distinctive tokens overlap.
+ *
+ * Token comparison (not substring) so the TA's combined "Kingston and
+ * St. Andrew" matches a rider parish of "Kingston" OR "St. Andrew",
+ * and "Saint James" matches "St. James" — while "St. James" vs
+ * "St. Catherine" correctly does NOT match (no shared token).
  */
 function parishCompatible(
   routeParish: string | null,
   riderParish: string | null,
 ): boolean {
   if (!routeParish || !riderParish) return true;
-  const r = routeParish.toLowerCase();
-  const p = riderParish.toLowerCase();
-  return r.includes(p) || p.includes(r);
+  const r = parishTokens(routeParish);
+  const p = parishTokens(riderParish);
+  if (r.size === 0 || p.size === 0) return true;
+  for (const t of p) if (r.has(t)) return true;
+  return false;
 }
 
 function normaliseParish(s: string | null): string | null {
