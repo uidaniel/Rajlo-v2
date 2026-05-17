@@ -12,6 +12,7 @@ import { useRidePosition } from "@/lib/use-ride-position";
 import { useBackgroundRefresh } from "@/lib/use-background-refresh";
 import { SafetySheet } from "@/components/safety-sheet";
 import { CancelReasonDialog } from "@/components/cancel-reason-dialog";
+import { riderCancellationFeeJmd } from "@/lib/cancellation-fees";
 import { SafetyCheckModal } from "@/components/safety-check-modal";
 import { useUnusualStopDetector } from "@/lib/use-unusual-stop-detector";
 import { useOffRouteDetector } from "@/lib/use-off-route-detector";
@@ -1078,6 +1079,10 @@ export default function RiderLiveTripPage() {
         busy={cancelling}
         onClose={() => setCancelDialogOpen(false)}
         onConfirm={performCancel}
+        feeWarningJmd={riderCancellationFeeJmd(
+          ride.status,
+          ride.timeline.requestedAt,
+        )}
       />
 
       {/* Persistent safety-chat pill — visible while any alert is

@@ -3,6 +3,7 @@ import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { getWalletBalance } from "@/lib/wallet";
 import { getDriverSelfieUrl } from "@/lib/driver-selfie";
+import { riderCancellationFeeJmd, chargeFee } from "@/lib/cancellation-fees";
 
 /**
  * /api/rider/route-taxi/hails/[id]
@@ -11,7 +12,10 @@ import { getDriverSelfieUrl } from "@/lib/driver-selfie";
  * PATCH — rider-side state transition. Today only `cancelled` is
  *         allowed, and only while the hail is `requested` or
  *         `accepted` (not after pickup — that's a no-show / refund
- *         conversation, not a self-serve cancel).
+ *         conversation, not a self-serve cancel). Cancelling an
+ *         `accepted` hail more than 2 minutes after requesting it
+ *         incurs a J$100 cancellation fee (driver keeps 80%); a
+ *         `requested` hail with no driver yet is always free.
  *
  * Powers the live hailing page. We return the full join (driver +
  * vehicle + session position + wallet snapshot for completed hails)
@@ -208,7 +212,9 @@ export async function PATCH(
   // owned by support — not a self-serve flip.
   const { data: hail } = await supabase
     .from("route_hails")
-    .select("id, status")
+    .select(
+      "id, status, requested_at, session_id, pickup_name, dropoff_name",
+    )
     .eq("id", id)
     .eq("rider_id", user.id)
     .maybeSingle();
@@ -224,6 +230,11 @@ export async function PATCH(
     );
   }
 
+  // Fee tier — a route hail never reaches `arrived`, so this only ever
+  // lands on the J$0 (requested / inside grace window) or J$100
+  // (accepted, past the window) tiers.
+  const feeJmd = riderCancellationFeeJmd(hail.status, hail.requested_at);
+
   const { error } = await supabase
     .from("route_hails")
     .update({
@@ -238,5 +249,54 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  // ─── Charge the cancellation fee, if one applies ───
+  let feeCharged = false;
+  let feeUncollected = false;
+  if (feeJmd > 0) {
+    // Resolve the accepting driver's user id via the session so we can
+    // pay them their 80% share.
+    let driverUserId: string | null = null;
+    if (hail.session_id) {
+      const { data: sess } = await supabase
+        .from("driver_sessions")
+        .select("driver_id")
+        .eq("id", hail.session_id)
+        .maybeSingle();
+      if (sess?.driver_id) {
+        const { data: drv } = await supabase
+          .from("drivers")
+          .select("user_id")
+          .eq("id", sess.driver_id)
+          .maybeSingle();
+        driverUserId = drv?.user_id ?? null;
+      }
+    }
+    const result = await chargeFee(supabase, {
+      riderId: user.id,
+      driverUserId,
+      feeJmd,
+      rideId: hail.id,
+      feeType: "cancellation",
+      label: `${hail.pickup_name} → ${hail.dropoff_name} (Route Taxi)`,
+    });
+    feeCharged = result.ok;
+    feeUncollected = !result.ok;
+    if (!result.ok) {
+      // Wallet too low — the cancellation still stands; record it on
+      // the hail so admin can follow up.
+      await supabase
+        .from("route_hails")
+        .update({
+          cancellation_reason: `${body.reason?.slice(0, 150) ?? "Rider cancelled"} · J$${feeJmd} fee uncollected`,
+        })
+        .eq("id", id);
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    cancellationFeeJmd: feeJmd,
+    feeCharged,
+    feeUncollected,
+  });
 }

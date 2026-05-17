@@ -43,6 +43,7 @@ export function CancelReasonDialog({
   busy,
   onClose,
   onConfirm,
+  feeWarningJmd,
 }: {
   open: boolean;
   role: CancelReasonRole;
@@ -51,6 +52,10 @@ export function CancelReasonDialog({
   /** Called with the final reason string (may be empty if user skipped
    *  picking). The caller's job to fire the cancel API and close. */
   onConfirm: (reason: string) => void;
+  /** When set and > 0, a banner warns the user that confirming will
+   *  charge this cancellation fee. The rider's live-trip passes the
+   *  fee resolved from the current ride status. */
+  feeWarningJmd?: number;
 }) {
   const presets = role === "rider" ? RIDER_REASONS : DRIVER_REASONS;
   const [selected, setSelected] = useState<string | null>(null);
@@ -109,6 +114,19 @@ export function CancelReasonDialog({
                   : "Pick a reason so the rider + Rajlo ops know what happened."}
               </p>
             </div>
+
+            {/* Cancellation-fee warning — only when one actually applies. */}
+            {feeWarningJmd && feeWarningJmd > 0 ? (
+              <div className="border-b border-amber-200 bg-amber-50 px-5 py-3">
+                <p className="text-xs font-semibold leading-relaxed text-amber-900">
+                  Heads up — cancelling now charges a{" "}
+                  <span className="font-extrabold">
+                    J${feeWarningJmd.toLocaleString("en-JM")}
+                  </span>{" "}
+                  cancellation fee, deducted from your wallet.
+                </p>
+              </div>
+            ) : null}
 
             {/* Reasons */}
             <div className="space-y-2 px-5 py-5">

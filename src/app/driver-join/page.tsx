@@ -168,7 +168,7 @@ const FEATURES: Feature[] = [
     bullets: [
       "TA Franchise + Badge re-verified annually",
       "Vehicle + plate shown to every matched rider",
-      "Background-checked + insurance-on-file",
+      "Police record & insurance documents on file",
     ],
     screenshot: "/playstore/screenshots/1000536548.jpg",
     icon: "shield-check",

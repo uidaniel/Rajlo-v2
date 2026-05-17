@@ -1,5 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { asAdminRole, userHasPermission } from "@/lib/admin-rbac";
+import { requiredPermissionForAdminPath } from "@/lib/admin-route-permissions";
 
 /**
  * Two responsibilities, executed in order:
@@ -145,19 +147,32 @@ export async function proxy(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const isAdminRoute = path.startsWith("/admin");
+  const isAdminPage = path === "/admin" || path.startsWith("/admin/");
+  const isAdminApi =
+    path === "/api/admin" || path.startsWith("/api/admin/");
   const isDriverRoute = path.startsWith("/driver") && path !== "/driver-join";
   const isRiderRoute = path.startsWith("/rider");
-  const isProtected = isAdminRoute || isDriverRoute || isRiderRoute;
+  const isProtectedPage = isAdminPage || isDriverRoute || isRiderRoute;
 
   // Shared paths bypass auth entirely.
   if (SHARED_PATH_PREFIXES.some((p) => path.startsWith(p))) {
     return response;
   }
-  if (!isProtected) return response;
+  // Nothing to gate — public marketing pages, non-admin APIs, etc.
+  if (!isProtectedPage && !isAdminApi) return response;
+
+  /** JSON 403 for admin API calls (never an HTML redirect). */
+  const apiForbidden = (error: string) =>
+    new NextResponse(JSON.stringify({ error }), {
+      status: 403,
+      headers: { "content-type": "application/json" },
+    });
 
   if (!user) {
-    const loginPath = isAdminRoute
+    // Admin API with no session → let the route's own auth return a
+    // JSON 401 rather than redirecting an API client to an HTML page.
+    if (isAdminApi) return response;
+    const loginPath = isAdminPage
       ? "/auth/admin/login"
       : isDriverRoute
         ? "/auth/driver/login"
@@ -170,24 +185,52 @@ export async function proxy(request: NextRequest) {
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, admin_role, admin_suspended")
     .eq("id", user.id)
     .single();
 
   const role = profile?.role ?? "rider";
 
   // Strict role separation. safety_officer counts as admin-tier for
-  // the admin surface (the per-page nav + API checks scope what they
-  // can actually do).
+  // the admin surface.
   const adminAllowed = role === "admin" || role === "safety_officer";
-  if (
-    (isAdminRoute && !adminAllowed) ||
-    (isDriverRoute && role !== "driver") ||
-    (isRiderRoute && role !== "rider")
-  ) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/403";
-    return NextResponse.redirect(url);
+
+  // ─── Page-level role separation (unchanged behaviour) ───
+  if (isProtectedPage) {
+    if (
+      (isAdminPage && !adminAllowed) ||
+      (isDriverRoute && role !== "driver") ||
+      (isRiderRoute && role !== "rider")
+    ) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/403";
+      return NextResponse.redirect(url);
+    }
+  }
+
+  // ─── RBAC permission gating — admin pages AND admin APIs ───
+  // The single enforcement point: every admin surface is checked
+  // against the caller's tier here, so legacy routes are covered
+  // without per-route edits.
+  if ((isAdminPage || isAdminApi) && adminAllowed) {
+    // A suspended admin is locked out of the whole surface.
+    if (profile?.admin_suspended) {
+      if (isAdminApi) return apiForbidden("admin_suspended");
+      const url = request.nextUrl.clone();
+      url.pathname = "/403";
+      return NextResponse.redirect(url);
+    }
+    const needed = requiredPermissionForAdminPath(path);
+    if (
+      needed &&
+      !userHasPermission(role, asAdminRole(profile?.admin_role), needed)
+    ) {
+      if (isAdminApi) return apiForbidden("insufficient_permission");
+      // Bounce a denied page to the dashboard (every tier may see it).
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin";
+      return NextResponse.redirect(url);
+    }
   }
 
   return response;

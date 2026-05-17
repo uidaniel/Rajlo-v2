@@ -3,6 +3,8 @@ import { PortalLayout } from "@/components/portal-layout";
 import { AdminAccessBeacon } from "@/components/admin-access-beacon";
 import { adminNav, safetyOfficerNav } from "@/lib/mock-data";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import { asAdminRole, userHasPermission } from "@/lib/admin-rbac";
+import { requiredPermissionForAdminPath } from "@/lib/admin-route-permissions";
 
 /**
  * Admin / officer portal shell.
@@ -33,7 +35,7 @@ export default async function AdminLayout({
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("role")
+    .select("role, admin_role")
     .eq("id", user.id)
     .single();
 
@@ -44,6 +46,18 @@ export default async function AdminLayout({
 
   const isAdmin = role === "admin";
 
+  // Scope the sidebar to the viewer's RBAC tier: a nav item only shows
+  // if its route requires no specific permission, or the viewer's tier
+  // grants it. The proxy enforces the same map server-side — this just
+  // keeps lower tiers from seeing menu items they'd be 403'd out of.
+  const adminRole = asAdminRole(profile?.admin_role);
+  const nav = isAdmin
+    ? adminNav.filter((item) => {
+        const needed = requiredPermissionForAdminPath(item.href);
+        return !needed || userHasPermission(role, adminRole, needed);
+      })
+    : safetyOfficerNav;
+
   return (
     <PortalLayout
       title={isAdmin ? "Admin/Ops Portal" : "Safety Operations"}
@@ -52,7 +66,7 @@ export default async function AdminLayout({
           ? "Verification operations, pricing controls, and incident workflows."
           : "Safety queue, live trips, and rider chat — scoped to safety scope."
       }
-      nav={isAdmin ? adminNav : safetyOfficerNav}
+      nav={nav}
     >
       {/* Records an admin_access_logs entry once per session for the
          security dashboard's access history. */}

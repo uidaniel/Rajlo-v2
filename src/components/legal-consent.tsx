@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { Icon, type IconName } from "./icons";
 
@@ -16,18 +17,22 @@ export type ConsentDocument = {
  * Legal consent block — the shared, legally load-bearing UI shown at
  * signup and on the re-acceptance gate.
  *
- * It does three things, all required for enforceable consent:
- *   1. Lists every policy the user is agreeing to, each a real link to
- *      the full text at `/legal/<key>` (opens in a new tab so reading
- *      a policy never loses the signup form).
- *   2. Surfaces the three high-impact consents as their own callouts —
- *      GPS / background location, automatic payment authorization, and
- *      OTP verification — because burying these in a policy link is
- *      weak consent. They're stated in plain language, on screen.
- *   3. A single explicit checkbox the user must actively tick. The
- *      parent keeps `checked` in state and blocks submission until
- *      it's true; the acceptance is then logged server-side with the
- *      version + timestamp + IP via POST /api/legal/accept.
+ * Layout is "compact + expandable": the explicit consent checkbox sits
+ * at the TOP so it's reachable without scrolling, and the full policy
+ * list + the GPS / payment / OTP disclosures live behind a single
+ * expander. Nothing is removed — every policy link and every
+ * plain-language disclosure is still one tap away — but the user is no
+ * longer forced to scroll a wall of text before they can agree.
+ *
+ * Consent remains enforceable because:
+ *   1. The checkbox copy itself names what's being agreed to and that
+ *      the acceptance is recorded.
+ *   2. Every policy is a real link to its full text at `/legal/<key>`.
+ *   3. The three high-impact consents (background GPS, automatic
+ *      payments, OTP) are stated verbatim in the expander.
+ *   4. The parent blocks submission until the box is ticked, and the
+ *      acceptance is logged server-side with version + timestamp + IP
+ *      via POST /api/legal/accept.
  */
 
 type Disclosure = {
@@ -71,72 +76,103 @@ export function LegalConsent({
   heading?: string;
   intro?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const count = documents.length;
+
   return (
-    <div className="rounded-2xl border border-line bg-surface p-5">
-      <h3 className="text-sm font-extrabold tracking-tight">{heading}</h3>
-      <p className="mt-1 text-xs leading-relaxed text-muted">{intro}</p>
+    <div className="rounded-2xl border border-line bg-surface p-4 sm:p-5">
+      <p className="text-[11px] font-bold uppercase tracking-wider text-rajlo-red">
+        {heading}
+      </p>
 
-      {/* Policy list */}
-      <ul className="mt-4 space-y-1.5">
-        {documents.map((doc) => (
-          <li key={doc.key}>
-            <Link
-              href={`/legal/${doc.key}`}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center justify-between gap-3 rounded-xl border border-line bg-background px-3.5 py-2.5 transition-colors hover:border-rajlo-red"
-            >
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-bold">
-                  {doc.title}
-                </span>
-                <span className="block truncate text-[11px] text-muted">
-                  {doc.summary}
-                </span>
-              </span>
-              <span className="flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
-                Read
-                <Icon name="arrow-right" className="h-3 w-3" />
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-
-      {/* High-impact disclosures */}
-      <div className="mt-4 space-y-2.5">
-        {DISCLOSURES.map((d) => (
-          <div
-            key={d.title}
-            className="flex gap-3 rounded-xl bg-background p-3.5"
-          >
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-rajlo-red/10 text-rajlo-red">
-              <Icon name={d.icon} className="h-4 w-4" />
-            </span>
-            <div>
-              <p className="text-xs font-extrabold">{d.title}</p>
-              <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
-                {d.body}
-              </p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* The explicit consent checkbox */}
-      <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-rajlo-red/30 bg-primary-soft/40 p-3.5">
+      {/* The explicit consent checkbox — kept at the top so it's
+          reachable without scrolling past the policy detail. */}
+      <label className="mt-2.5 flex cursor-pointer items-start gap-3 rounded-xl border border-rajlo-red/30 bg-primary-soft/40 p-3 sm:p-3.5">
         <input
           type="checkbox"
           checked={checked}
           onChange={(e) => onChange(e.target.checked)}
-          className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-line accent-rajlo-red focus:ring-2 focus:ring-rajlo-red/20"
+          className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer rounded border-line accent-rajlo-red focus:ring-2 focus:ring-rajlo-red/20"
         />
-        <span className="text-xs font-semibold leading-relaxed">
-          I confirm I have read, understood, and agree to be legally bound
-          by all of the policies and disclosures above, and I consent to
-          RAJLO recording this acceptance.
+        <span className="min-w-0 text-xs font-semibold leading-relaxed">
+          I have read, understood, and agree to be legally bound by RAJLO&apos;s{" "}
+          {count} {count === 1 ? "policy" : "policies"} — and I consent to
+          background GPS location, automatic wallet charges, OTP verification,
+          and to RAJLO recording this acceptance.
         </span>
       </label>
+
+      {/* Single expander revealing the full policy list + disclosures. */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="mt-2.5 flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-background px-3.5 py-2.5 text-left transition-colors hover:border-rajlo-red"
+      >
+        <span className="min-w-0 text-xs font-bold">
+          {open ? "Hide" : "Review"} the {count}{" "}
+          {count === 1 ? "policy" : "policies"} &amp; key disclosures
+        </span>
+        <Icon
+          name="chevron-down"
+          className={`h-4 w-4 shrink-0 text-muted transition-transform ${
+            open ? "rotate-180" : ""
+          }`}
+        />
+      </button>
+
+      {open && (
+        <div className="mt-3 space-y-4">
+          <p className="text-[11px] leading-relaxed text-muted">{intro}</p>
+
+          {/* Policy list */}
+          <ul className="space-y-1.5">
+            {documents.map((doc) => (
+              <li key={doc.key}>
+                <Link
+                  href={`/legal/${doc.key}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex items-center justify-between gap-3 rounded-xl border border-line bg-background px-3.5 py-2.5 transition-colors hover:border-rajlo-red"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-bold">
+                      {doc.title}
+                    </span>
+                    <span className="block truncate text-[11px] text-muted">
+                      {doc.summary}
+                    </span>
+                  </span>
+                  <span className="flex shrink-0 items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-rajlo-red">
+                    Read
+                    <Icon name="arrow-right" className="h-3 w-3" />
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+
+          {/* High-impact disclosures */}
+          <div className="space-y-2.5">
+            {DISCLOSURES.map((d) => (
+              <div
+                key={d.title}
+                className="flex gap-3 rounded-xl bg-background p-3 sm:p-3.5"
+              >
+                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-rajlo-red/10 text-rajlo-red">
+                  <Icon name={d.icon} className="h-4 w-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="text-xs font-extrabold">{d.title}</p>
+                  <p className="mt-0.5 text-[11px] leading-relaxed text-muted">
+                    {d.body}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

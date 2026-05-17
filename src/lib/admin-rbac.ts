@@ -22,21 +22,28 @@ export const ADMIN_ROLES = [
 
 export type AdminRole = (typeof ADMIN_ROLES)[number];
 
-/** Every gated capability across the admin surface. New subsystems
- *  (fraud, moderation, incidents) add their checks against these. */
+/** Every gated capability across the admin surface. The WHOLE admin
+ *  panel — legacy pages + APIs included — is gated against these via
+ *  the central route-permission map (lib/admin-route-permissions.ts).
+ *  Adding a permission here without mapping a route just means no
+ *  route requires it yet. */
 export type AdminPermission =
-  | "view_incidents" // see incident reports + safety queue
+  | "view_operations" // dashboard, analytics, live trips, ride monitoring
+  | "manage_routes" // edit the route-taxi catalogue
+  | "manage_users" // view + act on rider / driver accounts
+  | "view_incidents" // incident reports + safety queue + messaging
   | "manage_incidents" // update / resolve / close incidents
   | "suspend_user" // temporary rider/driver suspension
   | "ban_user" // permanent account ban
-  | "freeze_payout" // place / release payout holds
+  | "view_finance" // wallets, transactions, QR charges
+  | "freeze_payout" // payouts, payout holds, wallet adjustments
   | "view_fraud" // see risk scores + fraud dashboards
   | "manage_fraud" // open/resolve fraud investigations, raise flags
   | "export_evidence" // export consent / incident / fraud evidence
-  | "review_drivers" // approve / reject driver verification
+  | "review_drivers" // driver verification, vehicle changes, violations
   | "edit_policies" // edit + publish legal policies
-  | "manage_security" // infrastructure + security configuration
-  | "manage_admins"; // change admin roles, suspend admins
+  | "manage_security" // audit logs + admin security console
+  | "manage_admins"; // add admins, change roles, suspend admins
 
 /** Human labels for the tiers — used in the admin UI. */
 export const ADMIN_ROLE_LABEL: Record<AdminRole, string> = {
@@ -65,30 +72,51 @@ export const ADMIN_ROLE_DESCRIPTION: Record<AdminRole, string> = {
  * "and also everything else".
  */
 const ROLE_PERMISSIONS: Record<AdminRole, AdminPermission[]> = {
-  support_agent: ["view_incidents"],
+  // Support: read-only operational + incident visibility, nothing more.
+  support_agent: ["view_operations", "view_incidents"],
+  // Moderator: works incidents, suspends users, reviews drivers + fraud
+  // signals — no finance, no permanent bans, no security/admin config.
   moderator: [
+    "view_operations",
     "view_incidents",
     "manage_incidents",
+    "manage_users",
     "suspend_user",
     "view_fraud",
     "review_drivers",
   ],
+  // Compliance / investigator: full fraud + financial + evidence reach.
   compliance: [
+    "view_operations",
     "view_incidents",
     "manage_incidents",
+    "manage_users",
     "suspend_user",
+    "view_finance",
+    "freeze_payout",
     "view_fraud",
     "manage_fraud",
-    "freeze_payout",
     "export_evidence",
     "review_drivers",
   ],
-  technical_admin: ["view_incidents", "view_fraud", "manage_security"],
+  // Technical admin: operations + routes + security config; minimal
+  // user-data access (no finance, no fraud-management, no bans).
+  technical_admin: [
+    "view_operations",
+    "view_incidents",
+    "manage_routes",
+    "manage_security",
+  ],
+  // Super admin: everything — listed explicitly, no implicit wildcard.
   super_admin: [
+    "view_operations",
+    "manage_routes",
+    "manage_users",
     "view_incidents",
     "manage_incidents",
     "suspend_user",
     "ban_user",
+    "view_finance",
     "freeze_payout",
     "view_fraud",
     "manage_fraud",
@@ -99,6 +127,16 @@ const ROLE_PERMISSIONS: Record<AdminRole, AdminPermission[]> = {
     "manage_admins",
   ],
 };
+
+/** Permissions granted to a safety officer (profiles.role =
+ *  'safety_officer'). Officers aren't `admin` tier — they get a fixed,
+ *  narrow set: the safety queue, incidents, and operational trip
+ *  visibility so they can intervene on a live ride. */
+const SAFETY_OFFICER_PERMISSIONS: AdminPermission[] = [
+  "view_operations",
+  "view_incidents",
+  "manage_incidents",
+];
 
 /**
  * Does an admin tier grant a permission?
@@ -126,4 +164,30 @@ export function asAdminRole(value: string | null | undefined): AdminRole | null 
   return value && (ADMIN_ROLES as readonly string[]).includes(value)
     ? (value as AdminRole)
     : null;
+}
+
+/**
+ * The effective permission set for a user, resolved from BOTH their
+ * `profiles.role` and (for admins) their `admin_role` tier.
+ *
+ *   - safety_officer → the fixed officer set
+ *   - admin          → their RBAC tier's set (none if no tier assigned)
+ *   - anyone else    → nothing (riders/drivers have no admin reach)
+ */
+export function userPermissions(
+  role: string | null | undefined,
+  adminRole: AdminRole | null | undefined,
+): AdminPermission[] {
+  if (role === "safety_officer") return SAFETY_OFFICER_PERMISSIONS;
+  if (role === "admin") return permissionsFor(adminRole);
+  return [];
+}
+
+/** Whether a user (by profile role + admin tier) holds a permission. */
+export function userHasPermission(
+  role: string | null | undefined,
+  adminRole: AdminRole | null | undefined,
+  permission: AdminPermission,
+): boolean {
+  return userPermissions(role, adminRole).includes(permission);
 }

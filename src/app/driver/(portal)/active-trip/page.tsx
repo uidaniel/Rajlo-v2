@@ -138,6 +138,10 @@ export default function DriverActiveTripPage() {
   // the driver taps "Start trip" on a PIN-required ride; cleared when
   // they verify, cancel, or the 3-strike auto-cancel fires.
   const [pinTargetId, setPinTargetId] = useState<string | null>(null);
+  // No-show confirmation. Tapping "Rider didn't show up" arms this so
+  // the driver gets a clear "the rider will be charged" confirmation
+  // before the no-show fee actually fires.
+  const [noShowArmed, setNoShowArmed] = useState(false);
 
   // Live position channel: driver streams own GPS so the rider can watch
   // the car move on the map. Hook also receives the rider's position so
@@ -290,6 +294,31 @@ export default function DriverActiveTripPage() {
       setCancelTargetId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't cancel ride");
+    } finally {
+      setActing(false);
+    }
+  };
+
+  // Report the rider as a no-show. The server enforces the 5-minute
+  // wait after arrival — if the driver taps too early it returns a
+  // "wait N more minutes" message which surfaces in `error`.
+  const handleNoShow = async (rideId: string) => {
+    setActing(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/driver/rides/${rideId}/status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "no_show" }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        throw new Error(json.error ?? `Server returned ${res.status}`);
+      }
+      setNoShowArmed(false);
+      setData({ ride: null, rider: null, carpool: null });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't report no-show");
     } finally {
       setActing(false);
     }
@@ -820,6 +849,48 @@ export default function DriverActiveTripPage() {
               Cancel ride
             </button>
           )}
+
+          {/* No-show — only once the driver is at the pickup. The
+             server enforces the 5-minute wait; this UI just collects
+             a clear confirmation since the rider gets charged J$300. */}
+          {ride.status === "arrived" &&
+            (noShowArmed ? (
+              <div className="rounded-2xl border border-amber-300 bg-amber-50 p-4">
+                <p className="text-xs font-semibold leading-relaxed text-amber-900">
+                  Only report a no-show if you waited the full 5 minutes
+                  and the rider never came. The rider is charged a J$300
+                  no-show fee — you keep J$240.
+                </p>
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={() => setNoShowArmed(false)}
+                    disabled={acting}
+                    className="inline-flex w-full items-center justify-center rounded-full border border-line bg-surface px-5 py-2.5 text-sm font-bold text-muted transition-colors hover:bg-surface-soft disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleNoShow(ride.id)}
+                    disabled={acting}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-amber-600 px-5 py-2.5 text-sm font-bold text-white transition-colors hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {acting ? "Working…" : "Confirm no-show"}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setNoShowArmed(true)}
+                disabled={acting}
+                className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-line bg-surface px-5 py-3 text-sm font-bold text-muted transition-colors hover:bg-surface-soft hover:text-amber-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Icon name="history" className="h-4 w-4" />
+                Rider didn&apos;t show up
+              </button>
+            ))}
         </div>
       </FadeUp>
 

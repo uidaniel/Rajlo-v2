@@ -9,6 +9,12 @@ import { notifyRider } from "@/lib/notify";
 import { resolveDriverEmail } from "@/lib/driver-email-resolver";
 import { creditWallet, debitWallet } from "@/lib/wallet";
 import { splitFare } from "@/lib/fare-engine";
+import {
+  noShowWaitElapsed,
+  chargeFee,
+  NO_SHOW_FEE_JMD,
+  FEE_UNCOLLECTED_STATUS,
+} from "@/lib/cancellation-fees";
 
 /**
  * POST /api/driver/rides/[id]/status
@@ -23,13 +29,17 @@ import { splitFare } from "@/lib/fare-engine";
  * Each transition stamps the matching timestamp column + writes a
  * ride_events row for the audit trail.
  *
- * Body: { action: "arrived" | "start" | "complete" }
+ * A fourth action, `no_show`, is not a forward transition — it
+ * cancels an `arrived` ride after the driver has waited the full
+ * pickup window and charges the rider the no-show fee.
+ *
+ * Body: { action: "arrived" | "start" | "complete" | "no_show" }
  */
 
-type Action = "arrived" | "start" | "complete";
+type Action = "arrived" | "start" | "complete" | "no_show";
 
 const TRANSITIONS: Record<
-  Action,
+  Exclude<Action, "no_show">,
   { from: string; to: string; tsColumn: string; eventName: string }
 > = {
   arrived: {
@@ -60,13 +70,12 @@ export async function POST(
   const body = (await request.json().catch(() => ({}))) as { action?: string };
   const action = body.action as Action | undefined;
 
-  if (!action || !(action in TRANSITIONS)) {
+  if (!action || (action !== "no_show" && !(action in TRANSITIONS))) {
     return NextResponse.json(
-      { error: "action must be one of: arrived, start, complete" },
+      { error: "action must be one of: arrived, start, complete, no_show" },
       { status: 400 },
     );
   }
-  const transition = TRANSITIONS[action];
 
   const auth = await createSupabaseAuthServerClient();
   const {
@@ -99,6 +108,134 @@ export async function POST(
       { status: 403 },
     );
   }
+
+  // ─── No-show cancellation (driver-triggered) ───
+  // The driver waited the full no-show window after marking `arrived`
+  // and the rider never boarded. Cancels the ride and charges the
+  // rider the no-show fee (driver keeps 80%).
+  if (action === "no_show") {
+    const { data: nsRide } = await supabase
+      .from("rides")
+      .select(
+        "id, status, arrived_at, rider_id, carpool_group_id, pickup_name, dropoff_name",
+      )
+      .eq("id", id)
+      .eq("driver_id", driver.id)
+      .maybeSingle();
+    if (!nsRide) {
+      return NextResponse.json({ error: "forbidden" }, { status: 403 });
+    }
+    if (nsRide.carpool_group_id) {
+      return NextResponse.json(
+        {
+          error:
+            "A no-show on a shared carpool trip can't be self-served — contact support.",
+        },
+        { status: 409 },
+      );
+    }
+    if (nsRide.status !== "arrived") {
+      return NextResponse.json(
+        {
+          error:
+            "A no-show can only be reported after you've marked Arrived.",
+        },
+        { status: 409 },
+      );
+    }
+    const wait = noShowWaitElapsed(nsRide.arrived_at, "private");
+    if (!wait.eligible) {
+      const remainingMin = Math.ceil((wait.waitSec - wait.elapsedSec) / 60);
+      return NextResponse.json(
+        {
+          error: `Wait the full ${Math.round(wait.waitSec / 60)}-minute pickup window before reporting a no-show — about ${remainingMin} min left.`,
+          waitSecRemaining: Math.max(
+            0,
+            Math.round(wait.waitSec - wait.elapsedSec),
+          ),
+        },
+        { status: 409 },
+      );
+    }
+
+    const cancelledAt = new Date().toISOString();
+    const { data: nsCancelled } = await supabase
+      .from("rides")
+      .update({
+        status: "cancelled",
+        cancelled_at: cancelledAt,
+        cancellation_reason: "rider_no_show",
+      })
+      .eq("id", nsRide.id)
+      .eq("status", "arrived")
+      .select("id")
+      .maybeSingle();
+    if (!nsCancelled) {
+      return NextResponse.json(
+        { error: "Ride is no longer in the 'arrived' state." },
+        { status: 409 },
+      );
+    }
+
+    const label = `${nsRide.pickup_name} → ${nsRide.dropoff_name}`;
+    const fee = await chargeFee(supabase, {
+      riderId: nsRide.rider_id,
+      driverUserId: user.id,
+      feeJmd: NO_SHOW_FEE_JMD,
+      rideId: nsRide.id,
+      feeType: "no_show",
+      label,
+    });
+    await supabase
+      .from("rides")
+      .update({
+        settlement_status: fee.ok
+          ? fee.driverCredited
+            ? "no_show_fee_settled"
+            : "cancel_fee_driver_credit_failed"
+          : FEE_UNCOLLECTED_STATUS,
+        settlement_error: fee.ok
+          ? null
+          : `No-show fee JMD ${NO_SHOW_FEE_JMD} uncollected: ${fee.error.slice(0, 400)}`,
+      })
+      .eq("id", nsRide.id);
+
+    await supabase.from("ride_events").insert({
+      ride_id: nsRide.id,
+      event: "cancelled",
+      actor_role: "driver",
+      actor_id: driver.external_id,
+      metadata: {
+        reason: "rider_no_show",
+        noShowFeeJmd: NO_SHOW_FEE_JMD,
+        feeCharged: fee.ok,
+        feeUncollected: !fee.ok,
+      },
+    });
+
+    void notifyRider(supabase, {
+      riderId: nsRide.rider_id,
+      kind: "trip",
+      title: "Trip cancelled — no-show",
+      body: fee.ok
+        ? `Your driver waited at ${nsRide.pickup_name}. A JMD ${NO_SHOW_FEE_JMD} no-show fee was charged.`
+        : `Your driver waited at ${nsRide.pickup_name}. A JMD ${NO_SHOW_FEE_JMD} no-show fee is outstanding.`,
+      href: `/rider/history/${nsRide.id}`,
+      cta: "View trip",
+      pushTag: `ride-${nsRide.id}-status`,
+      pushRenotify: true,
+    }).catch(() => null);
+
+    return NextResponse.json({
+      ok: true,
+      status: "cancelled",
+      noShow: true,
+      noShowFeeJmd: NO_SHOW_FEE_JMD,
+      feeCharged: fee.ok,
+    });
+  }
+
+  const transition = TRANSITIONS[action];
 
   // Look up the ride first so we know whether it's part of a carpool.
   // For carpool rides every status transition affects ALL rides in the

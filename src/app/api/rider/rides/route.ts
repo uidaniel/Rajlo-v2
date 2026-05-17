@@ -7,6 +7,7 @@ import { sendRideRequestedEmail } from "@/lib/email-templates";
 import { notifyRider, notifyAllAvailableDrivers } from "@/lib/notify";
 import { resolveRidePin } from "@/lib/pin-verify";
 import { getOutstandingLegalDocuments } from "@/lib/legal-consent";
+import { FEE_UNCOLLECTED_STATUS } from "@/lib/cancellation-fees";
 
 /**
  * POST /api/rider/rides
@@ -147,6 +148,26 @@ export async function POST(request: Request) {
           "Server is missing SUPABASE_SERVICE_ROLE_KEY — can't create ride.",
       },
       { status: 500 },
+    );
+  }
+
+  // Outstanding-fee gate: a rider with an uncollected cancellation or
+  // no-show fee can't book again until it's cleared. RAJLO's cashless
+  // policy explicitly allows outstanding balances to restrict access;
+  // admin clears the flag via /admin/wallets once the fee is settled.
+  const { count: unpaidFees } = await supabase
+    .from("rides")
+    .select("id", { count: "exact", head: true })
+    .eq("rider_id", user.id)
+    .eq("settlement_status", FEE_UNCOLLECTED_STATUS);
+  if (unpaidFees && unpaidFees > 0) {
+    return NextResponse.json(
+      {
+        error:
+          "You have an unpaid cancellation or no-show fee. Top up your wallet, then contact support to clear it before booking again.",
+        outstandingFee: true,
+      },
+      { status: 402 },
     );
   }
 

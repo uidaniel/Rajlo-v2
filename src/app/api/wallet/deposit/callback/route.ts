@@ -45,8 +45,16 @@ async function handle(request: NextRequest) {
     url.searchParams.get("deposit_id") ??
     url.searchParams.get("order_id") ??
     null;
-  const simulateSuccess = url.searchParams.get("simulate") === "success";
-  const simulateFailure = url.searchParams.get("simulate") === "failure";
+  // The `simulate` flags are a STUB-MODE-ONLY convenience: they let
+  // the wallet UI work end-to-end before a real gateway is wired.
+  // They are honoured ONLY when WiPay credentials are absent. The
+  // moment real credentials exist, an attacker can no longer credit a
+  // pending deposit for free by appending `?simulate=success`.
+  const stubMode = !process.env.WIPAY_API_KEY;
+  const simulateSuccess =
+    stubMode && url.searchParams.get("simulate") === "success";
+  const simulateFailure =
+    stubMode && url.searchParams.get("simulate") === "failure";
 
   if (!depositId) {
     return NextResponse.json({ error: "Missing deposit_id" }, { status: 400 });
