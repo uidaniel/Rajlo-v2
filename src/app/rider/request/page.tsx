@@ -16,7 +16,9 @@ import { formatEta } from "@/lib/format-eta";
 import {
   detectParish,
   estimateFare,
+  fareForDistance,
   formatJMD,
+  type FareEstimate,
   type Place,
 } from "@/lib/jamaica";
 
@@ -252,10 +254,73 @@ export default function RiderRequestPage() {
     return list;
   }, [pickup, filledStops, dropoff]);
 
-  const fare = useMemo(
+  // Instant straight-line estimate — shown immediately, and the
+  // fallback if Google Directions is unavailable.
+  const localFare = useMemo(
     () => estimateFare(allPoints, seats),
     [allPoints, seats],
   );
+
+  // Accurate fare from REAL road distance via Google Directions. The
+  // straight-line estimate can be wildly off on Jamaica's winding
+  // roads; this resolves the actual driving distance (waypoints
+  // included) and re-prices the trip. Null until it resolves.
+  const [drivingFare, setDrivingFare] = useState<FareEstimate | null>(null);
+
+  useEffect(() => {
+    if (allPoints.length < 2) {
+      setDrivingFare(null);
+      return;
+    }
+    let cancelled = false;
+    // Reset so the displayed fare falls back to the straight-line
+    // estimate while the accurate lookup is in flight.
+    setDrivingFare(null);
+    (async () => {
+      try {
+        const g = await loadGoogleMaps();
+        const ds = new g.maps.DirectionsService();
+        const origin = allPoints[0];
+        const destination = allPoints[allPoints.length - 1];
+        const result = await ds.route({
+          origin: { lat: origin.lat, lng: origin.lng },
+          destination: { lat: destination.lat, lng: destination.lng },
+          waypoints: allPoints.slice(1, -1).map((p) => ({
+            location: { lat: p.lat, lng: p.lng },
+            stopover: true,
+          })),
+          travelMode: g.maps.TravelMode.DRIVING,
+          region: "jm",
+        });
+        if (cancelled) return;
+        const legs = result.routes[0]?.legs ?? [];
+        let meters = 0;
+        let seconds = 0;
+        for (const leg of legs) {
+          meters += leg.distance?.value ?? 0;
+          seconds += leg.duration?.value ?? 0;
+        }
+        if (meters <= 0) return;
+        setDrivingFare(
+          fareForDistance({
+            totalKm: meters / 1000,
+            etaMinutes: Math.max(5, Math.round(seconds / 60)),
+            intermediateStops: Math.max(0, allPoints.length - 2),
+            extraSeats: Math.max(0, seats - 1),
+          }),
+        );
+      } catch {
+        // Directions unavailable — keep the straight-line estimate.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [allPoints, seats]);
+
+  // Prefer the accurate road-distance fare; fall back to the instant
+  // straight-line estimate while it loads or if Directions fails.
+  const fare = drivingFare ?? localFare;
 
   // Subscribe to the global fleet channel so we can show car icons on the
   // booking-screen map. Disabled while we're bootstrapping (no point

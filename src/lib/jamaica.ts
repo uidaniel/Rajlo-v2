@@ -189,31 +189,21 @@ export type FareEstimate = {
 };
 
 /**
- * Client-side fare preview. Real fare gets computed server-side at booking
- * time using Google Routes (driving distance) — this is just an estimate
- * to show the rider before they tap "Request ride".
+ * Assemble a fare from an ALREADY-KNOWN trip distance + duration.
+ *
+ * This is the single source of truth for the private-ride fare maths.
+ * Both the straight-line `estimateFare()` and the real-driving-distance
+ * path on the request page (Google Directions) feed their numbers
+ * through here, so the formula never diverges between the two.
  */
-export function estimateFare(
-  points: { lat: number; lng: number }[],
-  seats: number,
-): FareEstimate {
-  if (points.length < 2) {
-    return {
-      totalKm: 0,
-      etaMinutes: 0,
-      fareJMD: 0,
-      breakdown: [],
-    };
-  }
-  // Driving distance is roughly 1.25× great-circle for JM road network.
-  const totalKm = routeDistanceKm(points) * 1.25;
-  const etaMinutes = Math.max(
-    5,
-    Math.round((totalKm / FARE_CONFIG.avgKmh) * 60),
-  );
-
-  const intermediateStops = Math.max(0, points.length - 2);
-  const extraSeats = Math.max(0, seats - 1);
+export function fareForDistance(args: {
+  /** Trip distance in km — straight-line estimate OR real road km. */
+  totalKm: number;
+  etaMinutes: number;
+  intermediateStops: number;
+  extraSeats: number;
+}): FareEstimate {
+  const { totalKm, etaMinutes, intermediateStops, extraSeats } = args;
 
   const distanceFare = totalKm * FARE_CONFIG.perKmJMD;
   const stopsFare = intermediateStops * FARE_CONFIG.perStopJMD;
@@ -245,6 +235,40 @@ export function estimateFare(
   );
 
   return { totalKm, etaMinutes, fareJMD, breakdown };
+}
+
+/**
+ * Quick straight-line fare estimate. Shown instantly while the
+ * accurate Google-Directions driving-distance quote loads on the
+ * request page — and used as the fallback if Directions is
+ * unavailable. The great-circle distance is scaled by 1.25 as a rough
+ * stand-in for the Jamaican road network's extra winding.
+ */
+export function estimateFare(
+  points: { lat: number; lng: number }[],
+  seats: number,
+): FareEstimate {
+  if (points.length < 2) {
+    return {
+      totalKm: 0,
+      etaMinutes: 0,
+      fareJMD: 0,
+      breakdown: [],
+    };
+  }
+  // Driving distance is roughly 1.25× great-circle for JM road network.
+  const totalKm = routeDistanceKm(points) * 1.25;
+  const etaMinutes = Math.max(
+    5,
+    Math.round((totalKm / FARE_CONFIG.avgKmh) * 60),
+  );
+
+  return fareForDistance({
+    totalKm,
+    etaMinutes,
+    intermediateStops: Math.max(0, points.length - 2),
+    extraSeats: Math.max(0, seats - 1),
+  });
 }
 
 export function formatJMD(amount: number): string {
