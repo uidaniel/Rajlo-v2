@@ -1,0 +1,282 @@
+RAJLO Privacy Policy
+Effective Date: May 17, 2026
+Welcome to RAJLO — Jamaica’s First Cashless Transportation Platform.
+This Privacy Policy (“Policy”) explains how RAJLO (“RAJLO,” “we,” “our,” or “us”) collects, uses, stores, processes, shares, and protects personal information when users access or use the RAJLO platform, mobile applications, websites, software systems, payment systems, communication systems, and related services (collectively, the “Platform”).
+By using the RAJLO Platform, you consent to the collection and use of information as described in this Policy.
+
+1. Information We Collect
+RAJLO may collect the following categories of information:
+1.1 Account Information
+Including but not limited to:
+Full name
+Phone number
+Email address
+Date of birth
+Profile photos
+Username and account credentials
+1.2 Identity Verification Information
+For drivers and certain users, RAJLO may collect:
+Driver’s license information
+Government-issued identification
+Vehicle registration documents
+Insurance documentation
+Transport Authority documentation
+Verification photographs
+1.3 Location Information
+RAJLO may collect precise or approximate location information, including:
+Real-time GPS location
+Background location data
+Pickup and drop-off locations
+Route information
+Trip history
+Device location signals
+Location information may be collected even when the application is running in the background where permitted by device settings and applicable laws.
+1.4 Payment Information
+RAJLO and its payment processing partners may collect:
+Payment card information
+Payment authorization details
+Transaction history
+Billing information
+Currency and payment processing data
+RAJLO may use third-party payment processors for secure payment handling.
+1.5 Device & Technical Information
+RAJLO may automatically collect:
+Device identifiers
+IP addresses
+Browser information
+Mobile carrier information
+Operating system details
+Device model information
+App usage information
+Cookies and tracking technologies
+Diagnostic and crash data
+1.6 Communications Information
+RAJLO may collect records of:
+Customer support communications
+In-app messaging
+Call masking systems
+Emails and notifications
+Safety reports and complaints
+1.7 Usage & Analytics Information
+RAJLO may collect:
+Feature interactions
+Search activity
+Ride request activity
+Session duration
+Referral activity
+App performance analytics
+Fraud detection indicators
+
+2. How We Use Information
+RAJLO may use collected information to:
+Operate and improve the Platform
+Match riders with drivers
+Process payments and payouts
+Verify accounts and identities
+Prevent fraud and abuse
+Maintain platform security
+Investigate incidents and disputes
+Provide customer support
+Improve maps and routing systems
+Personalize user experiences
+Send service-related notifications
+Enforce policies and agreements
+Comply with Jamaican laws and legal obligations
+Conduct analytics and business operations
+
+3. GPS & Location Services
+3.1 Real-Time Location Tracking
+RAJLO uses real-time GPS and location tracking technologies to:
+Facilitate ride matching
+Provide navigation support
+Improve pickup accuracy
+Enhance platform safety
+Detect fraud and fake GPS activity
+Support trip monitoring and operational systems
+3.2 Background Location Collection
+Certain features may require collection of background location information while the app is active or running in the background.
+Users may adjust location permissions through device settings; however, disabling location access may limit Platform functionality.
+3.3 Location Accuracy Disclaimer
+GPS systems and mapping technologies are not guaranteed to be accurate at all times.
+RAJLO is not responsible for:
+GPS inaccuracies
+Mapping errors
+Delayed location updates
+Navigation failures
+Mobile network interruptions
+
+4. Information Sharing
+RAJLO may share information:
+4.1 Between Riders & Drivers
+Limited information may be shared between riders and drivers to facilitate trips, including:
+First names
+Pickup and drop-off information
+Vehicle details
+Trip status information
+Ratings and reviews
+4.2 Service Providers
+RAJLO may share information with third-party service providers assisting with:
+Payment processing
+Cloud hosting
+Mapping systems
+Analytics
+Fraud prevention
+Customer support
+Communications systems
+Identity verification
+4.3 Legal Compliance & Safety
+RAJLO may disclose information where reasonably necessary to:
+Comply with Jamaican law
+Respond to court orders or legal requests
+Cooperate with law enforcement
+Investigate fraud or criminal activity
+Protect users, drivers, or the public
+Enforce Platform policies
+4.4 Business Transfers
+Information may be transferred in connection with:
+Mergers
+Acquisitions
+Financing transactions
+Asset sales
+Corporate restructuring
+
+5. Data Retention
+RAJLO may retain information for as long as reasonably necessary to:
+Operate the Platform
+Maintain business records
+Comply with legal obligations
+Resolve disputes
+Prevent fraud
+Enforce agreements
+Support safety investigations
+Retention periods may vary depending on the type of information and applicable legal requirements.
+
+6. Data Security
+RAJLO uses commercially reasonable measures to help protect information from unauthorized access, misuse, alteration, or disclosure.
+However, no technology system, mobile network, cloud infrastructure, or internet transmission is completely secure.
+RAJLO does not guarantee absolute security of information.
+Users acknowledge that they transmit and store information at their own risk.
+
+7. User Responsibilities
+Users are responsible for:
+Maintaining account confidentiality
+Protecting login credentials
+Protecting OTP verification codes
+Maintaining device security
+Restricting unauthorized account access
+Users must immediately notify RAJLO of suspected unauthorized account activity.
+
+8. Cookies & Tracking Technologies
+RAJLO may use:
+Cookies
+Device identifiers
+Analytics tools
+Session tracking technologies
+Similar tracking systems
+for:
+Authentication
+Performance monitoring
+Fraud detection
+Platform analytics
+User experience improvements
+Users may adjust certain browser or device settings to limit tracking technologies; however, some Platform functionality may be affected.
+
+9. Children’s Privacy
+The RAJLO Platform is not intended for individuals who do not meet the minimum legal age required under applicable Jamaican law.
+RAJLO does not knowingly collect personal information from children without appropriate authorization where required.
+
+10. International Processing
+User information may be processed, stored, or transferred through cloud systems and third-party providers operating in multiple jurisdictions.
+By using the Platform, users consent to such transfers and processing.
+
+11. Third-Party Services
+The Platform may integrate with or rely on third-party services, including:
+Payment processors
+Mapping providers
+Mobile operating systems
+Analytics systems
+Cloud infrastructure providers
+RAJLO is not responsible for the privacy practices, security, or operations of third-party services.
+Users should review the privacy policies of applicable third parties.
+
+12. Fraud Prevention & Monitoring
+RAJLO reserves the right to monitor Platform activity for:
+Fraud prevention
+Fake GPS detection
+Unauthorized access attempts
+Payment fraud
+Account abuse
+Suspicious activity
+Platform security enforcement
+RAJLO may suspend or terminate accounts involved in suspected fraudulent activity.
+
+13. No Warranty
+The Platform and all related services are provided “as is” and “as available.”
+RAJLO makes no warranties regarding:
+Data security
+GPS accuracy
+Service availability
+System reliability
+Error-free operation
+Continuous uptime
+
+14. Limitation of Liability
+To the fullest extent permitted under Jamaican law:
+RAJLO, its owners, affiliates, officers, directors, employees, contractors, licensors, and service providers shall not be liable for:
+Unauthorized access to information
+Data breaches beyond reasonable control
+GPS inaccuracies
+Mobile network failures
+Cloud service interruptions
+Lost data
+Identity theft
+Financial losses
+Technical failures
+Third-party actions
+Delayed notifications
+Cyberattacks
+Service interruptions
+Users use the Platform and transmit information entirely at their own risk.
+
+15. User Rights & Choices
+Where permitted by applicable law, users may request to:
+Update account information
+Correct inaccurate information
+Access certain stored information
+Close accounts
+Adjust notification preferences
+RAJLO may retain certain information where necessary for:
+Legal compliance
+Fraud prevention
+Safety investigations
+Dispute resolution
+Enforcement of agreements
+
+16. Account Deactivation
+Users may request account deactivation subject to:
+Outstanding balances
+Fraud investigations
+Legal obligations
+Safety investigations
+Compliance requirements
+RAJLO may retain certain information after account deactivation where reasonably necessary.
+
+17. Changes to This Policy
+RAJLO reserves the right to modify or update this Privacy Policy at any time without prior notice.
+Continued use of the Platform following updates constitutes acceptance of the revised Policy.
+
+18. Governing Law
+This Privacy Policy shall be governed by and interpreted in accordance with the laws of Jamaica.
+Any disputes relating to this Policy shall be subject to the jurisdiction of the courts of Jamaica.
+
+19. Contact Information
+Questions regarding this Privacy Policy or privacy-related concerns may be submitted through official RAJLO support channels.
+
+20. User Acknowledgment
+By using the RAJLO Platform, users acknowledge and agree that they:
+Have read and understood this Privacy Policy
+Consent to the collection and use of information as described
+Understand the risks associated with electronic communications and GPS technologies
+Release RAJLO from liability to the fullest extent permitted under Jamaican law
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

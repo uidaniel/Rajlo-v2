@@ -1,0 +1,219 @@
+RAJLO Acceptable Use Policy (AUP)
+Effective Date: May 17, 2026
+Welcome to RAJLO — Jamaica’s First Cashless Transportation Platform.
+This Acceptable Use Policy (“AUP”) governs the permitted and prohibited use of the RAJLO platform, mobile applications, websites, APIs, servers, software systems, payment systems, communication systems, and related services (collectively, the “Platform”).
+This AUP is designed to protect the security, reliability, integrity, and lawful operation of the Platform.
+By accessing or using the Platform, users agree to comply with this AUP, all related RAJLO policies, and applicable Jamaican laws.
+
+1. Authorized Use Only
+Users may use the Platform only for lawful, authorized, and intended transportation-related purposes.
+Users may not use the Platform in ways that:
+Violate Jamaican law
+Threaten Platform security
+Disrupt Platform operations
+Interfere with other users
+Abuse Platform systems
+Facilitate fraud or criminal activity
+RAJLO reserves the right to determine whether activity violates this AUP.
+
+2. Fraudulent Activity Prohibited
+The following activities are strictly prohibited:
+Fake ride requests
+Fake trip generation
+Fake driver activity
+Fake rider accounts
+Fraudulent referrals
+Promotional abuse
+Chargeback fraud
+Payment fraud
+Stolen payment method usage
+Fare manipulation
+Artificial surge manipulation
+Identity fraud
+Impersonation
+Fake reviews or ratings
+Coordinated fraud schemes
+RAJLO reserves the right to investigate suspected fraud and cooperate with law enforcement where appropriate.
+
+3. GPS Spoofing & Location Manipulation
+Users may not:
+Use fake GPS applications
+Manipulate device location data
+Falsify trip locations
+Use VPNs or tools intended to evade fraud detection systems
+Interfere with mapping or tracking systems
+Attempt to bypass geolocation restrictions
+RAJLO may monitor for suspicious location behavior and permanently deactivate accounts engaged in GPS manipulation.
+
+4. Unauthorized Automation & Bots
+Users may not:
+Use bots or automated scripts
+Automate ride requests
+Automate driver acceptance systems
+Use unauthorized macros or automation tools
+Scrape Platform content or data
+Use crawler systems or indexing bots without authorization
+Conduct automated account creation
+Abuse APIs or backend systems
+Unauthorized automation is strictly prohibited.
+
+5. Reverse Engineering & System Interference
+Users may not:
+Reverse engineer Platform systems
+Decompile software
+Copy Platform code or systems
+Attempt unauthorized access to servers
+Circumvent Platform protections
+Interfere with Platform infrastructure
+Introduce malware, spyware, or harmful code
+Probe Platform vulnerabilities
+Conduct denial-of-service attacks
+Attempt unauthorized data extraction
+RAJLO reserves all rights relating to its software, infrastructure, algorithms, and intellectual property.
+
+6. Account Abuse Prohibited
+Users may not:
+Share accounts without authorization
+Sell or transfer accounts
+Operate multiple fraudulent accounts
+Use another person’s identity
+Access accounts without authorization
+Use stolen credentials
+Circumvent account suspensions
+Create accounts for fraudulent purposes
+RAJLO may suspend or permanently deactivate accounts engaged in abusive activity.
+
+7. Payment System Abuse
+Users may not:
+Abuse refund systems
+Engage in chargeback fraud
+Manipulate payment systems
+Attempt unauthorized transactions
+Use stolen payment methods
+Circumvent Platform fees
+Exploit pricing errors knowingly
+RAJLO reserves the right to recover losses arising from fraudulent or abusive payment activity.
+
+8. Security Monitoring
+RAJLO reserves the right to monitor Platform activity for:
+Fraud prevention
+GPS spoofing detection
+Unauthorized access attempts
+Automation detection
+Security threats
+Payment abuse
+Suspicious account behavior
+Infrastructure protection
+Users acknowledge and consent to reasonable monitoring and security enforcement activities.
+
+9. Intellectual Property Protection
+Users may not:
+Copy Platform branding
+Reproduce Platform interfaces
+Misuse RAJLO trademarks
+Republish Platform content without authorization
+Create unauthorized derivative systems
+Commercially exploit Platform systems
+All Platform intellectual property remains the exclusive property of RAJLO.
+
+10. API & Infrastructure Restrictions
+Unless expressly authorized in writing, users may not:
+Access internal APIs
+Interfere with backend systems
+Conduct penetration testing
+Overload servers intentionally
+Attempt infrastructure exploitation
+Circumvent technical limitations
+Access administrative systems
+RAJLO reserves the right to block IP addresses, devices, or networks involved in suspicious activity.
+
+11. Data Protection & Privacy
+Users may not:
+Collect personal information without authorization
+Harvest Platform user data
+Share confidential user information
+Sell Platform data
+Misuse trip or location information
+Conduct unauthorized surveillance
+RAJLO reserves the right to investigate privacy violations.
+
+12. Criminal Activity Prohibited
+The Platform may not be used for:
+Human trafficking
+Drug distribution
+Transportation of illegal contraband
+Money laundering
+Organized fraud schemes
+Cybercrime
+Harassment or stalking
+Violent criminal activity
+Any unlawful purpose under Jamaican law
+RAJLO reserves the right to cooperate with law enforcement investigations where permitted or required.
+
+13. Platform Availability Disclaimer
+RAJLO does not guarantee uninterrupted or error-free operation of:
+Mobile applications
+APIs
+GPS systems
+Payment systems
+Servers
+Communications systems
+Cloud infrastructure
+Notifications
+Technical interruptions, outages, delays, or failures may occur.
+The Platform is provided “as is” and “as available.”
+
+14. Enforcement Actions
+RAJLO reserves the right to:
+Investigate suspicious activity
+Restrict Platform access
+Suspend accounts
+Permanently deactivate users
+Block devices or IP addresses
+Reverse transactions
+Remove content
+Cooperate with law enforcement
+Pursue legal action where appropriate
+Enforcement actions may occur without prior notice where necessary to protect Platform integrity or user safety.
+
+15. Limitation of Liability
+To the fullest extent permitted under Jamaican law:
+RAJLO, its owners, affiliates, officers, directors, employees, contractors, licensors, and service providers shall not be liable for:
+Fraudulent activity by users
+Technical security breaches beyond reasonable control
+Unauthorized access attempts
+GPS inaccuracies
+Platform outages
+Data loss
+Cyberattacks
+Infrastructure failures
+Third-party misuse of the Platform
+Financial losses arising from abusive Platform activity
+Users access and use the Platform entirely at their own risk.
+
+16. Indemnification
+Users agree to defend, indemnify, and hold harmless RAJLO and its affiliates from claims, liabilities, damages, losses, legal expenses, fines, or costs arising from:
+Violations of this AUP
+Fraudulent conduct
+Criminal activity
+Unauthorized system access
+Abuse of Platform systems
+Violations of Jamaican law
+
+17. Policy Updates
+RAJLO reserves the right to modify or update this AUP at any time without prior notice.
+Continued use of the Platform following updates constitutes acceptance of the revised AUP.
+
+18. Governing Law
+This AUP shall be governed by and interpreted in accordance with the laws of Jamaica.
+Any disputes relating to this AUP shall be subject to the jurisdiction of the courts of Jamaica.
+
+19. User Acknowledgment
+By using the RAJLO Platform, users acknowledge and agree that they:
+Have read and understood this AUP
+Agree to comply with all Platform restrictions and security rules
+Understand that abusive activity may result in immediate account suspension or permanent deactivation
+Accept that RAJLO may monitor and investigate suspicious activity
+Release RAJLO from liability to the fullest extent permitted under Jamaican law
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

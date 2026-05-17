@@ -8,7 +8,7 @@ const NAV_LINKS: { label: string; href: string }[] = [
   { label: "How it works", href: "/how-it-works" },
   { label: "Fare estimator", href: "/fare-estimator" },
   { label: "Drive with us", href: "/driver-join" },
-  { label: "Safety", href: "/legal/safety" },
+  { label: "Safety", href: "/legal/safety-disclaimer-emergency-policy" },
 ];
 
 /**

@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { Logo } from "./logo";
 import { ArcWatermark } from "./arc-pattern";
@@ -560,48 +559,11 @@ function CountryPicker({
   );
 }
 
-/**
- * Agreement checkbox with Terms + Privacy Policy links.
- * Use on signup pages — gate the submit button on `checked`.
- */
-export function AgreementCheckbox({
-  checked,
-  onChange,
-}: {
-  checked: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <StaggerItem>
-      <label className="flex cursor-pointer items-start gap-3 text-xs leading-relaxed text-muted">
-        <input
-          type="checkbox"
-          checked={checked}
-          onChange={(e) => onChange(e.target.checked)}
-          className="mt-[2px] h-4 w-4 shrink-0 cursor-pointer rounded border-line accent-rajlo-red focus:ring-2 focus:ring-rajlo-red/20"
-          aria-describedby="agreement-text"
-        />
-        <span id="agreement-text">
-          I agree to Rajlo&apos;s{" "}
-          <Link
-            href="/legal/terms"
-            className="font-semibold text-rajlo-red hover:underline"
-          >
-            Terms of Service
-          </Link>{" "}
-          and{" "}
-          <Link
-            href="/legal/privacy"
-            className="font-semibold text-rajlo-red hover:underline"
-          >
-            Privacy Policy
-          </Link>
-          .
-        </span>
-      </label>
-    </StaggerItem>
-  );
-}
+// NOTE: the old lightweight `AgreementCheckbox` (Terms + Privacy only)
+// has been replaced by the full `<LegalConsent>` component
+// (src/components/legal-consent.tsx), which lists every applicable
+// policy plus the GPS / payment / OTP disclosures. Signup pages import
+// that directly.
 
 /**
  * "Continue with Google" button. Used on rider + driver login/signup pages.

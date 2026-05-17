@@ -6,12 +6,18 @@ import {
   AuthShell,
   AuthField,
   AuthSubmit,
-  AgreementCheckbox,
   AuthPhoneField,
   GoogleAuthButton,
   AuthDivider,
 } from "@/components/auth-shell";
+import { LegalConsent } from "@/components/legal-consent";
+import { documentsForRole } from "@/lib/legal-documents";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+
+// The full set of policies a rider agrees to at signup. The logged,
+// timestamped acceptance is recorded server-side by the consent gate
+// on first authenticated entry to the portal (POST /api/legal/accept).
+const RIDER_LEGAL_DOCS = documentsForRole("rider");
 
 export default function RiderSignupPage() {
   const [step, setStep] = useState<"info" | "check-email">("info");
@@ -143,7 +149,11 @@ export default function RiderSignupPage() {
         <AuthField label="Email" type="email" placeholder="you@example.com" value={email} onChange={setEmail} autoComplete="email" icon="email" required />
         <AuthPhoneField label="Phone number" placeholder="876 555 0123" value={phone} onChange={setPhone} required />
         <AuthField label="Password" type="password" placeholder="At least 8 characters" value={password} onChange={setPassword} autoComplete="new-password" icon="password" required />
-        <AgreementCheckbox checked={agreed} onChange={setAgreed} />
+        <LegalConsent
+          documents={RIDER_LEGAL_DOCS}
+          checked={agreed}
+          onChange={setAgreed}
+        />
         <AuthSubmit onClick={handleSignup} loading={isLoading} disabled={!name || !email || !phone || !password || !agreed}>
           Create account
         </AuthSubmit>

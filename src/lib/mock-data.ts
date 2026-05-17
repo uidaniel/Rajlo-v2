@@ -33,6 +33,7 @@ export const riderNav: NavItem[] = [
   { label: "Settings", labelKey: "nav.rider.settings", href: "/rider/settings", icon: "settings" },
   { label: "Support", labelKey: "nav.rider.support", href: "/rider/support", icon: "help-circle" },
   { label: "Safety", labelKey: "nav.rider.safety", href: "/rider/safety", icon: "shield" },
+  { label: "Report an incident", labelKey: "nav.rider.report", href: "/rider/report-incident", icon: "shield-alert" },
 ];
 
 /**
@@ -62,6 +63,7 @@ export const driverNav: NavItem[] = [
   { label: "Notifications", labelKey: "nav.driver.notifications", href: "/driver/notifications", icon: "bell" },
   { label: "Profile", labelKey: "nav.driver.profile", href: "/driver/profile", icon: "user" },
   { label: "Help & safety", labelKey: "nav.driver.support", href: "/driver/help-safety", icon: "shield" },
+  { label: "Report an incident", labelKey: "nav.driver.report", href: "/driver/report-incident", icon: "shield-alert" },
   { label: "Settings", labelKey: "nav.driver.settings", href: "/driver/settings", icon: "settings" },
 ];
 
@@ -96,6 +98,11 @@ export const adminNav: NavItem[] = [
   { label: "Transactions", labelKey: "nav.admin.transactions", href: "/admin/transactions", icon: "trending-up" },
   { label: "Payouts", labelKey: "nav.admin.payouts", href: "/admin/wallet-withdrawals", icon: "trending-up" },
   { label: "Audit logs", labelKey: "nav.admin.audit", href: "/admin/audit-logs", icon: "history" },
+  { label: "Incidents", labelKey: "nav.admin.incidents", href: "/admin/incidents", icon: "shield-alert" },
+  { label: "Legal policies", labelKey: "nav.admin.legal", href: "/admin/legal", icon: "file-text" },
+  { label: "Fraud & risk", labelKey: "nav.admin.fraud", href: "/admin/fraud", icon: "shield-alert" },
+  { label: "Moderation", labelKey: "nav.admin.moderation", href: "/admin/moderation", icon: "shield-check" },
+  { label: "Admin security", labelKey: "nav.admin.security", href: "/admin/security", icon: "shield" },
 ];
 
 /**

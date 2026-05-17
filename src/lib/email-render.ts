@@ -203,9 +203,9 @@ export function renderEmail({
                     <span style="color:#3a3f37;margin:0 8px;">·</span>
                     <a href="${APP_URL}/rider/settings" style="color:#cbd5d0;text-decoration:none;font-weight:600;">Settings</a>
                     <span style="color:#3a3f37;margin:0 8px;">·</span>
-                    <a href="${APP_URL}/legal/privacy" style="color:#cbd5d0;text-decoration:none;font-weight:600;">Privacy</a>
+                    <a href="${APP_URL}/legal/privacy-policy" style="color:#cbd5d0;text-decoration:none;font-weight:600;">Privacy</a>
                     <span style="color:#3a3f37;margin:0 8px;">·</span>
-                    <a href="${APP_URL}/legal/terms" style="color:#cbd5d0;text-decoration:none;font-weight:600;">Terms</a>
+                    <a href="${APP_URL}/legal/terms-of-service" style="color:#cbd5d0;text-decoration:none;font-weight:600;">Terms</a>
                   </td>
                 </tr>
                 <tr>

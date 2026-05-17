@@ -6,12 +6,20 @@ import {
   AuthShell,
   AuthField,
   AuthSubmit,
-  AgreementCheckbox,
   AuthPhoneField,
   GoogleAuthButton,
   AuthDivider,
 } from "@/components/auth-shell";
+import { LegalConsent } from "@/components/legal-consent";
+import { documentsForRole } from "@/lib/legal-documents";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
+
+// The full set of policies a driver agrees to at signup — includes the
+// Driver Agreement, earnings disclaimer, and driver cancellation policy
+// on top of the shared platform policies. The logged, timestamped
+// acceptance is recorded server-side by the consent gate on first
+// authenticated entry (POST /api/legal/accept).
+const DRIVER_LEGAL_DOCS = documentsForRole("driver");
 
 export default function DriverSignupPage() {
   const [step, setStep] = useState<"info" | "check-email">("info");
@@ -158,7 +166,11 @@ export default function DriverSignupPage() {
           <strong>Red plate only.</strong> Rajlo accepts drivers with valid TA Franchise Certificates and PPV-rated insurance.
         </div>
 
-        <AgreementCheckbox checked={agreed} onChange={setAgreed} />
+        <LegalConsent
+          documents={DRIVER_LEGAL_DOCS}
+          checked={agreed}
+          onChange={setAgreed}
+        />
 
         <AuthSubmit onClick={handleSubmit} loading={isLoading} disabled={!name || !email || !phone || !plate || !password || !agreed}>
           Create account & start onboarding

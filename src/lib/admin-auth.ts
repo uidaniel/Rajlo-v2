@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createSupabaseAuthServerClient } from "./supabase-auth-server";
 import { getSupabaseServerClient } from "./supabase-server";
+import {
+  asAdminRole,
+  hasPermission,
+  type AdminPermission,
+  type AdminRole,
+} from "./admin-rbac";
 
 /**
  * Shared admin route gatekeeper.
@@ -25,6 +31,9 @@ export type AdminActor = {
    *  Endpoints can branch on this to restrict which fields a non-
    *  admin caller is allowed to mutate. */
   role: "admin" | "safety_officer";
+  /** Granular admin tier (RBAC). Null for safety officers and for any
+   *  admin not yet assigned a tier. Drives `requirePermission`. */
+  adminRole: AdminRole | null;
 };
 
 type RequireAdminResult =
@@ -44,13 +53,23 @@ export async function requireAdmin(): Promise<RequireAdminResult> {
 
   const { data: profile } = await auth
     .from("profiles")
-    .select("role, full_name")
+    .select("role, full_name, admin_role, admin_suspended")
     .eq("id", user.id)
     .single();
 
   if (profile?.role !== "admin") {
     return {
       error: NextResponse.json({ error: "forbidden" }, { status: 403 }),
+    };
+  }
+
+  // A suspended admin is locked out of the entire admin surface.
+  if ((profile as { admin_suspended?: boolean }).admin_suspended) {
+    return {
+      error: NextResponse.json(
+        { error: "admin_suspended" },
+        { status: 403 },
+      ),
     };
   }
 
@@ -70,9 +89,33 @@ export async function requireAdmin(): Promise<RequireAdminResult> {
       label: profile.full_name ?? user.email ?? "Admin",
       email: user.email ?? null,
       role: "admin",
+      adminRole: asAdminRole(
+        (profile as { admin_role?: string | null }).admin_role,
+      ),
     },
     supabase,
   };
+}
+
+/**
+ * Permission-scoped admin gate. Calls `requireAdmin()` then checks the
+ * caller's RBAC tier grants `permission` — a 403 otherwise. Use this on
+ * any privileged endpoint instead of a bare `requireAdmin()`.
+ */
+export async function requirePermission(
+  permission: AdminPermission,
+): Promise<RequireAdminResult> {
+  const gate = await requireAdmin();
+  if (gate.error) return gate;
+  if (!hasPermission(gate.actor.adminRole, permission)) {
+    return {
+      error: NextResponse.json(
+        { error: "insufficient_permission", permission },
+        { status: 403 },
+      ),
+    };
+  }
+  return gate;
 }
 
 /**
@@ -99,13 +142,22 @@ export async function requireSafetyOfficerOrAdmin(): Promise<RequireAdminResult>
 
   const { data: profile } = await auth
     .from("profiles")
-    .select("role, full_name")
+    .select("role, full_name, admin_role, admin_suspended")
     .eq("id", user.id)
     .single();
 
   if (profile?.role !== "admin" && profile?.role !== "safety_officer") {
     return {
       error: NextResponse.json({ error: "forbidden" }, { status: 403 }),
+    };
+  }
+
+  if ((profile as { admin_suspended?: boolean }).admin_suspended) {
+    return {
+      error: NextResponse.json(
+        { error: "admin_suspended" },
+        { status: 403 },
+      ),
     };
   }
 
@@ -128,6 +180,9 @@ export async function requireSafetyOfficerOrAdmin(): Promise<RequireAdminResult>
         (profile.role === "admin" ? "Admin" : "Safety officer"),
       email: user.email ?? null,
       role: profile.role as "admin" | "safety_officer",
+      adminRole: asAdminRole(
+        (profile as { admin_role?: string | null }).admin_role,
+      ),
     },
     supabase,
   };

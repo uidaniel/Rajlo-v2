@@ -176,7 +176,7 @@ export default function ContactPage() {
 
                   <p className="text-xs text-muted">
                     By submitting, you agree to our{" "}
-                    <Link href="/legal/privacy" className="font-semibold text-rajlo-red hover:underline">
+                    <Link href="/legal/privacy-policy" className="font-semibold text-rajlo-red hover:underline">
                       Privacy Policy
                     </Link>
                     .
@@ -199,7 +199,7 @@ export default function ContactPage() {
                   Use the in-app SOS during a trip to share your live location with us and your trusted contact.
                 </p>
                 <Link
-                  href="/legal/safety"
+                  href="/legal/safety-disclaimer-emergency-policy"
                   className="mt-5 inline-flex rounded-full border border-rajlo-red px-5 py-2 text-sm font-bold text-rajlo-red hover:bg-white"
                 >
                   Safety policy

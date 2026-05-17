@@ -13,7 +13,14 @@ import {
   SITE_URL,
   slugToParish,
 } from "@/lib/site-config";
-import { getLandingCtaTargets } from "@/lib/landing-cta-targets";
+// SEO landing pages deliberately do NOT resolve a personalised CTA
+// target. Reading auth cookies (getLandingCtaTargets) would force
+// per-request rendering and drop these pages out of static
+// generation. Their audience is logged-out Google visitors, so a
+// fixed CTA into the rider sign-in is correct — and keeping the page
+// static means it's served from the CDN edge with zero Supabase
+// egress per visit and the best possible Core Web Vitals.
+const RIDER_CTA_HREF = "/auth/rider/login";
 
 /**
  * Per-parish rideshare landing page.
@@ -85,7 +92,6 @@ export default async function ParishRideshareLanding({
   if (!parish) notFound();
 
   const info = PARISH_INFO[parish];
-  const cta = await getLandingCtaTargets();
   const canonicalPath = `/rideshare-in/${slug}`;
   // Sample fares at three typical distances so visitors get a
   // concrete price expectation without having to open the calculator.
@@ -193,7 +199,7 @@ export default async function ParishRideshareLanding({
 
   return (
     <div className="min-h-screen bg-background">
-      <SiteHeader bookHref={cta.riderHref} bookLabel="Book a ride" />
+      <SiteHeader bookHref={RIDER_CTA_HREF} bookLabel="Book a ride" />
 
       <script
         type="application/ld+json"
@@ -234,7 +240,7 @@ export default async function ParishRideshareLanding({
           </p>
           <div className="mt-8 flex flex-wrap items-center gap-3">
             <Link
-              href={cta.riderHref}
+              href={RIDER_CTA_HREF}
               className="inline-flex items-center gap-2 rounded-full bg-rajlo-red px-6 py-3 text-sm font-bold text-white shadow-lg shadow-rajlo-red/30 transition-all hover:-translate-y-0.5"
             >
               Book a ride in {parish}
@@ -427,7 +433,7 @@ export default async function ParishRideshareLanding({
             verified driver in minutes.
           </p>
           <Link
-            href={cta.riderHref}
+            href={RIDER_CTA_HREF}
             className="mt-8 inline-flex items-center gap-2 rounded-full bg-rajlo-red px-8 py-4 text-base font-bold text-white shadow-xl shadow-rajlo-red/30 transition-all hover:-translate-y-0.5"
           >
             Book a ride

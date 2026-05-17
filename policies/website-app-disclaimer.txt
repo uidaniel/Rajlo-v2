@@ -1,0 +1,210 @@
+RAJLO Website & App Disclaimer
+Effective Date: May 17, 2026
+Welcome to RAJLO — Jamaica’s First Cashless Transportation Platform.
+This Website & App Disclaimer (“Disclaimer”) governs access to and use of the RAJLO websites, mobile applications, software systems, communication systems, and related digital services (collectively, the “Platform”).
+By accessing or using the Platform, users acknowledge and agree to the terms of this Disclaimer.
+
+1. Technology Platform Disclaimer
+RAJLO is a technology marketplace platform that connects riders with independent third-party transportation providers.
+RAJLO:
+Does not directly provide transportation services
+Does not employ drivers
+Does not operate vehicles
+Does not guarantee ride availability
+Does not guarantee uninterrupted service
+Does not control driver behavior or route decisions
+All transportation services are independently provided by third-party drivers.
+
+2. Information Accuracy Disclaimer
+RAJLO strives to provide accurate and current information on the Platform.
+However, RAJLO does not guarantee that:
+Information is always accurate
+Content is complete
+Information is current
+Pricing is error-free
+Maps are accurate
+Availability information is correct
+Trip estimates are exact
+Technical information is uninterrupted or error-free
+Content may contain:
+Errors
+Delays
+Omissions
+Inaccuracies
+Technical issues
+Users rely on Platform information at their own risk.
+
+3. Pricing & Fare Disclaimer
+Displayed pricing, fare estimates, wait times, availability estimates, and related information are estimates only.
+Actual fares or trip details may vary due to:
+Traffic conditions
+Route changes
+Driver availability
+Mapping recalculations
+Technical adjustments
+Service demand
+Geographic conditions
+RAJLO reserves the right to modify pricing structures and service availability at any time.
+
+4. Service Availability Disclaimer
+RAJLO does not guarantee:
+Continuous Platform access
+Continuous ride availability
+Continuous driver availability
+Uninterrupted operation
+Error-free functionality
+Continuous GPS accuracy
+Continuous payment processing
+Continuous mobile network connectivity
+Temporary outages, delays, interruptions, or service limitations may occur.
+
+5. Mapping & GPS Disclaimer
+The Platform may utilize third-party GPS, mapping, and navigation systems.
+RAJLO does not guarantee:
+GPS accuracy
+Route accuracy
+Navigation accuracy
+Pickup location accuracy
+Real-time location precision
+GPS systems and mapping technologies may experience:
+Delays
+Inaccuracies
+Interruptions
+Device limitations
+Mobile network failures
+Users assume all risks associated with navigation or location-related inaccuracies.
+
+6. Third-Party Services & Links
+The Platform may integrate with or reference third-party services, including:
+Payment processors
+Mapping systems
+Mobile operating systems
+Cloud infrastructure providers
+External websites
+Third-party communication systems
+RAJLO does not control and is not responsible for:
+Third-party content
+Third-party services
+External websites
+Third-party policies
+Third-party outages or failures
+Users interact with third-party services at their own risk.
+
+7. Beta Features & Experimental Services
+Certain Platform features may be:
+Experimental
+In testing
+Limited-release
+Beta functionality
+Under active development
+Such features may:
+Contain bugs
+Operate unpredictably
+Be modified or removed
+Experience interruptions
+Produce inaccurate results
+RAJLO makes no guarantees regarding beta or experimental functionality.
+
+8. No Professional Advice
+Information provided on the Platform does not constitute:
+Legal advice
+Financial advice
+Tax advice
+Insurance advice
+Transportation advice
+Professional recommendations
+Users should consult qualified professionals regarding their individual circumstances.
+
+9. Security Disclaimer
+While RAJLO uses commercially reasonable security measures, RAJLO does not guarantee:
+Complete security of the Platform
+Freedom from cyberattacks
+Protection from unauthorized access
+Continuous protection against fraud
+Error-free operation
+Users acknowledge that internet-based systems inherently involve security risks.
+
+10. User Responsibility
+Users are responsible for:
+Maintaining accurate account information
+Protecting login credentials
+Evaluating transportation decisions independently
+Using reasonable judgment while using the Platform
+Complying with Jamaican laws and regulations
+Users assume all risks associated with use of the Platform.
+
+11. No Warranty
+To the fullest extent permitted under Jamaican law, the Platform and all related services are provided:
+“As is”
+“As available”
+Without warranties of any kind
+RAJLO disclaims all express or implied warranties, including warranties relating to:
+Merchantability
+Fitness for a particular purpose
+Reliability
+Availability
+Accuracy
+Security
+Non-infringement
+
+12. Limitation of Liability
+To the fullest extent permitted under Jamaican law:
+RAJLO, its owners, affiliates, officers, directors, employees, contractors, licensors, and service providers shall not be liable for:
+Technical failures
+Platform interruptions
+Pricing inaccuracies
+GPS inaccuracies
+Data loss
+Service delays
+Lost profits
+Lost opportunities
+Driver conduct
+Rider misconduct
+Third-party failures
+Cyberattacks
+Mobile network failures
+Financial losses arising from Platform use
+Users use the Platform entirely at their own risk.
+
+13. Intellectual Property
+All Platform content, including:
+Logos
+Branding
+Interfaces
+Graphics
+Software
+Features
+Systems
+Text
+Designs
+remain the exclusive property of RAJLO.
+Users may not reproduce, distribute, reverse engineer, or exploit Platform content without written authorization.
+
+14. Modifications to the Platform
+RAJLO reserves the right to:
+Modify Platform features
+Suspend services
+Remove content
+Restrict access
+Change pricing
+Update functionality
+Discontinue services
+at any time without prior notice.
+
+15. Governing Law
+This Disclaimer shall be governed by and interpreted in accordance with the laws of Jamaica.
+Any disputes relating to this Disclaimer shall be subject to the jurisdiction of the courts of Jamaica.
+
+16. Disclaimer Updates
+RAJLO reserves the right to modify or update this Disclaimer at any time without prior notice.
+Continued use of the Platform following updates constitutes acceptance of the revised Disclaimer.
+
+17. User Acknowledgment
+By using the Platform, users acknowledge and agree that they:
+Have read and understood this Disclaimer
+Understand that the Platform may contain inaccuracies or interruptions
+Accept all risks associated with third-party transportation services and internet-based systems
+Understand that RAJLO is a technology platform only
+Release RAJLO from liability to the fullest extent permitted under Jamaican law
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

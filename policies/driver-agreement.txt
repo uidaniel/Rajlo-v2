@@ -1,0 +1,257 @@
+RAJLO Driver Agreement
+Effective Date: May 17, 2026
+This Driver Agreement (“Agreement”) is entered into between RAJLO (“RAJLO,” “Company,” “Platform,” “we,” “our,” or “us”) and the independent driver (“Driver,” “you,” or “your”) using the RAJLO platform within Jamaica.
+By registering as a driver, accessing the RAJLO Driver App, accepting ride requests, or using the RAJLO platform in any manner, you agree to be legally bound by this Agreement.
+
+1. Nature of the Platform
+1.1 Technology Marketplace Platform
+RAJLO is a technology platform that connects riders with independent third-party transportation providers.
+RAJLO does not:
+Provide transportation services directly
+Employ drivers
+Operate vehicles
+Control driver schedules
+Supervise routes or driving decisions
+Guarantee ride requests or earnings
+Drivers independently provide transportation services to riders.
+
+2. Independent Contractor Relationship
+2.1 Independent Contractor Status
+Drivers using the RAJLO platform are independent contractors and are not:
+Employees of RAJLO
+Agents of RAJLO
+Partners or joint venturers
+Representatives of RAJLO
+Nothing in this Agreement creates:
+Employment rights
+Salary entitlement
+Pension rights
+Health benefits
+Vacation pay
+Overtime compensation
+Workers’ compensation coverage
+2.2 Driver Control
+Drivers maintain full control over:
+Work hours
+Availability
+Acceptance of ride requests
+Routes taken
+Vehicle operation
+Working locations within Jamaica
+Drivers may choose when and whether to use the RAJLO platform.
+
+3. Driver Eligibility Requirements
+Drivers must:
+Possess a valid Jamaican driver’s license
+Maintain all legally required permits and authorizations
+Comply with Jamaican Transport Authority regulations
+Maintain legally required insurance coverage
+Operate a roadworthy vehicle
+Maintain accurate account information
+Successfully complete any onboarding or verification requirements required by RAJLO
+RAJLO reserves the right to approve, reject, suspend, or deactivate driver accounts at its sole discretion.
+
+4. Driver Responsibilities
+Drivers are solely responsible for:
+Safe vehicle operation
+Passenger safety
+Vehicle maintenance and cleanliness
+Fuel and operating expenses
+Mobile devices and internet connectivity
+Taxes and statutory obligations
+Compliance with Jamaican laws and regulations
+Professional conduct toward riders
+Drivers agree to provide transportation services lawfully, safely, and professionally.
+
+5. Vehicle Requirements
+Drivers must ensure that vehicles used on the platform:
+Are legally registered
+Are roadworthy and safe
+Meet Jamaican legal requirements
+Maintain valid fitness and insurance documentation
+Are clean and reasonably maintained
+Meet any RAJLO platform standards communicated from time to time
+RAJLO may request updated documentation at any time.
+
+6. RAJLO Services
+RAJLO currently supports:
+RAJLO Private Ride — on-demand private transportation
+RAJLO Route — route-based transportation operating on Jamaican taxi routes and fare systems
+RAJLO reserves the right to modify, suspend, add, or remove services at any time.
+
+7. Driver Earnings & Platform Fees
+7.1 Driver Earnings
+Drivers are eligible to earn fares generated from completed trips facilitated through the RAJLO platform.
+7.2 Platform Commission
+RAJLO may charge platform commissions, service fees, processing fees, or other deductions from driver earnings.
+Applicable fee structures may be updated periodically at RAJLO’s discretion.
+7.3 No Earnings Guarantee
+RAJLO does not guarantee:
+Ride volume
+Passenger demand
+Minimum earnings
+Driver profitability
+Availability of trip requests
+Driver earnings depend on numerous factors, including:
+Market demand
+Driver availability
+Competition
+Location
+Traffic conditions
+Rider behavior
+Drivers assume all financial risks associated with operating independently.
+
+8. Cashless Payments
+8.1 Electronic Payments
+RAJLO operates as a cashless platform.
+Drivers agree that:
+Rider payments are processed electronically
+Payout timing may vary
+Processing delays may occur
+Third-party payment processors may experience interruptions
+8.2 Payment Disputes
+RAJLO reserves the right to:
+Investigate disputed fares
+Reverse fraudulent transactions
+Withhold payouts where necessary
+Adjust driver balances for refunds, chargebacks, fraud investigations, or policy violations
+
+9. Driver Conduct Standards
+Drivers must:
+Treat riders respectfully
+Follow Jamaican traffic laws
+Avoid discrimination or harassment
+Refrain from threatening behavior
+Maintain professional conduct
+Avoid impaired driving
+Avoid illegal activities
+Prohibited conduct includes:
+Fraudulent trips
+Fake GPS activity
+Fare manipulation
+Harassment
+Violence
+Drug or alcohol impairment
+Unauthorized account sharing
+Criminal activity
+
+10. Trip Acceptance & Cancellation
+Drivers are expected to minimize unnecessary cancellations after accepting ride requests.
+Drivers may cancel trips for legitimate reasons, including:
+Safety concerns
+Rider misconduct
+Vehicle issues
+Emergencies
+Incorrect pickup information
+Technical failures
+Excessive cancellations may result in:
+Reduced trip priority
+Temporary restrictions
+Suspension
+Permanent deactivation
+RAJLO reserves the right to evaluate cancellation patterns at its sole discretion.
+
+11. Insurance & Liability
+11.1 Driver Insurance Responsibility
+Drivers are solely responsible for maintaining all legally required insurance coverage.
+RAJLO does not provide:
+Vehicle insurance
+Health insurance
+Workers’ compensation
+Accident coverage
+Liability coverage for drivers
+11.2 Assumption of Risk
+Drivers acknowledge that transportation services involve inherent risks, including:
+Accidents
+Injuries
+Criminal acts
+Vehicle damage
+Passenger disputes
+Technical failures
+Financial losses
+Drivers voluntarily assume all risks associated with operating on the platform.
+
+12. Limitation of Liability
+To the fullest extent permitted under Jamaican law:
+RAJLO, its owners, affiliates, officers, directors, employees, contractors, licensors, and partners shall not be liable for:
+Personal injury
+Death
+Vehicle damage
+Lost profits
+Lost income
+Business interruption
+Criminal acts
+Passenger misconduct
+Technical failures
+GPS inaccuracies
+Network outages
+Delayed payouts
+Third-party disputes
+Government enforcement actions
+Driver losses or expenses
+Drivers use the platform entirely at their own risk.
+
+13. Indemnification
+Drivers agree to defend, indemnify, and hold harmless RAJLO and its affiliates from any claims, liabilities, damages, losses, legal expenses, fines, or costs arising from:
+Driver misconduct
+Traffic violations
+Accidents
+Passenger claims
+Violations of Jamaican law
+Insurance failures
+Vehicle defects
+Unauthorized account activity
+Breach of this Agreement
+
+14. Technology & Service Availability
+RAJLO does not guarantee uninterrupted operation of:
+Mobile applications
+GPS systems
+Dispatch systems
+Payment systems
+Notifications
+Mobile networks
+Mapping services
+Temporary outages, delays, bugs, or technical failures may occur.
+The platform is provided “as is” and “as available” without warranties of any kind.
+
+15. Account Suspension & Deactivation
+RAJLO reserves the right to suspend, restrict, or permanently deactivate driver accounts at any time for:
+Policy violations
+Fraudulent activity
+Unsafe behavior
+Criminal activity
+Excessive cancellations
+Poor platform conduct
+Legal or regulatory concerns
+Failure to maintain required documentation
+RAJLO may take action without prior notice where necessary to protect platform integrity or user safety.
+
+16. Confidentiality & Platform Protection
+Drivers agree not to:
+Reverse engineer the platform
+Copy platform systems
+Share confidential company information
+Manipulate platform algorithms
+Use bots or unauthorized automation
+Abuse promotions or referral systems
+RAJLO reserves all rights relating to its intellectual property, branding, software, and systems.
+
+17. Governing Law
+This Agreement shall be governed by and interpreted in accordance with the laws of Jamaica.
+Any disputes arising from this Agreement or use of the platform shall be subject to the jurisdiction of the courts of Jamaica.
+
+18. Agreement Updates
+RAJLO reserves the right to modify or update this Agreement at any time without prior notice.
+Continued use of the platform after updates constitutes acceptance of the revised Agreement.
+
+19. Driver Acknowledgment
+By using the RAJLO platform, drivers acknowledge and agree that they:
+Have read and understood this Agreement
+Operate as independent contractors
+Are solely responsible for their transportation services
+Assume all operational risks
+Agree to comply with Jamaican laws and platform policies
+Release RAJLO from liability to the fullest extent permitted under Jamaican law
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

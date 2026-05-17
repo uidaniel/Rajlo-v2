@@ -1,0 +1,151 @@
+
+RAJLO Driver Cancellation & Service Reliability Policy
+Effective Date: May 17, 2026
+This Driver Cancellation & Service Reliability Policy governs the use of the RAJLO driver platform by independent drivers operating through the RajLo transportation marketplace in Jamaica. By accessing or using the RAJLO Driver App, drivers agree to comply with this policy and all applicable Jamaican laws and regulations.
+
+1. Independent Driver Status
+1.1 Independent Contractor Relationship
+Drivers using the RAJLO platform are independent transportation providers and are not employees, agents, partners, or representatives of RAJLO.
+RAJLO operates solely as a technology platform that connects riders with independent drivers. Drivers are fully responsible for:
+Their own conduct and behavior
+Vehicle condition and maintenance
+Driving decisions
+Route selection
+Passenger interactions
+Compliance with Jamaican traffic laws and Transport Authority regulations
+Insurance, licensing, permits, taxes, and operating expenses
+1.2 No Transportation Liability
+RAJLO does not own, operate, manage, or control vehicles and is not responsible for:
+Driver actions or omissions
+Passenger conduct
+Traffic incidents or accidents
+Injuries, damages, theft, or losses
+Delays, route issues, or missed pickups
+Disputes between drivers and passengers
+Service interruptions caused by network, GPS, mobile carrier, weather, or technical failures
+All transportation services are provided directly by independent drivers.
+
+2. Driver Cancellation Policy
+2.1 Acceptance of Ride Requests
+Once a driver accepts a ride request through the RAJLO platform, the driver is expected to make reasonable efforts to complete the trip professionally and safely.
+2.2 Permitted Cancellations
+Drivers may cancel a trip when reasonably necessary, including but not limited to:
+Passenger no-show
+Safety concerns
+Mechanical failure
+Medical emergencies
+Dangerous weather or road conditions
+Incorrect pickup information
+Rider misconduct or threatening behavior
+Network or technical failures
+2.3 Excessive Cancellations
+Frequent or repeated cancellations that negatively impact platform reliability may result in:
+Warnings
+Temporary account restrictions
+Reduced trip priority
+Temporary suspension
+Permanent deactivation from the platform
+RAJLO reserves the right to review cancellation activity on a case-by-case basis.
+
+3. Late Arrival & Pickup Standards
+3.1 Timeliness
+Drivers are expected to proceed toward pickup locations promptly after accepting ride requests and to maintain professional service standards.
+3.2 Communication with Riders
+If delayed, drivers should communicate with riders through the RAJLO app whenever possible.
+RAJLO is not responsible for delays caused by:
+Traffic congestion
+Road closures
+GPS inaccuracies
+Weather conditions
+Rider location errors
+Mobile network outages
+Events outside the driver's control
+
+4. Passenger No-Show Policy
+4.1 Waiting Time
+Drivers are encouraged to wait a reasonable amount of time at the pickup location before canceling a ride due to passenger absence.
+4.2 No-Show Documentation
+Drivers may be required to confirm arrival through GPS, timestamp data, or in-app tools before a no-show cancellation is processed.
+
+5. Safety & Emergency Situations
+5.1 Driver Safety Priority
+Drivers should never continue a trip if they believe their personal safety, the passenger’s safety, or public safety is at risk.
+5.2 Emergency Reporting
+Drivers should immediately contact local emergency services in serious situations involving:
+Accidents
+Assault
+Threats
+Criminal activity
+Medical emergencies
+RAJLO may provide platform support but is not liable for emergency response outcomes.
+
+6. Technical Issues
+6.1 Platform Availability
+RAJLO does not guarantee uninterrupted availability of the app, GPS systems, mobile connectivity, payment processing, or dispatch systems.
+Temporary outages, delays, or technical errors may occur.
+6.2 Driver Responsibility
+Drivers are responsible for maintaining:
+A functioning smartphone
+Reliable internet or mobile data connection
+Updated app software
+Adequate battery power and device functionality
+
+7. Compliance with Jamaican Laws
+Drivers are solely responsible for complying with:
+Jamaican Road Traffic laws
+Transport Authority regulations
+Licensing requirements
+Insurance obligations
+Vehicle fitness requirements
+Tax obligations and business registration requirements
+RAJLO is not responsible for any fines, penalties, impoundments, legal claims, or enforcement actions involving drivers.
+
+8. Account Reviews & Enforcement
+RAJLO reserves the right to investigate:
+Excessive cancellations
+Fraudulent activity
+Unsafe driving behavior
+Abuse of the platform
+Violations of community guidelines
+False reporting or manipulation of trips
+RAJLO may suspend or permanently deactivate accounts at its sole discretion to protect platform integrity and user safety.
+
+9. Limitation of Liability
+To the maximum extent permitted under Jamaican law:
+RAJLO, its owners, affiliates, officers, employees, contractors, and partners shall not be liable for any:
+Direct or indirect damages
+Loss of income or profits
+Vehicle damage
+Personal injury
+Death
+Theft or property loss
+Emotional distress
+Business interruption
+Data loss
+Third-party claims
+arising from:
+Use of the platform
+Driver conduct
+Passenger conduct
+Cancellations
+Delays
+Accidents
+Technical failures
+Payment disputes
+GPS inaccuracies
+Criminal acts
+Events beyond RAJLO’s reasonable control
+Drivers use the platform entirely at their own risk.
+
+10. Policy Updates
+RAJLO reserves the right to update, modify, or replace this policy at any time without prior notice. Continued use of the RAJLO platform after updates constitutes acceptance of the revised policy.
+
+11. Driver Acknowledgment
+By using the RAJLO Driver App and accepting ride requests, drivers acknowledge that they:
+Have read and understood this policy
+Operate as independent contractors
+Accept responsibility for their own transportation services
+Agree to comply with all applicable laws and platform rules
+Release RAJLO from liability to the fullest extent permitted by law
+RAJLO — Jamaica’s Cashless Transportation Platform
+

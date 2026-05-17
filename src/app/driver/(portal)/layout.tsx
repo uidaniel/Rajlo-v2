@@ -6,6 +6,8 @@ import { DriverActivityTracker } from "@/components/driver-activity-tracker";
 import { DriverPortalGate } from "@/components/driver-portal-gate";
 import { DriverOnlinePresence } from "@/components/driver-online-presence";
 import { PullToRefresh } from "@/components/pull-to-refresh";
+import { LegalConsentGate } from "@/components/legal-consent-gate";
+import { DeviceFingerprintBeacon } from "@/components/device-fingerprint-beacon";
 import { driverNav } from "@/lib/mock-data";
 import { getDriverStatus } from "@/lib/driver-status";
 
@@ -60,6 +62,12 @@ export default async function DriverPortalLayout({
       nav={driverNav}
     >
       <SessionGuard />
+      {/* Blocks the driver with a consent modal if they owe acceptance
+         of any new or updated policy. The driver-online API enforces
+         the same gate server-side. */}
+      <LegalConsentGate />
+      {/* Submits this device's fraud fingerprint once per session. */}
+      <DeviceFingerprintBeacon />
       {/* Pull-to-refresh — touch-only, mobile-only. The driver
          portal runs inside the Capacitor WebView where the native
          browser refresh isn't reachable, so the gesture is the only

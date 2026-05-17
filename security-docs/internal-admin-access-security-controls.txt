@@ -1,0 +1,341 @@
+RAJLO Internal Admin Access & Security Controls Specification
+Effective Date: May 17, 2026
+This specification defines the internal administrative access controls, privileged account protections, permission management, operational security requirements, and internal system governance for RAJLO.
+Purpose:
+Protect sensitive RAJLO systems and data
+Prevent unauthorized internal access
+Reduce insider threats
+Reduce admin abuse risk
+Protect legal and operational records
+Improve platform governance
+Maintain operational accountability
+Support audit and investigation requirements
+This specification applies to all RAJLO administrators, moderators, support staff, developers, contractors, operational personnel, and internal system users.
+
+1. Core Security Objectives
+RAJLO internal systems should:
+Restrict access to sensitive systems
+Prevent unauthorized actions
+Log all critical admin activity
+Support role-based permissions
+Reduce insider threat risk
+Protect operational evidence
+Protect payment and legal systems
+Support investigation and accountability
+
+2. Role-Based Access Control (RBAC)
+Access to internal systems must follow role-based access principles.
+Users should only access systems necessary for their responsibilities.
+Recommended internal roles:
+2.1 Support Agent
+Access:
+Basic incident review
+User support tools
+Limited trip visibility
+Restrictions:
+Cannot freeze payouts
+Cannot permanently ban users
+Cannot export sensitive evidence
+Cannot access security systems
+2.2 Moderator
+Access:
+Incident management
+User suspension tools
+Fraud flag review
+Complaint management
+Restrictions:
+Cannot modify admin permissions
+Cannot access full infrastructure systems
+Cannot delete audit records
+2.3 Compliance/Investigator
+Access:
+Fraud investigations
+Payment disputes
+Evidence exports
+Consent records
+Risk scoring systems
+Restrictions:
+Cannot change core infrastructure configurations
+2.4 Developer/Technical Admin
+Access:
+Infrastructure systems
+Deployment systems
+Monitoring systems
+Backend operational systems
+Restrictions:
+Should not access unnecessary user data
+Should not modify moderation evidence improperly
+2.5 Super Admin
+Access:
+Full operational systems
+Admin management
+Security systems
+Platform-wide enforcement systems
+Super-admin access should be tightly restricted.
+
+3. Authentication Requirements
+3.1 Multi-Factor Authentication (MFA)
+All admin accounts should require MFA/2FA.
+Recommended methods:
+Authenticator apps
+Hardware security keys where possible
+Secure backup recovery codes
+3.2 Password Security
+Admin passwords should:
+Be strong and unique
+Not be reused across services
+Follow minimum complexity standards
+Support password rotation where appropriate
+3.3 Session Security
+Admin sessions should support:
+Session expiration
+Forced logout after inactivity
+Suspicious login detection
+Concurrent session monitoring
+
+4. Privileged Action Controls
+Sensitive admin actions should require:
+Elevated permissions
+Audit logging
+Additional verification where possible
+Sensitive actions include:
+Permanent bans
+Payout releases
+Payout freezes
+Evidence exports
+Permission changes
+Security configuration changes
+Policy changes
+Driver approval overrides
+
+5. Audit Logging Requirements
+Every significant admin action must generate immutable audit logs.
+Logs should store:
+Admin ID
+Role
+Action type
+Timestamp
+IP address where available
+Device/session metadata
+Target user/entity
+Action reason
+Metadata snapshot
+Example action types:
+admin_login
+admin_logout
+user_suspended
+payout_frozen
+fraud_flag_added
+evidence_exported
+policy_updated
+permission_changed
+Audit logs should not be hard-deleted.
+
+6. Sensitive Data Access Restrictions
+Access to sensitive data should be restricted.
+Sensitive data includes:
+Driver documents
+Payment-related information
+GPS history
+Consent logs
+Fraud investigations
+Incident evidence
+Internal security records
+Only authorized personnel should access sensitive records.
+
+7. Admin Access Monitoring
+The system should monitor:
+Failed admin login attempts
+Suspicious login locations
+Unusual export activity
+Permission escalations
+Unauthorized access attempts
+Excessive data access
+Critical events should generate alerts.
+
+8. Internal Investigation Controls
+The system should support investigation of:
+Rogue admin behavior
+Unauthorized access
+Data misuse
+Internal fraud
+Evidence tampering attempts
+Unauthorized exports
+Internal investigations should generate audit records.
+
+9. Environment Separation
+Production systems should be separated from:
+Development environments
+Testing environments
+Staging systems
+Test systems should not use real production user data unless properly protected.
+
+10. Infrastructure Access Controls
+Infrastructure access should be restricted for:
+Databases
+Cloud systems
+Deployment systems
+API gateways
+Backup systems
+Payment systems
+Recommended protections:
+VPN restrictions where possible
+IP allowlisting where appropriate
+MFA enforcement
+Secure credential management
+
+11. Secret & Credential Management
+Sensitive credentials should never be:
+Hardcoded into frontend systems
+Exposed publicly
+Shared insecurely
+Stored in unsecured files
+Examples:
+API keys
+Payment credentials
+Cloud access tokens
+Database credentials
+JWT secrets
+Recommended:
+Environment variables
+Secure secret management systems
+Access rotation procedures
+
+12. Export Restrictions
+Sensitive exports should:
+Require elevated permissions
+Generate audit logs
+Be limited to authorized admins
+Be protected from unauthorized sharing
+Sensitive exports include:
+Incident evidence
+Consent records
+Fraud investigations
+GPS history
+Driver onboarding documents
+
+13. Internal Security Incident Procedures
+Internal security incidents should support:
+Immediate investigation
+Session revocation
+Access suspension
+Audit review
+Evidence preservation
+Escalation procedures
+Critical incidents may justify immediate account lockdown.
+
+14. Required Database Tables
+14.1 admin_roles
+Fields:
+id
+role_name
+permissions_json
+created_at
+14.2 admin_access_logs
+Fields:
+id
+admin_user_id
+login_timestamp
+logout_timestamp
+ip_address
+device_info
+session_status
+created_at
+14.3 admin_security_events
+Fields:
+id
+admin_user_id
+event_type
+severity
+description
+metadata_json
+created_at
+14.4 admin_permission_changes
+Fields:
+id
+changed_by_admin_id
+target_admin_id
+previous_permissions_json
+new_permissions_json
+created_at
+
+15. Recommended API Endpoints
+Get Admin Audit Logs
+GET /admin/security/audit-logs
+Get Admin Access History
+GET /admin/security/access-history
+Suspend Admin Access
+POST /super-admin/admins/{id}/suspend
+Update Admin Permissions
+POST /super-admin/admins/{id}/permissions
+Export Security Investigation
+GET /super-admin/security/export/{id}
+
+16. Admin Dashboard Requirements
+Dashboard should support:
+Admin role management
+Access monitoring
+Security alert monitoring
+Audit log review
+Internal investigation tracking
+Permission management
+Dashboard should display:
+Active admin sessions
+Failed login attempts
+Suspicious activity alerts
+Recent exports
+Permission changes
+
+17. Evidence & Record Retention
+Preserve:
+Admin audit logs
+Permission changes
+Security incidents
+Access logs
+Export history
+Internal investigations
+Historical records should remain accessible for:
+Legal defense
+Internal investigations
+Compliance reviews
+Fraud investigations
+
+18. Legal Protection Notes
+This system helps RAJLO:
+Demonstrate operational governance
+Reduce insider threat risk
+Protect legal evidence
+Preserve audit trails
+Support regulatory credibility
+Improve internal accountability
+The system should clearly show:
+Who accessed systems
+What actions were taken
+When actions occurred
+What data was accessed
+
+19. Minimum Production Checklist
+Before launch confirm:
+MFA works for admins
+Role permissions work
+Audit logs work
+Session expiration works
+Permission changes are logged
+Sensitive exports are restricted
+Admin access alerts work
+Production/development separation exists
+Secret management is secured
+Security incident procedures exist
+
+20. Developer Summary
+Daniel should implement a production-grade internal admin security and access control system that:
+Restricts access to sensitive RAJLO systems.
+Uses role-based permissions and MFA.
+Maintains immutable audit logs.
+Protects sensitive exports and operational data.
+Detects suspicious admin activity.
+Preserves evidence for legal and operational investigations.
+Reduces insider threat and unauthorized access risk.
+This system is a critical operational governance and infrastructure protection layer for RAJLO.
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

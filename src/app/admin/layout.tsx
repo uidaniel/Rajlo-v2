@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { PortalLayout } from "@/components/portal-layout";
+import { AdminAccessBeacon } from "@/components/admin-access-beacon";
 import { adminNav, safetyOfficerNav } from "@/lib/mock-data";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 
@@ -53,6 +54,9 @@ export default async function AdminLayout({
       }
       nav={isAdmin ? adminNav : safetyOfficerNav}
     >
+      {/* Records an admin_access_logs entry once per session for the
+         security dashboard's access history. */}
+      {isAdmin && <AdminAccessBeacon />}
       {children}
     </PortalLayout>
   );

@@ -183,7 +183,7 @@ export function DeleteAccountDialog({
                 are retained for compliance — required by Jamaica&apos;s
                 Bank of Jamaica + Transport Authority rules. See{" "}
                 <a
-                  href="/legal/privacy"
+                  href="/legal/privacy-policy"
                   target="_blank"
                   rel="noreferrer"
                   className="font-bold underline"

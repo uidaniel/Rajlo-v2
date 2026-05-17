@@ -5,6 +5,7 @@ import { getWalletBalance } from "@/lib/wallet";
 import { calculateRouteFare } from "@/lib/fare-engine";
 import { isWithinJamaica } from "@/lib/jamaica";
 import { notifyRouteTaxiDrivers } from "@/lib/notify";
+import { getOutstandingLegalDocuments } from "@/lib/legal-consent";
 
 /**
  * POST /api/rider/route-taxi/hail
@@ -54,6 +55,30 @@ export async function POST(request: Request) {
   } = await auth.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // Legal-consent gate: a rider may not hail a route taxi until they
+  // have accepted every required policy at its current version. The
+  // consent modal enforces this in the UI; this 403 is the
+  // server-side guarantee.
+  const outstandingLegal = await getOutstandingLegalDocuments(
+    auth,
+    user.id,
+    "rider",
+  );
+  if (outstandingLegal.length > 0) {
+    return NextResponse.json(
+      {
+        error: "legal_consent_required",
+        message:
+          "Review and accept RAJLO's updated policies before hailing a route taxi.",
+        outstanding: outstandingLegal.map((d) => ({
+          key: d.key,
+          title: d.title,
+        })),
+      },
+      { status: 403 },
+    );
   }
 
   let body: HailBody;

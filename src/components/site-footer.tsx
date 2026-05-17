@@ -20,16 +20,16 @@ export function SiteFooter() {
       title: "Support",
       links: [
         ["Help & FAQs", "/help"],
-        ["Safety", "/legal/safety"],
+        ["Safety policy", "/legal/safety-disclaimer-emergency-policy"],
         ["Contact", "/contact"],
       ],
     },
     {
       title: "Legal",
       links: [
-        ["Terms", "/legal/terms"],
-        ["Privacy", "/legal/privacy"],
-        ["Safety policy", "/legal/safety"],
+        ["Terms of Service", "/legal/terms-of-service"],
+        ["Privacy Policy", "/legal/privacy-policy"],
+        ["All policies", "/legal"],
       ],
     },
   ];

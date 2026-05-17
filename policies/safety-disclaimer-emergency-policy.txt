@@ -1,0 +1,240 @@
+RAJLO Safety Disclaimer & Emergency Policy
+Effective Date: May 17, 2026
+Welcome to RAJLO — Jamaica’s First Cashless Transportation Platform.
+This Safety Disclaimer & Emergency Policy (“Policy”) governs safety-related matters, emergency procedures, user responsibilities, and liability limitations associated with the use of the RAJLO platform, mobile applications, websites, communication systems, and related services (collectively, the “Platform”).
+By using the Platform, riders, drivers, and all users acknowledge and accept the risks associated with third-party transportation services and agree to comply with this Policy.
+
+1. Technology Platform Disclaimer
+1.1 RAJLO Is a Technology Platform
+RAJLO is a technology marketplace platform that connects riders with independent third-party transportation providers.
+RAJLO:
+Does not provide transportation services directly
+Does not employ drivers
+Does not own or operate vehicles
+Does not supervise trips in real time
+Does not control driver behavior or route decisions
+Does not guarantee ride availability or uninterrupted service
+All transportation services are independently provided by third-party drivers.
+1.2 Independent Contractor Drivers
+Drivers using the Platform are independent contractors and are not employees, agents, or representatives of RAJLO.
+Drivers are solely responsible for:
+Vehicle operation
+Driving decisions
+Passenger interactions
+Vehicle safety and maintenance
+Compliance with Jamaican laws
+Insurance obligations
+
+2. Assumption of Risk
+Transportation services involve inherent risks.
+By using the Platform, users voluntarily assume all risks associated with:
+Vehicle accidents
+Traffic incidents
+Driver negligence
+Passenger misconduct
+Criminal acts
+Road hazards
+Weather conditions
+Delays
+Vehicle malfunctions
+Technical failures
+GPS inaccuracies
+Mobile network interruptions
+Emergency response limitations
+Users use the Platform entirely at their own risk.
+
+3. No Guarantee of Safety
+While RAJLO strives to promote safer transportation experiences, RAJLO cannot guarantee:
+Driver behavior
+Rider behavior
+Passenger conduct
+Vehicle safety
+Crime prevention
+Background check accuracy
+Identity verification accuracy
+Emergency response outcomes
+GPS accuracy
+Mobile network reliability
+Safe pickup or drop-off locations
+Continuous tracking accuracy
+Prevention of accidents or criminal activity
+RAJLO makes no warranties regarding user safety.
+
+4. Background Check Disclaimer
+Where background checks, identity verification, or document reviews are conducted, users acknowledge that:
+Such reviews may be limited in scope
+Information may be incomplete, outdated, inaccurate, or unavailable
+Criminal records may not always be discoverable
+Future conduct cannot be predicted
+RAJLO does not guarantee the suitability, safety, or reliability of any driver, rider, or user.
+
+5. GPS & Tracking Limitations
+RAJLO may use GPS, mapping systems, and real-time tracking technologies for operational purposes.
+However, users acknowledge that:
+GPS systems are not always accurate
+Location updates may be delayed
+Tracking systems may fail
+Mobile networks may experience outages
+Device limitations may impact location accuracy
+Real-time monitoring may not function continuously
+RAJLO is not responsible for losses or incidents arising from inaccurate or interrupted location services.
+
+6. Emergency Situations
+6.1 Emergency Services
+In emergencies involving:
+Accidents
+Assaults
+Threats
+Medical emergencies
+Criminal activity
+Immediate danger
+users should immediately contact Jamaican emergency services or law enforcement.
+6.2 RAJLO Support Limitations
+RAJLO may provide limited support assistance where reasonably possible.
+However, RAJLO:
+Is not an emergency response provider
+Does not guarantee immediate intervention
+Does not guarantee monitoring of emergency reports in real time
+Does not guarantee emergency communication delivery
+Does not guarantee emergency response outcomes
+Users should not rely solely on the Platform during emergencies.
+
+7. Driver Safety Responsibilities
+Drivers are solely responsible for:
+Safe vehicle operation
+Following Jamaican traffic laws
+Maintaining vehicle roadworthiness
+Maintaining legally required insurance
+Avoiding impaired or distracted driving
+Making lawful and safe driving decisions
+Determining whether conditions are safe to continue a trip
+Drivers may refuse or cancel trips where safety concerns reasonably exist.
+
+8. Rider Safety Responsibilities
+Riders are responsible for:
+Providing accurate pickup information
+Entering and exiting vehicles safely
+Wearing seatbelts where available
+Following reasonable safety instructions
+Avoiding unsafe or unlawful behavior
+Protecting personal belongings
+Riders should use reasonable judgment when interacting with drivers and using transportation services.
+
+9. Safe Pickup & Drop-Off Locations
+Users are responsible for selecting reasonably safe and legally accessible pickup and drop-off locations.
+Drivers may refuse pickups or drop-offs where:
+Conditions appear unsafe
+Traffic laws prohibit stopping
+Criminal activity is suspected
+Environmental hazards exist
+Road conditions are dangerous
+RAJLO is not responsible for incidents occurring at pickup or drop-off locations.
+
+10. Vehicle & Personal Property Disclaimer
+RAJLO is not responsible for:
+Vehicle defects
+Mechanical failures
+Lost or stolen property
+Damaged belongings
+Unattended items left in vehicles
+Third-party theft
+Users are solely responsible for protecting their personal property.
+
+11. Technical Systems Disclaimer
+RAJLO does not guarantee uninterrupted operation of:
+Mobile applications
+GPS systems
+Mapping services
+Communications systems
+Notifications
+Emergency features
+Payment systems
+Cloud infrastructure
+Mobile carrier networks
+Technical failures, outages, delays, or inaccuracies may occur.
+The Platform is provided “as is” and “as available” without warranties of any kind.
+
+12. Prohibited Conduct
+Users may not:
+Threaten or harass others
+Engage in violence
+Carry illegal weapons or contraband
+Operate vehicles while impaired
+Use the Platform for criminal activity
+Engage in stalking or intimidation
+Share accounts without authorization
+Manipulate GPS or tracking systems
+Engage in fraudulent behavior
+RAJLO reserves the right to suspend or permanently ban users violating Platform safety rules.
+
+13. Reporting Safety Concerns
+Users are encouraged to report:
+Unsafe driving
+Harassment
+Criminal activity
+Fraudulent behavior
+Vehicle safety concerns
+Threats or misconduct
+RAJLO reserves the right to investigate reports at its sole discretion.
+False or fraudulent reports may result in account suspension.
+
+14. Account Suspension & Deactivation
+RAJLO reserves the right to suspend, restrict, or permanently deactivate accounts where:
+Safety concerns arise
+Fraud is suspected
+Criminal activity is reported
+Platform rules are violated
+User behavior creates unreasonable risk
+RAJLO may take enforcement action without prior notice where necessary to protect users or Platform integrity.
+
+15. Limitation of Liability
+To the fullest extent permitted under Jamaican law:
+RAJLO, its owners, affiliates, officers, directors, employees, contractors, licensors, and service providers shall not be liable for:
+Personal injury
+Death
+Vehicle accidents
+Assaults
+Criminal acts
+Kidnapping
+Theft
+Property damage
+Emotional distress
+Driver negligence
+Rider misconduct
+Third-party conduct
+Emergency response failures
+GPS inaccuracies
+Technical failures
+Mobile network outages
+Background check limitations
+Lost profits or financial losses
+Off-platform interactions
+Users use the Platform entirely at their own risk.
+
+16. Indemnification
+Users agree to defend, indemnify, and hold harmless RAJLO and its affiliates from claims, liabilities, damages, legal expenses, or losses arising from:
+User misconduct
+Criminal activity
+Violations of Jamaican law
+Unsafe behavior
+Violations of this Policy
+Vehicle operation or transportation services
+
+17. Policy Updates
+RAJLO reserves the right to modify or update this Policy at any time without prior notice.
+Continued use of the Platform following updates constitutes acceptance of the revised Policy.
+
+18. Governing Law
+This Policy shall be governed by and interpreted in accordance with the laws of Jamaica.
+Any disputes relating to this Policy shall be subject to the jurisdiction of the courts of Jamaica.
+
+19. User Acknowledgment
+By using the RAJLO Platform, users acknowledge and agree that they:
+Have read and understood this Policy
+Understand the risks associated with third-party transportation services
+Accept that RAJLO cannot guarantee user safety
+Understand the limitations of GPS, tracking, and emergency systems
+Voluntarily assume all risks associated with Platform use
+Release RAJLO from liability to the fullest extent permitted under Jamaican law
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

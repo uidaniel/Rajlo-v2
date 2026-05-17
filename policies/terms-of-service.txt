@@ -1,0 +1,285 @@
+RAJLO Terms of Service
+Effective Date: May 17, 2026
+Welcome to RAJLO — Jamaica’s First Cashless Transportation Platform.
+These Terms of Service (“Terms”) govern your access to and use of the RAJLO platform, mobile applications, websites, software, payment systems, communication systems, and related services (collectively, the “Platform”).
+By accessing, downloading, registering for, or using the RAJLO Platform, you agree to be legally bound by these Terms.
+If you do not agree to these Terms, you may not use the Platform.
+
+1. Definitions
+For purposes of these Terms:
+“RAJLO” refers to the company, platform, affiliates, owners, operators, licensors, employees, contractors, and related entities.
+“User” refers to any rider, driver, visitor, or person using the Platform.
+“Driver” refers to independent third-party transportation providers using the Platform.
+“Rider” refers to any person requesting transportation services through the Platform.
+“Services” refers to technology services, software systems, payment systems, communication systems, and marketplace services provided by RAJLO.
+
+2. Nature of the Platform
+2.1 Technology Platform Only
+RAJLO is a technology marketplace platform that connects riders with independent third-party transportation providers.
+RAJLO:
+Does not own or operate vehicles
+Does not provide transportation services directly
+Does not employ drivers
+Does not control driver conduct
+Does not guarantee ride availability
+Does not guarantee service quality or uninterrupted operation
+All transportation services are independently provided by third-party drivers.
+2.2 Independent Contractor Relationship
+Drivers are independent contractors and are not employees, agents, representatives, or partners of RAJLO.
+Nothing in these Terms creates:
+Employment relationships
+Joint ventures
+Partnerships
+Agency relationships
+
+3. Eligibility
+To use the Platform, users must:
+Be legally capable of entering binding agreements
+Provide accurate account information
+Maintain valid payment methods where required
+Comply with Jamaican laws and regulations
+Comply with all Platform policies
+RAJLO reserves the right to refuse service to any person at its sole discretion.
+
+4. User Accounts
+4.1 Account Responsibility
+Users are responsible for:
+Maintaining account confidentiality
+Protecting login credentials
+Protecting OTP verification codes
+Restricting unauthorized access to devices
+All activity occurring under their account
+4.2 Accurate Information
+Users must provide accurate and current information at all times.
+RAJLO may suspend or terminate accounts containing false, misleading, or fraudulent information.
+
+5. RAJLO Services
+RAJLO currently supports:
+5.1 RAJLO Private Ride
+An on-demand private transportation service connecting riders with independent drivers.
+5.2 RAJLO Route
+A route-based transportation service utilizing Jamaican route taxi systems and fare structures.
+RAJLO reserves the right to modify, suspend, expand, or discontinue services at any time.
+
+6. Cashless Payment System
+6.1 Electronic Payments
+RAJLO operates as a fully cashless transportation platform.
+By using the Platform, users authorize RAJLO and its payment processors to:
+Charge payment methods
+Process trip fares
+Apply cancellation fees
+Apply service fees
+Process refunds where applicable
+6.2 Fare Estimates
+Displayed fares are estimates only and may change due to:
+Traffic conditions
+Route changes
+GPS recalculations
+Wait times
+Technical adjustments
+Service demand
+Final fares are determined at trip completion.
+6.3 Payment Failures
+RAJLO reserves the right to:
+Retry failed payments
+Restrict account access
+Suspend accounts
+Refer unpaid balances for collections
+
+7. Cancellation Policies
+Users agree that cancellation fees may apply depending on:
+Driver travel distance
+Wait times
+Timing of cancellation
+Service category
+Platform demand
+Detailed cancellation rules are governed by separate Rider and Driver Policies.
+
+8. User Conduct
+Users agree not to:
+Violate Jamaican laws
+Harass or threaten others
+Engage in discrimination
+Commit fraud
+Manipulate fares or routes
+Use fake GPS systems
+Abuse promotions
+Damage vehicles or property
+Reverse engineer the Platform
+Use bots or unauthorized automation
+Share accounts without authorization
+Engage in criminal activity
+RAJLO reserves the right to investigate violations and take enforcement action.
+
+9. Driver Conduct & Responsibilities
+Drivers are solely responsible for:
+Vehicle operation
+Vehicle maintenance
+Insurance coverage
+Licensing and permits
+Compliance with Jamaican laws
+Passenger interactions
+Taxes and operating expenses
+Drivers assume all risks associated with transportation services.
+
+10. Rider Responsibilities
+Riders are responsible for:
+Providing accurate pickup information
+Maintaining valid payment methods
+Following safety instructions
+Respectful behavior toward drivers
+Compliance with Jamaican laws
+Riders assume all risks associated with transportation services.
+
+11. Safety Disclaimer
+Transportation services involve inherent risks.
+RAJLO cannot guarantee:
+Driver behavior
+Passenger behavior
+Vehicle safety
+Route safety
+Background check accuracy
+Crime prevention
+Emergency response outcomes
+Technical reliability
+Users voluntarily assume all risks associated with use of the Platform.
+
+12. Lost Property
+Users are solely responsible for their belongings.
+RAJLO is not responsible for:
+Lost items
+Stolen property
+Damaged belongings
+Unclaimed property left in vehicles
+RAJLO may attempt to facilitate communication between parties but does not guarantee item recovery.
+
+13. Technical Services Disclaimer
+RAJLO does not guarantee uninterrupted or error-free operation of:
+Mobile applications
+GPS systems
+Payment systems
+Notifications
+Mapping services
+Communication systems
+Mobile networks
+Servers or cloud infrastructure
+The Platform is provided “as is” and “as available” without warranties of any kind.
+
+14. Limitation of Liability
+To the fullest extent permitted under Jamaican law:
+RAJLO, its owners, affiliates, officers, directors, employees, contractors, licensors, and service providers shall not be liable for:
+Personal injury
+Death
+Property damage
+Emotional distress
+Lost profits
+Lost income
+Vehicle damage
+Delays
+Missed appointments
+Driver negligence
+Passenger misconduct
+Criminal acts
+Service interruptions
+Technical failures
+GPS inaccuracies
+Data breaches beyond reasonable control
+Third-party disputes
+Government actions
+Force majeure events
+Users use the Platform entirely at their own risk.
+
+15. Indemnification
+Users agree to defend, indemnify, and hold harmless RAJLO and its affiliates from claims, liabilities, damages, losses, legal fees, fines, and expenses arising from:
+Violations of these Terms
+Violations of Jamaican law
+User misconduct
+Fraudulent activity
+Damage caused to third parties
+Unauthorized account activity
+
+16. Intellectual Property
+All Platform content, including:
+Software
+Logos
+Branding
+Trademarks
+Designs
+Interfaces
+Graphics
+Features
+Systems
+remain the exclusive property of RAJLO.
+Users may not copy, modify, distribute, reverse engineer, or exploit Platform content without written authorization.
+
+17. Privacy
+Use of the Platform is also governed by the RAJLO Privacy Policy.
+Users acknowledge that RAJLO may collect and process:
+GPS location data
+Device information
+Payment information
+Trip history
+Communication records
+Usage analytics
+for operational, security, fraud prevention, legal, and business purposes.
+
+18. Fraud Prevention & Enforcement
+RAJLO reserves the right to investigate:
+Fake trips
+Chargeback fraud
+Referral abuse
+GPS manipulation
+Fake accounts
+Payment fraud
+Threatening behavior
+Promotional abuse
+RAJLO may suspend or permanently deactivate accounts at its sole discretion.
+
+19. Account Suspension & Termination
+RAJLO reserves the right to suspend, restrict, or terminate accounts at any time for:
+Policy violations
+Fraudulent activity
+Safety concerns
+Payment issues
+Legal compliance concerns
+Criminal activity
+Abuse of the Platform
+RAJLO may take action without prior notice where necessary.
+
+20. Force Majeure
+RAJLO shall not be liable for delays, failures, or interruptions caused by events beyond its reasonable control, including:
+Natural disasters
+Hurricanes
+Flooding
+Government actions
+Civil unrest
+Internet outages
+Power failures
+Mobile network failures
+Cyberattacks
+Transportation disruptions
+
+21. Governing Law
+These Terms shall be governed by and interpreted in accordance with the laws of Jamaica.
+Any disputes arising from these Terms or use of the Platform shall be subject to the jurisdiction of the courts of Jamaica.
+
+22. Dispute Resolution
+Users agree to attempt to resolve disputes with RAJLO informally before initiating legal proceedings.
+RAJLO reserves the right to require mediation, arbitration, or alternative dispute resolution procedures where permitted by law.
+
+23. Modifications to Terms
+RAJLO reserves the right to modify these Terms at any time without prior notice.
+Continued use of the Platform following updates constitutes acceptance of the revised Terms.
+
+24. Entire Agreement
+These Terms, together with related Platform policies, constitute the entire agreement between users and RAJLO concerning use of the Platform.
+
+25. User Acknowledgment
+By using the RAJLO Platform, users acknowledge and agree that they:
+Have read and understood these Terms
+Accept all risks associated with third-party transportation services
+Understand that drivers are independent contractors
+Agree to comply with Jamaican laws and Platform policies
+Release RAJLO from liability to the fullest extent permitted under Jamaican law
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

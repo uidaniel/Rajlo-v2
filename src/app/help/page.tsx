@@ -217,7 +217,7 @@ export default function HelpPage() {
                 Use the in-app SOS to share your live location with us and your trusted contact.
               </p>
               <Link
-                href="/legal/safety"
+                href="/legal/safety-disclaimer-emergency-policy"
                 className="mt-6 inline-flex rounded-full border border-rajlo-red px-6 py-3 text-sm font-bold text-rajlo-red hover:bg-white"
               >
                 Read the Safety policy

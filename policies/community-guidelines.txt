@@ -1,0 +1,265 @@
+RAJLO Community Guidelines
+Effective Date: May 17, 2026
+Welcome to RAJLO — Jamaica’s First Cashless Transportation Platform.
+These Community Guidelines (“Guidelines”) establish the standards of conduct required for all riders, drivers, users, contractors, visitors, and participants using the RAJLO platform, mobile applications, websites, communication systems, and related services (collectively, the “Platform”).
+These Guidelines are intended to help maintain a safe, respectful, lawful, and reliable environment throughout the RAJLO ecosystem.
+By accessing or using the Platform, users agree to comply with these Guidelines, all applicable Jamaican laws, and all related RAJLO policies and agreements.
+
+1. Respect & Professional Conduct
+All users must behave respectfully, professionally, and lawfully at all times.
+Users must not:
+Harass, intimidate, or threaten others
+Use abusive, offensive, or discriminatory language
+Engage in bullying or hate speech
+Engage in verbal or physical violence
+Engage in sexual harassment or misconduct
+Damage another person’s property
+Create unsafe situations
+Encourage illegal conduct
+RAJLO maintains zero tolerance for violent, threatening, discriminatory, or abusive behavior.
+
+2. Safety Standards
+2.1 Driver Safety Responsibilities
+Drivers must:
+Operate vehicles safely and responsibly
+Follow Jamaican traffic laws
+Maintain valid licensing and insurance
+Keep vehicles reasonably clean and roadworthy
+Avoid distracted driving
+Avoid impaired driving
+Use lawful pickup and drop-off locations where reasonably possible
+2.2 Rider Safety Responsibilities
+Riders must:
+Wear seatbelts where available
+Avoid distracting drivers
+Enter and exit vehicles safely
+Follow reasonable safety instructions
+Avoid unsafe or unlawful conduct during trips
+2.3 Emergency Situations
+In emergencies involving:
+Accidents
+Assaults
+Threats
+Criminal activity
+Medical emergencies
+users should immediately contact Jamaican emergency services.
+RAJLO may provide limited support assistance but is not responsible for emergency response outcomes.
+
+3. Illegal Activity Prohibited
+Users may not use the Platform for:
+Criminal activity
+Human trafficking
+Drug distribution or illegal drug activity
+Transportation of illegal weapons or contraband
+Fraudulent activity
+Money laundering
+Theft or robbery
+Smuggling
+Harassment or stalking
+Any conduct violating Jamaican law
+RAJLO reserves the right to cooperate with law enforcement where permitted or required by law.
+
+4. Fraud & Platform Manipulation
+The following activities are strictly prohibited:
+Fake ride requests
+Fake trip completion
+GPS spoofing or fake location systems
+Fare manipulation
+Referral fraud
+Payment fraud
+Chargeback abuse
+Identity fraud
+Account sharing without authorization
+Multiple fraudulent accounts
+Artificial ride inflation
+Manipulation of ratings or reviews
+Use of bots or unauthorized automation
+Attempts to bypass platform fees
+RAJLO reserves the right to investigate suspicious activity and permanently remove users engaged in fraudulent conduct.
+
+5. Driver Conduct Standards
+Drivers must:
+Treat riders respectfully
+Maintain professional behavior
+Avoid discrimination
+Avoid harassment or intimidation
+Avoid reckless driving
+Avoid intoxication or impairment
+Maintain vehicle cleanliness and safety
+Comply with Jamaican transport regulations
+Drivers may not:
+Solicit cash payments outside the Platform
+Carry illegal weapons or contraband
+Use another person’s account
+Permit unauthorized drivers to use their account
+Refuse service unlawfully
+Engage in threatening or criminal conduct
+
+6. Rider Conduct Standards
+Riders must:
+Treat drivers respectfully
+Provide accurate pickup information
+Maintain lawful conduct during trips
+Avoid damaging vehicles
+Maintain professional behavior
+Riders may not:
+Threaten or harass drivers
+Damage vehicles
+Smoke in vehicles where prohibited
+Consume illegal drugs
+Carry illegal weapons or contraband
+Engage in fraudulent activity
+Create unsafe conditions during trips
+Riders may be financially responsible for:
+Vehicle damage
+Excessive cleaning fees
+Repair costs
+Safety-related incidents caused by rider misconduct
+
+7. Discrimination & Harassment
+RAJLO prohibits discrimination or harassment based on characteristics protected under applicable law.
+Users may not engage in:
+Racist conduct
+Threatening behavior
+Sexual harassment
+Hate speech
+Religious harassment
+Disability discrimination
+Any abusive or discriminatory conduct
+RAJLO reserves the right to suspend or permanently ban accounts involved in discriminatory or harassing behavior.
+
+8. Alcohol, Drugs & Weapons
+Users may not:
+Operate vehicles while impaired
+Consume illegal drugs during trips
+Carry illegal weapons or contraband
+Engage in unlawful substance-related conduct
+Drivers must never operate vehicles while impaired by:
+Alcohol
+Illegal drugs
+Controlled substances affecting driving ability
+RAJLO maintains zero tolerance for impaired driving.
+
+9. Account Security & Identity Verification
+Users are responsible for:
+Protecting account credentials
+Protecting OTP verification codes
+Maintaining accurate account information
+Preventing unauthorized account access
+Users may not:
+Impersonate others
+Create fake identities
+Use stolen payment methods
+Share accounts without authorization
+RAJLO reserves the right to require identity verification at any time.
+
+10. Vehicle Standards
+Drivers must maintain vehicles that are:
+Roadworthy
+Legally registered
+Reasonably clean
+Safe for transportation services
+Properly insured where required by law
+RAJLO reserves the right to remove vehicles from the Platform where safety or compliance concerns arise.
+
+11. Privacy & Recording
+Users must respect the privacy of others.
+Users may not:
+Share personal information without authorization
+Publicly disclose private trip information
+Misuse screenshots, recordings, or user data
+Harass users outside the Platform
+RAJLO reserves the right to investigate privacy-related complaints.
+
+12. Ratings, Reviews & Reporting
+Users are expected to provide honest and accurate ratings, reports, and complaints.
+False reports, fraudulent complaints, or abuse of safety reporting systems may result in:
+Account restrictions
+Suspension
+Permanent deactivation
+RAJLO reserves the right to investigate all reports at its sole discretion.
+
+13. Technical Abuse Prohibited
+Users may not:
+Reverse engineer the Platform
+Attempt unauthorized access to systems
+Interfere with Platform operations
+Introduce malware or harmful code
+Scrape Platform data
+Exploit software vulnerabilities
+Circumvent Platform protections
+RAJLO reserves all rights relating to Platform systems, software, and infrastructure.
+
+14. Enforcement & Investigations
+RAJLO reserves the right to:
+Investigate violations
+Monitor Platform activity
+Review trip activity
+Review payment activity
+Suspend or terminate accounts
+Remove content or access
+Cooperate with law enforcement
+Take legal action where appropriate
+RAJLO may take enforcement action without prior notice where necessary to protect:
+User safety
+Platform integrity
+Operational systems
+Legal compliance
+
+15. Account Suspension & Permanent Bans
+Violations of these Guidelines may result in:
+Warnings
+Temporary restrictions
+Account suspension
+Permanent deactivation
+Payment restrictions
+Legal action
+RAJLO reserves the right to determine appropriate enforcement measures at its sole discretion.
+
+16. No Guarantee of Safety
+While RAJLO strives to promote safety and responsible conduct, RAJLO cannot guarantee:
+User behavior
+Driver behavior
+Passenger behavior
+Crime prevention
+Vehicle safety
+Background check accuracy
+Emergency response outcomes
+Platform security
+Users voluntarily assume all risks associated with using the Platform.
+
+17. Limitation of Liability
+To the fullest extent permitted under Jamaican law:
+RAJLO, its owners, affiliates, officers, directors, employees, contractors, licensors, and service providers shall not be liable for:
+User misconduct
+Criminal acts
+Assaults
+Theft
+Harassment
+Vehicle accidents
+Property damage
+Personal injury
+Emotional distress
+Technical failures
+Third-party disputes
+Off-platform conduct
+Law enforcement actions
+Users use the Platform entirely at their own risk.
+
+18. Policy Updates
+RAJLO reserves the right to modify or update these Community Guidelines at any time without prior notice.
+Continued use of the Platform following updates constitutes acceptance of the revised Guidelines.
+
+19. Governing Law
+These Guidelines shall be governed by and interpreted in accordance with the laws of Jamaica.
+Any disputes relating to these Guidelines shall be subject to the jurisdiction of the courts of Jamaica.
+
+20. User Acknowledgment
+By using the RAJLO Platform, users acknowledge and agree that they:
+Have read and understood these Community Guidelines
+Agree to comply with all Platform rules and Jamaican laws
+Accept all risks associated with third-party transportation services
+Understand that violations may result in account suspension or permanent deactivation
+Release RAJLO from liability to the fullest extent permitted under Jamaican law
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

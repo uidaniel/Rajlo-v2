@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
+import { getOutstandingLegalDocuments } from "@/lib/legal-consent";
 
 /**
  * GET / PATCH /api/driver/online
@@ -111,6 +112,32 @@ export async function PATCH(request: Request) {
             "You can't go offline while a trip is in progress. Finish or cancel the current ride first.",
         },
         { status: 409 },
+      );
+    }
+  }
+
+  // Legal-consent gate: a driver may not go online until they have
+  // accepted every required policy at its current version. The consent
+  // modal (LegalConsentGate) enforces this in the UI, but the server
+  // is the source of truth — this 403 stops a tampered client.
+  if (desired) {
+    const outstanding = await getOutstandingLegalDocuments(
+      auth,
+      user.id,
+      "driver",
+    );
+    if (outstanding.length > 0) {
+      return NextResponse.json(
+        {
+          error: "legal_consent_required",
+          message:
+            "Review and accept RAJLO's updated policies before going online.",
+          outstanding: outstanding.map((d) => ({
+            key: d.key,
+            title: d.title,
+          })),
+        },
+        { status: 403 },
       );
     }
   }

@@ -1,0 +1,375 @@
+RAJLO Incident Reporting & Record Retention System Specification
+Effective Date: May 17, 2026
+This specification defines the incident reporting, evidence logging, dispute management, investigation tracking, and record retention requirements for RAJLO.
+Purpose:
+Protect RAJLO legally and operationally
+Create structured evidence trails
+Support fraud investigations
+Support safety investigations
+Support insurance and legal matters
+Support account enforcement decisions
+Reduce “he said vs. she said” disputes
+Preserve operational history for audits and investigations
+This system applies to riders, drivers, support staff, moderators, administrators, and operational systems.
+
+1. Incidents That Must Be Logged
+The system must support logging and investigation of:
+1.1 Safety Incidents
+Vehicle accidents
+Physical altercations
+Assault reports
+Threats or intimidation
+Harassment claims
+Unsafe driving complaints
+Criminal activity
+Emergency situations
+1.2 Rider Complaints
+Incorrect charges
+Route disputes
+Driver misconduct
+Vehicle cleanliness complaints
+Lost property reports
+Cancellation disputes
+Payment disputes
+1.3 Driver Complaints
+Rider misconduct
+Threatening riders
+Vehicle damage claims
+Fraudulent rider complaints
+No-show disputes
+Payment disputes
+1.4 Platform Abuse
+Fake GPS activity
+Fake trips
+Fraud attempts
+Chargeback abuse
+Multiple account abuse
+Referral fraud
+Unauthorized account sharing
+1.5 Technical Incidents
+GPS failures
+Payment system failures
+App crashes affecting trips
+Backend failures
+Mapping issues
+Notification failures
+
+2. Required Incident Data
+Every incident report should store:
+2.1 Core Incident Information
+Incident ID
+Incident type
+Severity level
+Report status
+Reported timestamp
+Incident timestamp
+Trip ID (if applicable)
+Driver ID (if applicable)
+Rider ID (if applicable)
+Reporter user ID
+Assigned moderator/admin ID
+2.2 Trip & Location Data
+Pickup location
+Drop-off location
+GPS coordinates where available
+Route data snapshot
+Driver online status
+Trip timeline
+Timestamp history
+2.3 Device & Technical Metadata
+App version
+Platform (iOS/Android/Web)
+Device type
+IP address where available
+User agent
+GPS accuracy metadata
+2.4 Supporting Evidence
+Uploaded images
+Uploaded screenshots
+Uploaded videos
+Audio files where permitted
+Chat logs
+In-app communication logs
+Payment transaction references
+Support notes
+
+3. Recommended Database Tables
+3.1 incidents
+Fields:
+id
+incident_type
+severity_level
+status
+rider_id
+driver_id
+trip_id
+reporter_user_id
+assigned_admin_id
+title
+description
+incident_timestamp
+reported_at
+resolved_at
+resolution_summary
+action_taken
+created_at
+updated_at
+Recommended severity levels:
+low
+medium
+high
+critical
+Recommended statuses:
+open
+under_review
+awaiting_response
+escalated
+resolved
+closed
+3.2 incident_evidence
+Fields:
+id
+incident_id
+evidence_type
+file_url
+uploaded_by_user_id
+uploaded_at
+metadata_json
+Evidence types:
+screenshot
+image
+video
+audio
+document
+chat_log
+gps_snapshot
+3.3 incident_audit_logs
+Fields:
+id
+incident_id
+action_type
+action_description
+admin_user_id
+metadata_json
+created_at
+Example action types:
+incident_created
+incident_updated
+evidence_uploaded
+account_suspended
+account_warned
+payment_adjusted
+escalation_requested
+incident_closed
+3.4 support_notes
+Fields:
+id
+incident_id
+admin_user_id
+note_text
+is_internal
+created_at
+3.5 account_actions
+Fields:
+id
+user_id
+action_type
+reason
+related_incident_id
+admin_user_id
+created_at
+Example actions:
+warning
+temporary_suspension
+permanent_ban
+payout_hold
+refund_issued
+payment_reversal
+
+4. Incident Reporting Flow
+4.1 Rider Reporting Flow
+Riders should be able to report:
+Unsafe driving
+Harassment
+Lost items
+Incorrect charges
+Threats
+Vehicle cleanliness issues
+Driver misconduct
+Reports should attach:
+Trip reference
+Description
+Optional screenshots/photos
+4.2 Driver Reporting Flow
+Drivers should be able to report:
+Rider misconduct
+Threats
+Vehicle damage
+Fraudulent complaints
+Unsafe rider behavior
+Payment disputes
+4.3 Emergency Escalation
+Critical incidents should be flagged automatically for urgent review.
+Critical examples:
+Assault
+Violent threats
+Major accidents
+Criminal activity
+Law enforcement involvement
+
+5. Backend Enforcement Actions
+Based on incidents, admins should be able to:
+Warn accounts
+Suspend riders
+Suspend drivers
+Permanently ban users
+Freeze payouts
+Issue refunds
+Reverse charges
+Escalate investigations
+Export evidence packages
+All actions must generate audit logs.
+
+6. Record Retention Requirements
+RAJLO should preserve records for:
+Legal defense
+Fraud investigations
+Insurance claims
+Regulatory reviews
+Payment disputes
+Chargebacks
+Safety investigations
+Do not hard-delete important incident records.
+Recommended retained records:
+Incident reports
+Payment logs
+GPS snapshots
+Consent logs
+Chat records
+Account enforcement history
+Uploaded evidence
+Historical records should remain accessible after account deactivation.
+
+7. Audit Trail Requirements
+All moderation/admin actions must be logged.
+Examples:
+Who viewed incident
+Who modified incident
+Who suspended user
+Who issued refund
+Who uploaded evidence
+Who closed incident
+Audit logs should include:
+Timestamp
+Admin ID
+IP address where available
+Action description
+Metadata snapshot
+
+8. Security Requirements
+Incident data must be protected.
+Recommended protections:
+Admin-only access controls
+Role-based permissions
+Encryption at rest where possible
+Backup systems
+Immutable audit trails
+Secure file storage
+Limited evidence access
+Critical incidents should have restricted visibility.
+
+9. Admin Dashboard Requirements
+Admins/moderators should be able to:
+Search incidents
+Filter by severity/status
+View trip history
+View GPS history
+View payment history
+Upload evidence
+Add internal notes
+Suspend users
+Export evidence packages
+Track investigation timelines
+Dashboard should display:
+Incident status
+Severity
+User history
+Repeat offender indicators
+Prior complaints
+Linked incidents
+
+10. Evidence Export Requirements
+Admins should be able to export:
+Incident reports
+GPS logs
+Payment records
+Consent logs
+Screenshots/images
+Chat records
+Timeline summaries
+Audit logs
+This is important for:
+Legal disputes
+Insurance claims
+Chargebacks
+Regulatory requests
+Law enforcement cooperation
+
+11. Legal Protection Requirements
+Incident records help RAJLO:
+Defend against lawsuits
+Defend against false claims
+Justify account suspensions
+Investigate fraud
+Support insurance claims
+Demonstrate operational diligence
+Preserve evidence
+The system should clearly show:
+User-reported facts
+Platform actions taken
+Timeline history
+Evidence snapshots
+Policy violations
+
+12. Suggested API Endpoints
+Create Incident
+POST /incidents
+Upload Evidence
+POST /incidents/{id}/evidence
+Get Incident
+GET /incidents/{id}
+Update Incident Status
+PATCH /incidents/{id}
+Export Incident Package
+GET /admin/incidents/{id}/export
+Get User Incident History
+GET /admin/users/{id}/incidents
+
+13. Minimum Production Checklist
+Before launch confirm:
+Riders can report incidents
+Drivers can report incidents
+Incident severity exists
+Evidence uploads work
+Admin notes work
+Audit logs work
+User suspension tools work
+Incident exports work
+GPS history retention works
+Payment linkage works
+Consent logs can be linked to incidents
+Deleted accounts retain historical incident records
+Admin actions are fully logged
+
+14. Developer Summary
+Daniel should implement a centralized incident management and evidence retention system that:
+Logs all major rider/driver/platform incidents.
+Preserves timestamps, GPS data, payment data, and evidence.
+Allows moderators/admins to investigate disputes.
+Tracks all enforcement actions.
+Preserves historical evidence for legal and operational protection.
+Supports exports for disputes, insurance claims, and investigations.
+Creates permanent audit trails for moderation actions.
+This system is critical because it gives RAJLO operational evidence and legal defensibility when real-world incidents occur.
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

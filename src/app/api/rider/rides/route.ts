@@ -6,6 +6,7 @@ import { computeRideExpiry } from "@/lib/ride-expiry";
 import { sendRideRequestedEmail } from "@/lib/email-templates";
 import { notifyRider, notifyAllAvailableDrivers } from "@/lib/notify";
 import { resolveRidePin } from "@/lib/pin-verify";
+import { getOutstandingLegalDocuments } from "@/lib/legal-consent";
 
 /**
  * POST /api/rider/rides
@@ -83,6 +84,30 @@ export async function POST(request: Request) {
     .single();
   if (profile?.role !== "rider") {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+
+  // Legal-consent gate: a rider may not request a trip until they have
+  // accepted every required policy at its current version. The consent
+  // modal enforces this in the UI; this 403 is the server-side
+  // guarantee that a tampered client can't bypass it.
+  const outstandingLegal = await getOutstandingLegalDocuments(
+    auth,
+    user.id,
+    "rider",
+  );
+  if (outstandingLegal.length > 0) {
+    return NextResponse.json(
+      {
+        error: "legal_consent_required",
+        message:
+          "Review and accept RAJLO's updated policies before requesting a trip.",
+        outstanding: outstandingLegal.map((d) => ({
+          key: d.key,
+          title: d.title,
+        })),
+      },
+      { status: 403 },
+    );
   }
 
   const body = (await request.json()) as CreateRideRequest;

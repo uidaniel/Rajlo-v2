@@ -1,0 +1,257 @@
+RAJLO Payment & Refund Policy
+Effective Date: May 17, 2026
+Welcome to RAJLO — Jamaica’s First Cashless Transportation Platform.
+This Payment & Refund Policy (“Policy”) governs all payments, fares, fees, refunds, cancellations, disputes, and financial transactions processed through the RAJLO platform, mobile applications, payment systems, and related services (collectively, the “Platform”).
+By using the RAJLO Platform, riders and drivers agree to comply with this Policy.
+
+1. Cashless Platform
+1.1 Electronic Payments Only
+RAJLO operates as a fully cashless transportation platform.
+All trip fares, cancellation fees, service charges, and applicable platform fees are processed electronically through approved payment methods.
+Cash payments outside the Platform are prohibited unless expressly authorized by RAJLO.
+1.2 Authorized Payment Methods
+Users must maintain a valid payment method linked to their account.
+RAJLO may support:
+Debit cards
+Credit cards
+Digital wallets
+Bank-linked payment systems
+Other approved electronic payment methods
+RAJLO reserves the right to modify accepted payment methods at any time.
+
+2. Fare Calculations
+2.1 Fare Estimates
+Displayed fares are estimates only and may change based on:
+Distance traveled
+Time elapsed
+Traffic conditions
+Route changes
+Wait times
+Pickup location changes
+Mapping recalculations
+Service demand
+Technical adjustments
+Applicable taxes or fees
+Final fares are determined upon trip completion using RAJLO’s pricing systems.
+2.2 RAJLO Route Pricing
+RAJLO Route fares may utilize Jamaican route taxi structures, regional fare systems, or platform-adjusted pricing models.
+2.3 RAJLO Private Ride Pricing
+Private Ride pricing may vary based on:
+Trip distance
+Trip duration
+Demand conditions
+Pickup location
+Driver availability
+Operational factors
+RAJLO reserves the right to modify pricing structures at any time.
+
+3. Cancellation Fees
+3.1 Rider Cancellation Fees
+Cancellation fees may apply where:
+A driver has accepted the request
+The driver is traveling to the pickup location
+The driver has arrived at the pickup location
+The rider fails to appear
+The rider causes unreasonable delays
+Cancellation fees may vary depending on:
+Distance traveled by the driver
+Time elapsed
+Service category
+Demand conditions
+Geographic area
+3.2 Driver Cancellations
+Drivers may cancel trips for legitimate operational or safety-related reasons.
+RAJLO reserves the right to investigate cancellation activity and apply account restrictions where appropriate.
+
+4. Automatic Charges
+By using the Platform, users authorize RAJLO and its payment processors to:
+Charge trip fares
+Charge cancellation fees
+Apply outstanding balances
+Retry failed payments
+Apply service fees
+Process adjustments or corrections
+Recover unpaid balances
+Users agree that charges may occur automatically without additional authorization at the time of processing.
+
+5. Failed Payments
+5.1 Payment Authorization Failures
+If a payment method fails, RAJLO may:
+Retry payment processing
+Restrict ride requests
+Temporarily suspend accounts
+Require updated payment information
+Apply outstanding balances to future transactions
+5.2 Outstanding Balances
+Outstanding balances may prevent continued use of the Platform until resolved.
+RAJLO reserves the right to pursue collection of unpaid amounts where permitted by law.
+
+6. Refund Policy
+6.1 Refund Eligibility
+Refund requests may be reviewed for situations involving:
+Duplicate charges
+Technical billing errors
+Incorrect fare calculations
+Unauthorized transactions
+Verified service issues
+Refund eligibility is determined solely by RAJLO.
+6.2 Non-Guaranteed Refunds
+Refund requests do not guarantee refunds.
+RAJLO reserves the right to deny refund requests where:
+Fraud is suspected
+Platform abuse is detected
+Charges are valid under Platform policies
+Evidence does not support the claim
+6.3 Partial Refunds
+Where applicable, RAJLO may issue:
+Partial refunds
+Promotional credits
+Account adjustments
+Platform credits
+instead of full monetary refunds.
+
+7. Chargebacks & Payment Disputes
+7.1 Fraud Prevention
+Users agree not to initiate fraudulent chargebacks or payment disputes.
+RAJLO reserves the right to investigate:
+Chargeback abuse
+Payment fraud
+Unauthorized account activity
+Suspicious transactions
+Account manipulation
+7.2 Account Restrictions
+Users engaging in fraudulent or abusive payment activity may face:
+Account suspension
+Permanent deactivation
+Outstanding balance recovery
+Legal action where permitted by law
+
+8. Driver Payouts
+8.1 Payout Processing
+Driver earnings are processed electronically.
+Payout schedules may vary depending on:
+Banking systems
+Payment processors
+Fraud reviews
+Technical interruptions
+Compliance reviews
+8.2 Payout Delays
+RAJLO does not guarantee uninterrupted or immediate payout processing.
+Temporary delays may occur due to:
+Banking interruptions
+Fraud investigations
+Technical failures
+Compliance reviews
+Third-party payment provider delays
+8.3 Adjustments & Deductions
+RAJLO reserves the right to apply deductions or adjustments for:
+Refunds
+Chargebacks
+Fraud investigations
+Policy violations
+Platform commissions
+Processing fees
+
+9. Currency & Exchange Rates
+RAJLO primarily operates in Jamaican Dollars (JMD).
+Where applicable:
+Currency conversion rates may fluctuate
+Exchange rates may vary by payment processor
+Additional banking or international transaction fees may apply
+RAJLO is not responsible for third-party banking or currency conversion charges.
+
+10. Taxes & Regulatory Obligations
+Users are responsible for complying with applicable tax obligations under Jamaican law.
+Drivers are solely responsible for:
+Income taxes
+Statutory contributions
+Business registration obligations
+Licensing fees
+Regulatory compliance
+RAJLO does not provide tax advice.
+
+11. Promotional Credits & Discounts
+RAJLO may offer:
+Promotions
+Referral incentives
+Discounts
+Platform credits
+Promotional offers:
+Have no cash value unless required by law
+May expire
+May be modified or revoked
+May be restricted for abuse prevention
+RAJLO reserves the right to cancel promotions at any time.
+
+12. Fraud Monitoring
+RAJLO reserves the right to monitor transactions for:
+Fraud prevention
+Fake trip activity
+GPS manipulation
+Referral abuse
+Payment fraud
+Unauthorized access
+Suspicious account behavior
+RAJLO may suspend accounts during investigations.
+
+13. Technical Payment Disclaimer
+RAJLO does not guarantee uninterrupted operation of:
+Payment systems
+Banking integrations
+Third-party payment processors
+Mobile networks
+Cloud infrastructure
+Notifications or receipts
+Technical interruptions, delayed notifications, duplicate authorization holds, or temporary processing issues may occur.
+
+14. No Warranty
+All payment systems and related services are provided “as is” and “as available” without warranties of any kind.
+RAJLO makes no guarantees regarding:
+Payment processing speed
+Banking availability
+Processor uptime
+Transaction approvals
+Refund timing
+Currency conversion rates
+
+15. Limitation of Liability
+To the fullest extent permitted under Jamaican law:
+RAJLO, its owners, affiliates, officers, directors, employees, contractors, licensors, and service providers shall not be liable for:
+Banking interruptions
+Payment processor failures
+Chargeback disputes
+Currency conversion losses
+Fraudulent transactions
+Delayed refunds
+Lost earnings
+Technical payment failures
+Unauthorized account use
+Financial losses arising from Platform use
+Users use the Platform and payment systems entirely at their own risk.
+
+16. Indemnification
+Users agree to defend, indemnify, and hold harmless RAJLO and its affiliates from claims, liabilities, losses, legal expenses, or damages arising from:
+Fraudulent transactions
+Chargeback abuse
+Violations of this Policy
+Violations of Jamaican law
+Unauthorized payment activity
+User misconduct
+
+17. Policy Updates
+RAJLO reserves the right to modify or update this Policy at any time without prior notice.
+Continued use of the Platform following updates constitutes acceptance of the revised Policy.
+
+18. Governing Law
+This Policy shall be governed by and interpreted in accordance with the laws of Jamaica.
+Any disputes relating to this Policy shall be subject to the jurisdiction of the courts of Jamaica.
+
+19. User Acknowledgment
+By using the RAJLO Platform, users acknowledge and agree that they:
+Have read and understood this Policy
+Authorize electronic payment processing
+Accept the risks associated with electronic transactions
+Understand that pricing may vary
+Release RAJLO from liability to the fullest extent permitted under Jamaican law
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

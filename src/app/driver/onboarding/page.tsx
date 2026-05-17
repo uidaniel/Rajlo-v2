@@ -13,6 +13,7 @@ import { VehiclePicker } from "@/components/vehicle-picker";
 import { createSupabaseBrowserClient } from "@/lib/supabase-browser";
 import { uploadDriverDocument, removeDriverDocument } from "@/lib/storage";
 import { NativeUnverifiedRedirect } from "@/components/native-unverified-redirect";
+import { LegalConsentGate } from "@/components/legal-consent-gate";
 
 const DRAFT_KEY = "rajlo-driver-onboarding-draft";
 
@@ -811,6 +812,11 @@ function DriverOnboardingWizard() {
       {/* Native unverified → kick to the verify-on-web screen so they
           finish onboarding in a real browser. No-op on web. */}
       <NativeUnverifiedRedirect />
+      {/* Legal-consent gate — a driver must accept every required
+         policy (Driver Agreement, earnings disclaimer, etc.) at the
+         start of onboarding. Renders a blocking modal until the
+         consent is recorded; renders nothing once they're consented. */}
+      <LegalConsentGate />
       {/* ────── Top bar ────── */}
       <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
         <div className="mx-auto flex max-w-5xl items-center justify-between gap-4 px-2 py-3 md:px-3 md:py-4">

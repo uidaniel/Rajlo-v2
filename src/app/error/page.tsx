@@ -6,7 +6,7 @@ export default function ErrorPage() {
       title="Something went wrong."
       body="An unexpected error stopped your trip. Please try again — and if it keeps happening, our support team is here to help."
       primaryAction={{ label: "Try again", href: "/" }}
-      secondaryAction={{ label: "Contact support", href: "/legal/safety" }}
+      secondaryAction={{ label: "Contact support", href: "/contact" }}
       tone="muted"
     />
   );

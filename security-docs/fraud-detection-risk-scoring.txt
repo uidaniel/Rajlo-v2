@@ -1,0 +1,317 @@
+RAJLO Fraud Detection & Risk Scoring System Specification
+Effective Date: May 17, 2026
+This specification defines the fraud detection, account risk scoring, suspicious activity monitoring, automated enforcement, and fraud investigation systems for RAJLO.
+Purpose:
+Detect and reduce fraud
+Protect rider and driver accounts
+Reduce chargebacks and payment abuse
+Detect fake GPS activity
+Detect fake rides and referral abuse
+Protect payouts and platform revenue
+Support operational enforcement
+Preserve legal evidence
+Improve platform trust and safety
+This system applies to all riders, drivers, admins, moderators, payment systems, onboarding systems, and backend operational services.
+
+1. Core Fraud Threats
+The system should monitor and detect:
+1.1 Rider Fraud
+Fake trip requests
+Chargeback abuse
+Stolen payment methods
+Multiple fake accounts
+Promotional abuse
+Refund abuse
+Identity manipulation
+Account sharing
+1.2 Driver Fraud
+Fake GPS activity
+Fake trip completion
+Trip inflation
+Shared driver accounts
+Identity fraud
+Referral abuse
+Artificial surge manipulation
+Driver collusion
+1.3 Platform Fraud
+Device farming
+Coordinated fraud rings
+API abuse
+Automated bots
+Scripted activity
+Multiple-account abuse
+Backend exploitation attempts
+
+2. Risk Scoring System
+Every rider and driver should have an internal dynamic risk score.
+Recommended score range:
+0–100
+Examples:
+0–20 = Low risk
+21–50 = Moderate risk
+51–75 = High risk
+76–100 = Critical risk
+Risk scores should update automatically based on:
+Payment behavior
+GPS behavior
+Complaint history
+Device activity
+Login patterns
+Fraud indicators
+Chargebacks
+Cancellation behavior
+Multiple-account detection
+
+3. GPS Spoofing Detection
+The backend should monitor for:
+Impossible travel speeds
+GPS jumps
+Emulator detection
+Fake GPS applications
+Device location inconsistencies
+Trip routes inconsistent with road networks
+Frequent GPS anomalies
+Recommended actions:
+Flag account
+Increase risk score
+Trigger manual review
+Restrict payouts
+Suspend account
+
+4. Device Fingerprinting
+The system should collect and compare:
+Device IDs
+Browser fingerprints
+App version
+OS version
+IP addresses where available
+Login history
+Session metadata
+Purpose:
+Detect multiple-account abuse
+Detect shared accounts
+Detect fraud rings
+Detect suspicious device reuse
+
+5. Payment Fraud Detection
+The system should monitor:
+Chargebacks
+Failed payment attempts
+Stolen card indicators
+High refund frequency
+Unusual payment behavior
+Reused payment methods across accounts
+Rapid account creation + payment activity
+High-risk payment activity should trigger:
+Payment restrictions
+Ride restrictions
+Manual review
+Temporary account suspension
+
+6. Referral Abuse Detection
+The system should detect:
+Self-referrals
+Device-linked referral abuse
+Fake account farming
+Referral loops
+Artificial trip generation for bonuses
+Recommended controls:
+Referral payout delays
+Device/IP comparison
+Minimum trip requirements
+Fraud review queues
+
+7. Behavioral Monitoring
+Monitor for suspicious behavior patterns such as:
+Excessive cancellations
+Rapid account switching
+Frequent login device changes
+Unusual ride patterns
+Abnormal payout behavior
+Unusual GPS routes
+Repeated failed verification attempts
+Behavior anomalies should influence risk scoring.
+
+8. Automated Enforcement Rules
+The system should support automatic:
+Account flagging
+Ride restrictions
+Driver go-online restrictions
+Payout holds
+Temporary suspensions
+Referral freezes
+Fraud investigation escalations
+Critical fraud triggers may justify immediate suspension.
+
+9. Manual Review Queue
+High-risk accounts should enter a manual review queue.
+Admins/moderators should be able to review:
+Device history
+GPS history
+Payment history
+Complaint history
+Linked accounts
+Fraud indicators
+Risk score timeline
+
+10. Required Database Tables
+10.1 fraud_risk_scores
+Fields:
+id
+user_id
+role
+risk_score
+risk_level
+last_calculated_at
+created_at
+10.2 fraud_flags
+Fields:
+id
+user_id
+flag_type
+severity
+description
+metadata_json
+created_at
+resolved_at
+Example flag types:
+gps_spoofing
+chargeback_abuse
+fake_trip_activity
+multi_account_detection
+suspicious_payouts
+emulator_detected
+10.3 device_fingerprints
+Fields:
+id
+user_id
+device_id
+device_type
+app_version
+os_version
+ip_address
+fingerprint_hash
+created_at
+10.4 fraud_investigations
+Fields:
+id
+user_id
+investigation_status
+assigned_admin_id
+summary
+resolution
+created_at
+resolved_at
+
+11. Fraud Investigation Tools
+Admins should be able to:
+View linked accounts
+View risk scores
+View fraud flags
+Freeze payouts
+Restrict accounts
+Escalate investigations
+Export fraud evidence
+View GPS anomalies
+Review payment disputes
+
+12. Payout Protection Rules
+High-risk driver activity may trigger:
+Delayed payouts
+Manual payout review
+Fraud investigation hold
+Temporary payout freezes
+The system should preserve evidence before releasing disputed payouts.
+
+13. Security Requirements
+Fraud systems should be protected with:
+Admin-only access
+Role-based permissions
+Immutable audit logs
+Backend encryption where possible
+Secure investigation exports
+Risk event retention
+Fraud data should not be publicly accessible.
+
+14. Evidence Retention
+Preserve:
+GPS snapshots
+Device fingerprints
+Payment logs
+Risk score history
+Fraud flags
+Investigation history
+Enforcement actions
+Historical fraud evidence should remain accessible for:
+Legal defense
+Chargeback disputes
+Insurance matters
+Regulatory investigations
+
+15. Recommended API Endpoints
+Get Risk Score
+GET /admin/fraud/risk-score/{userId}
+View Fraud Flags
+GET /admin/fraud/flags/{userId}
+Freeze Payout
+POST /admin/fraud/payout-freeze/{driverId}
+Open Fraud Investigation
+POST /admin/fraud/investigations
+View Linked Accounts
+GET /admin/fraud/linked-accounts/{userId}
+
+16. Admin Dashboard Requirements
+Dashboard should display:
+High-risk users
+Fraud investigation queue
+GPS spoofing alerts
+Chargeback alerts
+Linked account alerts
+Suspicious payout activity
+Risk score trends
+Admins should be able to:
+Suspend users
+Freeze payouts
+Escalate cases
+Export evidence
+Resolve investigations
+
+17. Legal Protection Notes
+This fraud system helps RAJLO:
+Demonstrate operational diligence
+Reduce financial losses
+Reduce chargeback abuse
+Preserve legal evidence
+Justify enforcement actions
+Support payment processor compliance
+The system should clearly show:
+Fraud indicators detected
+Timeline history
+Actions taken
+Evidence preserved
+
+18. Minimum Production Checklist
+Before launch confirm:
+Risk scores work
+GPS spoofing detection works
+Device fingerprinting works
+Fraud flags work
+Payout freezes work
+Fraud investigations work
+Chargeback alerts work
+Linked-account detection works
+Admin fraud dashboard works
+Fraud evidence exports work
+
+19. Developer Summary
+Daniel should implement a fraud detection and risk scoring system that:
+Detects suspicious rider and driver behavior.
+Monitors GPS spoofing, fake trips, and payment fraud.
+Assigns automated risk scores.
+Supports automated and manual enforcement.
+Protects payouts and platform revenue.
+Preserves fraud evidence and investigation history.
+Strengthens RAJLO’s legal, financial, and operational protection.
+This system is a core operational protection layer for RAJLO as the platform scales.
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

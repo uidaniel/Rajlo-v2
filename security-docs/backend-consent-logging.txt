@@ -1,0 +1,383 @@
+RAJLO Backend Consent Logging Specification
+Effective Date: May 17, 2026
+Purpose: Legal acceptance, policy versioning, audit evidence, and user consent enforcement for RAJLO.
+This specification defines how RAJLO should record, store, verify, and enforce user consent for all legal policies, permissions, payment authorizations, GPS disclosures, and platform agreements.
+
+1. Primary Goal
+RAJLO must be able to prove that each rider and driver clearly accepted the correct version of each required legal document before using the platform.
+The backend should store tamper-resistant consent records showing:
+Who accepted
+What they accepted
+Which policy version they accepted
+When they accepted it
+Where they accepted it from
+What device/browser/app version was used
+What IP address was used, where available
+Whether re-acceptance is required after updates
+This is critical for legal protection, payment disputes, account disputes, GPS tracking disputes, and enforcement actions.
+
+2. Legal Documents Requiring Acceptance
+The backend must support consent logging for the following RAJLO documents:
+Terms of Service
+Privacy Policy
+Driver Agreement
+Driver Cancellation & Service Reliability Policy
+Rider Cancellation, Conduct & Liability Policy
+Payment & Refund Policy
+Community Guidelines
+Safety Disclaimer & Emergency Policy
+Acceptable Use Policy (AUP)
+Driver Earnings Disclaimer & Independent Income Disclosure
+Website & App Disclaimer
+
+3. User Types
+Consent requirements should be role-based.
+3.1 Rider Required Documents
+Riders must accept:
+Terms of Service
+Privacy Policy
+Rider Cancellation, Conduct & Liability Policy
+Payment & Refund Policy
+Community Guidelines
+Safety Disclaimer & Emergency Policy
+Acceptable Use Policy
+Website & App Disclaimer
+3.2 Driver Required Documents
+Drivers must accept:
+Terms of Service
+Privacy Policy
+Driver Agreement
+Driver Cancellation & Service Reliability Policy
+Payment & Refund Policy
+Community Guidelines
+Safety Disclaimer & Emergency Policy
+Acceptable Use Policy
+Driver Earnings Disclaimer & Independent Income Disclosure
+Website & App Disclaimer
+
+4. Consent Events to Log
+The backend must log these consent events:
+4.1 Account Creation Consent
+When a rider or driver creates an account, log acceptance of required policies.
+4.2 Login Re-Acceptance Consent
+If policies have changed, force the user to re-accept before continuing.
+4.3 GPS Permission Consent
+Log that the user acknowledged location tracking terms.
+For drivers, this must include live/background location tracking while online or during trips.
+For riders, this must include pickup/drop-off location processing and trip tracking.
+4.4 Payment Authorization Consent
+Log that the rider authorized RAJLO to process:
+Trip fares
+Cancellation fees
+No-show fees
+Outstanding balances
+Refund adjustments
+Automatic charges to saved payment methods
+4.5 OTP Verification Consent
+Log that the user agreed to receive OTP messages for authentication and account security.
+4.6 Driver Online Consent
+Before a driver can go online for the first time, the backend must verify that all driver-required documents are accepted.
+4.7 Rider Trip Request Consent
+Before a rider can request a trip, the backend must verify that all rider-required documents are accepted.
+
+5. Recommended Database Tables
+5.1 legal_documents
+Stores each RAJLO legal document and version.
+Fields:
+id
+document_key
+title
+version
+effective_date
+content_url
+content_hash
+is_active
+requires_acceptance
+applies_to_role
+created_at
+updated_at
+Example document_key values:
+terms_of_service
+privacy_policy
+driver_agreement
+driver_cancellation_policy
+rider_cancellation_policy
+payment_refund_policy
+community_guidelines
+safety_emergency_policy
+acceptable_use_policy
+driver_earnings_disclaimer
+website_app_disclaimer
+5.2 user_consents
+Stores each user acceptance event.
+Fields:
+id
+user_id
+user_role
+document_key
+document_version
+legal_document_id
+accepted_at
+acceptance_method
+checkbox_label
+ip_address
+user_agent
+device_id
+device_type
+app_version
+platform
+locale
+consent_text_snapshot
+content_hash
+source_screen
+is_revoked
+revoked_at
+created_at
+Recommended acceptance_method values:
+signup_checkbox
+login_reacceptance
+driver_onboarding
+rider_onboarding
+payment_authorization
+gps_permission_acknowledgment
+otp_verification_acknowledgment
+Recommended source_screen values:
+rider_signup
+driver_signup
+login_policy_update
+driver_go_online
+rider_request_trip
+payment_setup
+location_permission_screen
+5.3 consent_audit_logs
+Stores immutable audit history for legal evidence.
+Fields:
+id
+user_id
+event_type
+event_description
+metadata_json
+ip_address
+user_agent
+device_id
+app_version
+created_at
+Example event_type values:
+consent_created
+consent_verified
+consent_required
+consent_rejected
+policy_updated
+reacceptance_required
+account_blocked_missing_consent
+5.4 user_policy_status
+Stores current compliance state for fast checks.
+Fields:
+user_id
+role
+required_documents_json
+accepted_documents_json
+missing_documents_json
+is_compliant
+last_checked_at
+updated_at
+
+6. Backend API Endpoints
+6.1 Get Active Legal Documents
+GET /legal/documents?role=rider
+GET /legal/documents?role=driver
+Returns active documents required for the user role.
+Response should include:
+document_key
+title
+version
+effective_date
+content_url
+content_hash
+requires_acceptance
+6.2 Submit Consent
+POST /legal/consents
+Request body:
+{
+"userId": "user_123",
+"role": "rider",
+"acceptedDocuments": [
+{
+"documentKey": "terms_of_service",
+"version": "2026.05.17",
+"contentHash": "sha256_hash_here"
+}
+],
+"acceptanceMethod": "signup_checkbox",
+"sourceScreen": "rider_signup",
+"checkboxLabel": "I agree to RAJLO's Terms of Service, Privacy Policy, and required platform policies.",
+"consentTextSnapshot": "By continuing, I agree to RAJLO's Terms of Service, Privacy Policy, Payment & Refund Policy, Community Guidelines, Safety Disclaimer, Acceptable Use Policy, and other applicable platform policies."
+}
+Backend should automatically append:
+accepted_at
+ip_address
+user_agent
+device_id
+app_version
+platform
+6.3 Check Consent Status
+GET /legal/consents/status?userId=user_123&role=rider
+Returns:
+is_compliant
+missing_documents
+accepted_documents
+reacceptance_required
+6.4 Force Policy Re-Acceptance
+POST /admin/legal/require-reacceptance
+Admin-only endpoint used when policy versions are updated.
+Request body:
+{
+"documentKey": "privacy_policy",
+"newVersion": "2026.06.01",
+"rolesAffected": ["rider", "driver"]
+}
+6.5 Consent Audit Export
+GET /admin/legal/consents/export?userId=user_123
+Admin-only endpoint for legal, disputes, chargebacks, and investigations.
+Export should include:
+User identity
+Documents accepted
+Versions accepted
+Timestamps
+IP address
+Device/app details
+Consent text snapshots
+Audit logs
+
+7. Frontend UX Requirements
+7.1 Rider Signup Screen
+Must show a required checkbox:
+“I agree to RAJLO’s Terms of Service, Privacy Policy, Rider Cancellation Policy, Payment & Refund Policy, Community Guidelines, Safety Disclaimer, Acceptable Use Policy, and Website & App Disclaimer.”
+User cannot create account unless checked.
+7.2 Driver Signup Screen
+Must show a required checkbox:
+“I agree to RAJLO’s Terms of Service, Privacy Policy, Driver Agreement, Driver Cancellation Policy, Payment & Refund Policy, Community Guidelines, Safety Disclaimer, Acceptable Use Policy, Driver Earnings Disclaimer, and Website & App Disclaimer.”
+User cannot complete driver registration unless checked.
+7.3 Location Consent Screen
+Must show before requesting location permissions:
+“RAJLO uses location data to match rides, track trips, improve pickup accuracy, support safety features, prevent fraud, and operate real-time transportation services. Drivers may be tracked while online or during trips, including background location where permitted by device settings.”
+7.4 Payment Authorization Screen
+Must show before adding payment method or requesting first trip:
+“By continuing, I authorize RAJLO and its payment processors to electronically charge my saved payment method for trip fares, cancellation fees, no-show fees, outstanding balances, and applicable platform charges.”
+7.5 Policy Update Screen
+If policies change, user must see:
+“RAJLO has updated its legal policies. To continue using the platform, please review and accept the updated documents.”
+User cannot continue until accepted.
+
+8. Backend Enforcement Rules
+8.1 Rider Enforcement
+A rider cannot:
+Request a ride
+Add payment method
+Complete booking
+Use live trip services
+unless rider consent status is compliant.
+8.2 Driver Enforcement
+A driver cannot:
+Complete onboarding
+Go online
+Accept trips
+Receive payouts
+unless driver consent status is compliant.
+8.3 Missing Consent Handling
+If required consent is missing, backend returns:
+403 Forbidden
+{
+"error": "LEGAL_CONSENT_REQUIRED",
+"message": "Updated legal consent is required before continuing.",
+"missingDocuments": ["privacy_policy", "payment_refund_policy"]
+}
+
+9. Policy Versioning Rules
+Each legal document must have:
+Version number
+Effective date
+Content hash
+Active/inactive status
+Applies-to role
+Recommended version format:
+YYYY.MM.DD
+Example:
+2026.05.17
+When a document changes materially:
+Create a new version
+Mark re-acceptance required
+Store old version permanently
+Do not overwrite historical content
+
+10. Evidence Preservation Rules
+Do not delete consent records.
+Consent records should be retained for legal, regulatory, fraud, payment, and dispute purposes.
+Store:
+Timestamp
+Document version
+User role
+Consent text snapshot
+Device/app data
+IP address where available
+Content hash
+Historical consent records must remain available even if a user account is deactivated.
+
+11. Security Requirements
+Consent logs should be protected from unauthorized modification.
+Recommended protections:
+Admin-only access
+Audit trail for changes
+No hard deletion
+Append-only log behavior where possible
+Database backups
+Role-based permissions
+Encryption at rest where available
+Secure API authentication
+
+12. Admin Dashboard Requirements
+Admin should be able to view:
+User consent status
+Missing documents
+Accepted document versions
+Acceptance timestamps
+Device/app information
+IP address where available
+Re-acceptance requirements
+Admin should be able to:
+Export consent evidence
+Trigger policy re-acceptance
+View policy version history
+Mark documents as active/inactive
+
+13. Minimum Production Acceptance Checklist
+Before launch, confirm:
+All legal documents have version numbers
+All legal documents have active URLs
+Signup requires checkbox acceptance
+Driver onboarding requires Driver Agreement acceptance
+Rider trip request checks legal consent
+Driver go-online checks legal consent
+GPS disclosure is shown before location permission
+Payment authorization is logged before first charge
+Consent records store timestamps
+Consent records store policy versions
+Consent records store content hashes
+Consent records store device/app data
+Admin can export consent logs
+Backend blocks users missing required consent
+Re-acceptance works after policy updates
+
+14. Developer Summary
+Daniel should implement a backend legal consent system that:
+Stores every RAJLO legal document with versioning.
+Requires riders and drivers to accept the proper documents.
+Logs exact acceptance events with timestamp, policy version, device, app version, IP, and consent text.
+Blocks riders from requesting trips if consent is incomplete.
+Blocks drivers from going online if consent is incomplete.
+Forces re-acceptance when policies are updated.
+Preserves historical consent records permanently for disputes and legal evidence.
+Provides admin export tools for legal, chargeback, fraud, or safety investigations.
+This system is a critical legal protection layer for RAJLO because it proves that users agreed to the platform terms before using the service.
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

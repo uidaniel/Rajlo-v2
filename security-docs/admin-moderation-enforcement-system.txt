@@ -1,0 +1,374 @@
+RAJLO Admin Moderation & Enforcement System Specification
+Effective Date: May 17, 2026
+This specification defines the moderation, enforcement, investigation, risk management, account control, operational oversight, and audit requirements for the RAJLO administrative systems.
+Purpose:
+Protect RAJLO operationally and legally
+Support fraud prevention
+Support platform safety
+Support dispute investigations
+Manage rider and driver enforcement actions
+Maintain audit trails
+Demonstrate operational diligence
+Protect platform integrity
+Reduce abuse and regulatory risk
+This system applies to all administrators, moderators, support staff, investigators, compliance personnel, and internal operational users.
+
+1. Core Objectives
+The moderation system must allow RAJLO to:
+Investigate incidents
+Review fraud signals
+Suspend or ban accounts
+Freeze payouts
+Manage disputes
+Review onboarding status
+Track user behavior
+Monitor GPS spoofing
+Handle emergency escalations
+Maintain internal audit trails
+The system should support both rider and driver account management.
+
+2. Admin Roles & Permissions
+Recommended admin roles:
+2.1 Support Agent
+Can:
+View incidents
+Add support notes
+Respond to basic disputes
+View trip details
+Cannot:
+Permanently ban users
+Modify payout settings
+Delete records
+2.2 Moderator
+Can:
+Suspend users
+Review fraud indicators
+Escalate incidents
+Review complaints
+Issue warnings
+Cannot:
+Permanently delete records
+Override super-admin restrictions
+2.3 Compliance/Admin Investigator
+Can:
+Review legal issues
+Export evidence packages
+Freeze payouts
+Trigger reverification
+Review audit trails
+Manage escalated investigations
+2.4 Super Admin
+Can:
+Access all moderation systems
+Permanently deactivate users
+Modify admin permissions
+Trigger platform-wide enforcement actions
+Manage policy enforcement rules
+All admin actions must be logged.
+
+3. User Risk Monitoring
+The system should track risk indicators for riders and drivers.
+3.1 Driver Risk Indicators
+Examples:
+Excessive cancellations
+GPS spoofing
+Unsafe driving complaints
+Fraud reports
+Multiple account access
+Payment disputes
+Identity inconsistencies
+Harassment reports
+3.2 Rider Risk Indicators
+Examples:
+Chargeback abuse
+Excessive refund requests
+Fraudulent complaints
+Threatening behavior
+Fake bookings
+Payment failures
+Multiple device abuse
+Risk indicators should contribute to internal risk scoring.
+
+4. Enforcement Actions
+Admins/moderators should be able to:
+Issue warnings
+Temporarily suspend users
+Permanently deactivate accounts
+Freeze payouts
+Restrict ride requests
+Restrict driver go-online access
+Require reverification
+Escalate investigations
+Flag accounts for fraud review
+Recommended action types:
+warning
+temporary_suspension
+permanent_ban
+payout_hold
+reverification_required
+payment_restriction
+trip_restriction
+All enforcement actions must generate audit logs.
+
+5. Fraud Investigation Tools
+The system should support investigation of:
+Fake GPS activity
+Fake trips
+Referral fraud
+Payment fraud
+Chargeback abuse
+Identity fraud
+Shared accounts
+Device farming
+Coordinated abuse patterns
+Recommended tools:
+Device history viewer
+IP history viewer
+GPS anomaly detection
+Payment history review
+Linked account detection
+Duplicate identity detection
+
+6. Incident Investigation Tools
+Admins should be able to:
+Review incident reports
+View uploaded evidence
+Review trip timelines
+Review GPS history
+Review payment records
+Add internal notes
+Escalate cases
+Export investigation packages
+Critical incidents should support priority escalation.
+
+7. Payout Controls
+Admins/compliance personnel should be able to:
+Freeze driver payouts
+Review payout disputes
+Reverse fraudulent payouts
+Hold funds during investigations
+Release payouts after review
+All payout actions must be logged.
+
+8. Consent & Policy Compliance Monitoring
+Admins should be able to:
+View user consent status
+View policy versions accepted
+Trigger reacceptance requirements
+Restrict access for missing consent
+Export consent evidence
+The moderation system should integrate with legal consent logs.
+
+9. Driver Onboarding Oversight
+Admins should be able to:
+Review onboarding queues
+Approve/reject drivers
+Review uploaded documents
+Trigger reverification
+View risk indicators
+Review fraud alerts
+The system should display:
+Expired documents
+Missing documents
+Insurance status
+Complaint history
+Fraud flags
+
+10. Audit Logging Requirements
+Every admin action must generate immutable audit logs.
+Audit logs should store:
+Admin ID
+Action type
+Timestamp
+Target user ID
+IP address where available
+Device/session metadata
+Reason for action
+Metadata snapshot
+Examples:
+user_suspended
+payout_frozen
+incident_closed
+refund_issued
+driver_approved
+fraud_flag_added
+account_reactivated
+Audit records should never be hard-deleted.
+
+11. Required Database Tables
+11.1 admin_users
+Fields:
+id
+role
+permissions_json
+email
+status
+created_at
+11.2 moderation_actions
+Fields:
+id
+admin_user_id
+target_user_id
+action_type
+reason
+metadata_json
+created_at
+11.3 risk_flags
+Fields:
+id
+user_id
+flag_type
+severity
+description
+created_at
+resolved_at
+11.4 payout_holds
+Fields:
+id
+driver_id
+reason
+hold_amount
+created_by_admin_id
+released_at
+11.5 admin_audit_logs
+Fields:
+id
+admin_user_id
+action_type
+action_description
+target_entity_type
+target_entity_id
+metadata_json
+created_at
+
+12. Security Requirements
+Admin systems require elevated protection.
+Recommended protections:
+Role-based permissions
+MFA/2FA for admin accounts
+Session expiration
+IP monitoring
+Audit logging
+Admin access alerts
+Secure backend authentication
+Restricted export permissions
+Super-admin actions should require elevated verification where possible.
+
+13. Admin Dashboard Requirements
+Dashboard should support:
+Rider search
+Driver search
+Incident management
+Fraud investigation tools
+Risk score visibility
+GPS history review
+Payment dispute review
+Consent status review
+Payout management
+Driver onboarding queue
+Enforcement action history
+Dashboard should display:
+Repeat offenders
+Linked fraud indicators
+Escalated incidents
+Expired documents
+High-risk accounts
+
+14. Evidence Export System
+Admins should be able to export:
+Incident timelines
+GPS logs
+Payment history
+Consent records
+Audit trails
+Uploaded evidence
+Enforcement history
+Exports are important for:
+Legal disputes
+Insurance matters
+Chargebacks
+Law enforcement requests
+Regulatory reviews
+
+15. Emergency Intervention Controls
+For critical situations, admins should be able to:
+Immediately suspend accounts
+Freeze payouts
+Escalate incidents
+Lock account access
+Flag emergency investigations
+Restrict platform access
+Critical actions should generate high-priority audit logs.
+
+16. Data Retention Requirements
+Do not hard-delete:
+Moderation actions
+Audit logs
+Incident history
+Fraud investigations
+Consent records
+Enforcement history
+Historical records should remain accessible for:
+Legal defense
+Insurance disputes
+Fraud investigations
+Regulatory reviews
+
+17. Legal Protection Notes
+This moderation system helps RAJLO:
+Demonstrate operational diligence
+Justify account suspensions
+Support fraud prevention
+Support safety enforcement
+Preserve legal evidence
+Respond to disputes and investigations
+The system should clearly show:
+Timeline history
+Admin actions taken
+Evidence reviewed
+Reasons for enforcement decisions
+
+18. Recommended API Endpoints
+Get User Risk Profile
+GET /admin/users/{id}/risk-profile
+Suspend User
+POST /admin/users/{id}/suspend
+Permanently Ban User
+POST /admin/users/{id}/ban
+Freeze Driver Payout
+POST /admin/payouts/{driverId}/freeze
+Review Incident
+GET /admin/incidents/{id}
+Export Investigation Package
+GET /admin/incidents/{id}/export
+Trigger Driver Reverification
+POST /admin/drivers/{id}/reverify
+
+19. Minimum Production Checklist
+Before launch confirm:
+Admin roles work
+Moderation actions are logged
+Fraud flags work
+User suspension works
+Payout holds work
+Audit logs work
+Incident review works
+Consent review works
+Driver onboarding review works
+GPS history review works
+Export tools work
+MFA for admins works
+Admin access restrictions work
+
+20. Developer Summary
+Daniel should implement a production-grade moderation and enforcement system that:
+Allows admins to investigate fraud, incidents, and disputes.
+Tracks rider and driver risk indicators.
+Supports account suspensions, bans, and payout holds.
+Maintains immutable audit trails.
+Integrates with incident systems, onboarding systems, payment systems, and consent logs.
+Preserves historical evidence for legal and operational protection.
+Helps demonstrate operational diligence and platform governance.
+This system is one of the most important operational protection layers for RAJLO as the platform scales.
+RAJLO — Jamaica’s First Cashless Transportation Platform
+

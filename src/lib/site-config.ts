@@ -211,6 +211,7 @@ export const PUBLIC_MARKETING_ROUTES: Array<{
   { path: "/help", priority: 0.5, changeFrequency: "monthly" },
   { path: "/contact", priority: 0.5, changeFrequency: "monthly" },
   { path: "/download", priority: 0.7, changeFrequency: "monthly" },
-  { path: "/legal/privacy", priority: 0.3, changeFrequency: "yearly" },
-  { path: "/legal/terms", priority: 0.3, changeFrequency: "yearly" },
+  { path: "/legal", priority: 0.4, changeFrequency: "monthly" },
+  { path: "/legal/terms-of-service", priority: 0.3, changeFrequency: "yearly" },
+  { path: "/legal/privacy-policy", priority: 0.3, changeFrequency: "yearly" },
 ];

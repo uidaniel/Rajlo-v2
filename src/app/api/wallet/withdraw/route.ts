@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServerClient } from "@/lib/supabase-server";
 import { createSupabaseAuthServerClient } from "@/lib/supabase-auth-server";
 import { debitWallet, getWalletBalance } from "@/lib/wallet";
+import { hasActivePayoutHold } from "@/lib/payout-hold";
 
 /**
  * GET  /api/wallet/withdraw — list my withdrawal requests
@@ -89,6 +90,20 @@ export async function POST(request: Request) {
       {
         error:
           "Withdrawals are for driver wallets. Riders can transfer money to other riders or use it to pay for trips.",
+      },
+      { status: 403 },
+    );
+  }
+
+  // Moderation gate: a driver with an active payout hold can't
+  // withdraw. The hold is placed by the moderation/fraud team while a
+  // fraud or dispute investigation runs (see payout_holds).
+  if (await hasActivePayoutHold(supabase, user.id)) {
+    return NextResponse.json(
+      {
+        error: "payout_hold",
+        message:
+          "Your payouts are temporarily on hold while our team reviews your account. Contact support for details.",
       },
       { status: 403 },
     );
